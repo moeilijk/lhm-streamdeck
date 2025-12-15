@@ -85,3 +85,8 @@ Fork of shayne/hwinfo-streamdeck. This fork replaces the HWiNFO backend with Lib
 6. Configure the action to display the sensor reading you wish
 
     ![alt text](images/configureaction.gif "Configure Action")
+
+## Upstream diff (proof of origin)
+
+Upstream is archived (read-only). Changes in this fork are visible here:
+https://github.com/shayne/hwinfo-streamdeck/compare/main...moeilijk:lhm
