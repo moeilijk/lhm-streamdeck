@@ -1,3 +1,12 @@
+# lhm-streamdeck
+
+Fork of shayne/hwinfo-streamdeck.
+Goal: replace the HWiNFO backend with LibreHardwareMonitor.
+
+# lhm-streamdeck
+
+Fork of shayne/hwinfo-streamdeck. This fork replaces the HWiNFO backend with LibreHardwareMonitor.
+
 # HWiNFO Stream Deck Plugin
 
 ## ⚠⚠ Major refactor landed in pre-release v2.0.0, plugin code open sourced, remote monitoring infrastructure support ⚠⚠ 
