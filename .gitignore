@@ -30,3 +30,7 @@ cmd/hwinfostreamdeckplugin/debug
 
 # dep cache (protoc)
 .cache/
+
+# Local build caches (never commit)
+.gocache/
+.gomodcache/
