@@ -1,16 +1,18 @@
 GOCMD=go
 GOBUILD=$(GOCMD) build
 GOCLEAN=$(GOCMD) clean
+GOOS?=windows
+GOARCH?=amd64
+GOTARGETENV=GOOS=$(GOOS) GOARCH=$(GOARCH)
 
-SDPLUGINDIR=./com.exension.hwinfo.sdPlugin
+SDPLUGINDIR=./com.extension.lhm.sdPlugin
 
 PROTOS=$(wildcard ./*/**/**/*.proto)
 PROTOPB=$(PROTOS:.proto=.pb.go)
 
-plugin: proto
-	$(GOBUILD) -o $(SDPLUGINDIR)/hwinfo.exe ./cmd/hwinfo_streamdeck_plugin
-	$(GOBUILD) -o $(SDPLUGINDIR)/hwinfo-plugin.exe ./cmd/hwinfo-plugin
-	cp ../go-hwinfo-hwservice-plugin/bin/hwinfo-plugin.exe $(SDPLUGINDIR)/hwinfo-plugin.exe
+plugin:
+	$(GOTARGETENV) $(GOBUILD) -o $(SDPLUGINDIR)/lhm.exe ./cmd/lhm_streamdeck_plugin
+	$(GOTARGETENV) $(GOBUILD) -o $(SDPLUGINDIR)/lhm-bridge.exe ./cmd/lhm-bridge
 	-@install-plugin.bat
 
 proto: $(PROTOPB)
@@ -25,16 +27,15 @@ $(PROTOPB): $(PROTOS)
 
 # plugin:
 # 	-@kill-streamdeck.bat
-# 	@go build -o com.exension.hwinfo.sdPlugin\\hwinfo.exe github.com/shayne/hwinfo-streamdeck/cmd/hwinfo_streamdeck_plugin
-# 	@xcopy com.exension.hwinfo.sdPlugin $(APPDATA)\\Elgato\\StreamDeck\\Plugins\\com.exension.hwinfo.sdPlugin\\ /E /Q /Y
+# 	@go build -o com.extension.lhm.sdPlugin\\lhm.exe github.com/shayne/lhm-streamdeck/cmd/lhm_streamdeck_plugin
+# 	@xcopy com.extension.lhm.sdPlugin $(APPDATA)\\Elgato\\StreamDeck\\Plugins\\com.extension.lhm.sdPlugin\\ /E /Q /Y
 # 	@start-streamdeck.bat
 
 debug:
-	$(GOBUILD) -o $(SDPLUGINDIR)/hwinfo.exe ./cmd/hwinfo_debugger
-	cp ../go-grpc-hardware-service/bin/hwinfo-plugin.exe $(SDPLUGINDIR)/hwinfo-plugin.exe
+	$(GOTARGETENV) $(GOBUILD) -o $(SDPLUGINDIR)/lhm.exe ./cmd/lhm_debugger
 	-@install-plugin.bat
-# @xcopy com.exension.hwinfo.sdPlugin $(APPDATA)\\Elgato\\StreamDeck\\Plugins\\com.exension.hwinfo.sdPlugin\\ /E /Q /Y
+# @xcopy com.extension.lhm.sdPlugin $(APPDATA)\\Elgato\\StreamDeck\\Plugins\\com.extension.lhm.sdPlugin\\ /E /Q /Y
 
 release:
-	-@rm build/com.exension.hwinfo.streamDeckPlugin
-	@DistributionTool.exe -b -i com.exension.hwinfo.sdPlugin -o build
+	-@rm build/com.extension.lhm.streamDeckPlugin
+	@DistributionTool.exe -b -i com.extension.lhm.sdPlugin -o build

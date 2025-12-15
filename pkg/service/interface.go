@@ -6,7 +6,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/hashicorp/go-plugin"
-	"github.com/shayne/hwinfo-streamdeck/pkg/service/proto"
+	"github.com/shayne/lhm-streamdeck/pkg/service/proto"
 )
 
 // Handshake is a common handshake that is shared by plugin and host.
@@ -19,7 +19,7 @@ var Handshake = plugin.HandshakeConfig{
 
 // PluginMap is the map of plugins we can dispense.
 var PluginMap = map[string]plugin.Plugin{
-	"hwinfoplugin": &HardwareServicePlugin{},
+	"lhmplugin": &HardwareServicePlugin{},
 }
 
 // HardwareService is the interface that we're exposing as a plugin.
