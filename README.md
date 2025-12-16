@@ -1,17 +1,5 @@
 # Libre Hardware Monitor Stream Deck Plugin
 
-## ⚠⚠ Major refactor landed in pre-release v2.0.0, plugin code open sourced, remote monitoring infrastructure support ⚠⚠ 
-
----
-
->## Thank you & Looking for Maintainers
->
->Thank you everyone who has used and enjoyed this plugin. It started as a passion project and I continue to use it day to day. I am happy to finally release the full source on GitHub so the community can continue to shape it going forward.
->
->I haven't had the time to dedicate to this project in some time and appreciate everyone for hanging in there. I hope to work with some of you who are eager to take the project over. I am happy and ready to hand over the reigns. If there are development questions I'm happy to share my thoughts on the code and structure that exists.
->
->*-Shayne*
-
 ---
 
 ![alt text](images/demo.gif "Stream Deck Plugin Demo")
