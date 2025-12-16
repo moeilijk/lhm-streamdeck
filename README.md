@@ -8,12 +8,17 @@
 
 ## Configuring Libre Hardware Monitor
 
-1. Download the latest Libre Hardware Monitor release and unzip it somewhere permanent.
+1. Install the latest Libre Hardware Monitor release.
+    ![alt text](images/winget-lhm.gif "winget install LibreHardwareMonitor.LibreHardwareMonitor")
 2. Launch `LibreHardwareMonitor.exe`.
+    ![alt text](images/librehardwaremonitor-exe.png "LibreHardwareMonitor.exe")
 3. Open `Options -> Remote Web Server...`.
-4. Check **Active**, set the port to `8085`, and leave **Listen IP** at `127.0.0.1` (default settings).
-5. Select **Start** to enable the server and close the dialog.
-6. Verify things are working by opening [http://127.0.0.1:8085/data.json](http://127.0.0.1:8085/data.json) in a browser. The JSON response should look similar to [`example.json`](example.json). Keep Libre Hardware Monitor running while you use the Stream Deck action.
+4. Check **Active**, set the port to `8085`, and leave **Listen IP** at `local ip` (default settings).
+    ![alt text](images/lhm-web-config.gif "LibreHardwareMonitor Web Config")
+5. Select **Run** to enable the server.
+6. Check the top 4 options to set lhm to autorun on startup.
+    ![alt text](images/run-on-startup.gif "LibreHardwareMonitor startup")
+6. Verify things are working by opening [http://127.0.0.1:8085/data.json](http://127.0.0.1:8085/data.json) in a browser. Keep Libre Hardware Monitor running while you use the Stream Deck action.
 
 > Advanced: set the `LHM_ENDPOINT` environment variable before launching Stream Deck if you prefer another URL (e.g. a different port or host). The default endpoint is `http://127.0.0.1:8085/data.json`.
 
