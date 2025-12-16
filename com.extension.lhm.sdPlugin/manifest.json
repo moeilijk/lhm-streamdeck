@@ -28,7 +28,7 @@
   "Name": "Libre Hardware Monitor",
   "Icon": "pluginIcon",
   "URL": "https://github.com/shayne/lhm-streamdeck",
-  "Version": "0.1.0",
+  "Version": "1.0.0",
   "ApplicationsToMonitor": {
     "windows": ["LibreHardwareMonitor.EXE", "LibreHardwareMonitor.exe"]
   },
