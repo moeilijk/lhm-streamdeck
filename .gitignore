@@ -34,3 +34,7 @@ cmd/hwinfostreamdeckplugin/debug
 # Local build caches (never commit)
 .gocache/
 .gomodcache/
+
+# build artifacts
+build/*.streamDeckPlugin
+build/*.sdPlugin
