@@ -6,6 +6,10 @@
 
 > The plugin now talks to [Libre Hardware Monitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) over its HTTP bridge.
 
+## Motivation
+
+I wanted a local, open replacement for Stream Deck hardware monitoring without leaning on commercial tooling that did not fit my constraints. This fork keeps Shayne's original hwinfo plugin workflow while swapping the backend for Libre Hardware Monitor and documenting the refreshed setup.
+
 ## Configuring Libre Hardware Monitor
 
 1. Install the latest Libre Hardware Monitor release.
@@ -48,6 +52,10 @@
 6. Configure the action to display the sensor reading you wish
 
     ![alt text](images/configureaction.gif "Configure Action")
+
+## Credits
+
+Based on the excellent [hwinfo-streamdeck](https://github.com/shayne/hwinfo-streamdeck) project by Shayne. Portions of this implementation and README were initially drafted with assistance from ChatGPT and then reviewed before release.
 
 ## Upstream diff (proof of origin)
 
