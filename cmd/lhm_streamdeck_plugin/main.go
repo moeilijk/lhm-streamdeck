@@ -29,31 +29,8 @@ func main() {
 		log.Fatalf("Unable to chdir: %v", err)
 	}
 
-	// PRODUCTION
-	// LOGGING DISABLED:
-	//
+	// Disable logging in production
 	log.SetOutput(ioutil.Discard)
-
-	// DEBUG LOGGING:
-	//
-	// appdata := os.Getenv("APPDATA")
-	// logpath := filepath.Join(appdata, "Elgato/StreamDeck/Plugins/com.extension.lhm.sdPlugin/lhm.log")
-	// f, err := os.OpenFile(logpath, os.O_RDWR|os.O_CREATE, 0666)
-	// if err != nil {
-	// 	log.Fatalf("OpenFile Log: %v", err)
-	// }
-	// err = f.Truncate(0)
-	// if err != nil {
-	// 	log.Fatalf("Truncate Log: %v", err)
-	// }
-	// defer func() {
-	// 	err := f.Close()
-	// 	if err != nil {
-	// 		log.Fatalf("File Close: %v", err)
-	// 	}
-	// }()
-	// log.SetOutput(f)
-	// log.SetFlags(0)
 
 	flag.Parse()
 

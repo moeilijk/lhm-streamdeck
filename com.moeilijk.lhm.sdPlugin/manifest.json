@@ -1,0 +1,48 @@
+{
+	"$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+	"SDKVersion": 2,
+	"Software": {
+		"MinimumVersion": "6.4"
+	},
+	"Actions": [
+		{
+			"Icon": "icon",
+			"Name": "Libre Hardware Monitor",
+			"States": [
+				{
+					"Image": "defaultImage",
+					"TitleAlignment": "top",
+					"FontSize": 9,
+					"TitleColor": "#b7b7b7",
+					"ShowTitle": false
+				}
+			],
+			"SupportedInMultiActions": false,
+			"Tooltip": "Display sensor readings from Libre Hardware Monitor",
+			"UUID": "com.moeilijk.lhm.reading"
+		}
+	],
+	"Author": "moeilijk",
+	"CodePath": "lhm.exe",
+	"PropertyInspectorPath": "index_pi.html",
+	"Description": "Display sensor readings from Libre Hardware Monitor. Enable its remote web server on port 8085 for the plugin to connect.",
+	"Name": "Libre Hardware Monitor",
+	"UUID": "com.moeilijk.lhm",
+	"Icon": "pluginIcon",
+	"CategoryIcon": "icon",
+	"URL": "https://github.com/moeilijk/lhm-streamdeck",
+	"Version": "1.0.0.0",
+	"ApplicationsToMonitor": {
+		"windows": [
+			"LibreHardwareMonitor.EXE",
+			"LibreHardwareMonitor.exe"
+		]
+	},
+	"OS": [
+		{
+			"Platform": "windows",
+			"MinimumVersion": "10"
+		}
+	],
+	"Category": "Libre Hardware Monitor"
+}

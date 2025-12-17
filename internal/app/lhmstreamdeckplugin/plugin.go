@@ -144,7 +144,7 @@ func (p *Plugin) applyDefaultFormat(v float64, t hwsensorsservice.ReadingType, u
 }
 
 func (p *Plugin) updateTiles(data *actionData) {
-	if data.action != "com.extension.lhm.reading" {
+	if data.action != "com.moeilijk.lhm.reading" {
 		log.Printf("Unknown action updateTiles: %s\n", data.action)
 		return
 	}
@@ -158,7 +158,7 @@ func (p *Plugin) updateTiles(data *actionData) {
 	showUnavailable := func() {
 		if !data.settings.InErrorState {
 			payload := evStatus{Error: true, Message: "Libre Hardware Monitor Unavailable"}
-			err := p.sd.SendToPropertyInspector("com.extension.lhm.reading", data.context, payload)
+			err := p.sd.SendToPropertyInspector("com.moeilijk.lhm.reading", data.context, payload)
 			if err != nil {
 				log.Println("updateTiles SendToPropertyInspector", err)
 			}
@@ -179,7 +179,7 @@ func (p *Plugin) updateTiles(data *actionData) {
 	// show ui on property inspector if in error state
 	if data.settings.InErrorState {
 		payload := evStatus{Error: false, Message: "show_ui"}
-		err := p.sd.SendToPropertyInspector("com.extension.lhm.reading", data.context, payload)
+		err := p.sd.SendToPropertyInspector("com.moeilijk.lhm.reading", data.context, payload)
 		if err != nil {
 			log.Println("updateTiles SendToPropertyInspector", err)
 		}

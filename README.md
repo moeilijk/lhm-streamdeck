@@ -57,6 +57,13 @@ I wanted a local, open replacement for Stream Deck hardware monitoring without l
 
     ![alt text](images/configureaction.gif "Configure Action")
 
+### Title behavior
+
+- By default the tile shows the reading label returned by Libre Hardware Monitor inside the graph area.  
+- Entering text in the **Title** field replaces that label; Stream Deck stores the custom string per action.
+- If you enable the **Show Title** checkbox in Stream Deck’s title settings, the text renders outside the graph (the standard Stream Deck caption) while the graph can be left empty.  
+- Clearing the Title field while **Show Title** is enabled produces an empty caption, letting you hide the text entirely when you only want the graph.
+
 ## Credits
 
 Based on the excellent [hwinfo-streamdeck](https://github.com/shayne/hwinfo-streamdeck) project by Shayne. Portions of this implementation and README were initially drafted with assistance from ChatGPT and then reviewed before release.
