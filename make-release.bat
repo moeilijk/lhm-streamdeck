@@ -5,7 +5,9 @@ pushd "%~dp0" || exit /b 1
 if not exist "build" mkdir "build"
 del /q "build\com.moeilijk.lhm.streamDeckPlugin" 2>nul
 
-DistributionTool.exe -b -i "com.moeilijk.lhm.sdPlugin" -o "build"
+call streamdeck validate "com.moeilijk.lhm.sdPlugin"
+if errorlevel 1 exit /b 1
+call streamdeck pack "com.moeilijk.lhm.sdPlugin" --output "build" --force
 
 popd
 endlocal

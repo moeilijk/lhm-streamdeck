@@ -6,7 +6,7 @@
 	},
 	"Actions": [
 		{
-			"Icon": "icon",
+			"Icon": "actionIcon",
 			"Name": "Libre Hardware Monitor",
 			"States": [
 				{
@@ -29,7 +29,7 @@
 	"Name": "Libre Hardware Monitor",
 	"UUID": "com.moeilijk.lhm",
 	"Icon": "pluginIcon",
-	"CategoryIcon": "icon",
+	"CategoryIcon": "categoryIcon",
 	"URL": "https://github.com/moeilijk/lhm-streamdeck",
 	"Version": "1.0.0.0",
 	"ApplicationsToMonitor": {
