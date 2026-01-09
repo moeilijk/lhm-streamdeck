@@ -10,7 +10,7 @@ SDPLUGINDIR=./com.moeilijk.lhm.sdPlugin
 PROTOS=$(wildcard ./*/**/**/*.proto)
 PROTOPB=$(PROTOS:.proto=.pb.go)
 
-plugin:
+plugin: bump-version
 	$(GOTARGETENV) $(GOBUILD) -o $(SDPLUGINDIR)/lhm.exe ./cmd/lhm_streamdeck_plugin
 	$(GOTARGETENV) $(GOBUILD) -o $(SDPLUGINDIR)/lhm-bridge.exe ./cmd/lhm-bridge
 	-@install-plugin.bat
@@ -36,6 +36,9 @@ debug:
 	-@install-plugin.bat
 # @xcopy com.moeilijk.lhm.sdPlugin $(APPDATA)\\Elgato\\StreamDeck\\Plugins\\com.moeilijk.lhm.sdPlugin\\ /E /Q /Y
 
-release:
+release: bump-version
 	-@rm build/com.moeilijk.lhm.streamDeckPlugin
 	@DistributionTool.exe -b -i com.moeilijk.lhm.sdPlugin -o build
+
+bump-version:
+	./scripts/bump-manifest-version.sh
