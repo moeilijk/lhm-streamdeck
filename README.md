@@ -12,7 +12,8 @@ I wanted a local, open replacement for Stream Deck hardware monitoring without l
 
 ## Configuring Libre Hardware Monitor
 
-1. Install the latest Libre Hardware Monitor release.
+1. Install Libre Hardware Monitor **v0.9.5 or newer** (use the GitHub release; winget may still serve 0.9.4).
+   v0.9.5+ is required to avoid WinRing0 driver warnings and missing tiles after LHM restarts/updates.
 
     ![alt text](images/winget-lhm.gif "winget install LibreHardwareMonitor.LibreHardwareMonitor")
 2. Launch `LibreHardwareMonitor.exe`.
