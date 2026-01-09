@@ -20,16 +20,20 @@ I wanted a local, open replacement for Stream Deck hardware monitoring without l
 
     ![alt text](images/librehardwaremonitor-exe.png "LibreHardwareMonitor.exe")
 3. Open `Options -> Remote Web Server...`.
-4. Check **Active**, set the port to `8085`, and leave **Listen IP** at `local ip` (default settings).
+4. Check **Active**, set the port to `8085`, and set **Listen IP** to `0.0.0.0` (recommended) or your local IP.
+   Both options expose the web server on your network. Use firewall rules to prevent external access if you only want
+   local-only access.
 
     ![alt text](images/lhm-web-config.gif "LibreHardwareMonitor Web Config")
 5. Select **Run** to enable the server.
 6. Check the top 4 options to set lhm to autorun on startup.
 
     ![alt text](images/run-on-startup.gif "LibreHardwareMonitor startup")
-6. Verify things are working by opening [http://127.0.0.1:8085/data.json](http://127.0.0.1:8085/data.json) in a browser. Keep Libre Hardware Monitor running while you use the Stream Deck action.
+6. Verify things are working by opening [http://127.0.0.1:8085/data.json](http://127.0.0.1:8085/data.json). If you chose
+   a specific local IP, you can also use that IP in the URL. Keep Libre Hardware Monitor running while you use the Stream
+   Deck action.
 
-> Advanced: set the `LHM_ENDPOINT` environment variable before launching Stream Deck if you prefer another URL (e.g. a different port or host). The default endpoint is `http://127.0.0.1:8085/data.json`.
+> Advanced: set the `LHM_ENDPOINT` environment variable before launching Stream Deck if you prefer another URL (e.g. a different port or host). If you bind LHM to a specific local IP, set `LHM_ENDPOINT` to match that IP and port. The default endpoint is `http://127.0.0.1:8085/data.json`.
 
 
 ## Install and Setup the Plugin
