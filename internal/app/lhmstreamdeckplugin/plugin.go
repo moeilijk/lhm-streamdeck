@@ -201,9 +201,26 @@ func (p *Plugin) updateTiles(data *actionData) {
 	s := data.settings
 	r, err := p.getReading(s.SensorUID, s.ReadingID)
 	if err != nil {
-		log.Printf("getReading failed: %v\n", err)
-		showUnavailable()
-		return
+		if s.ReadingLabel != "" {
+			readings, rerr := p.hw.ReadingsForSensorID(s.SensorUID)
+			if rerr == nil {
+				for _, candidate := range readings {
+					if candidate.Label() == s.ReadingLabel {
+						s.ReadingID = candidate.ID()
+						r = candidate
+						err = nil
+						_ = p.sd.SetSettings(data.context, s)
+						p.am.SetAction(data.action, data.context, s)
+						break
+					}
+				}
+			}
+		}
+		if err != nil {
+			log.Printf("getReading failed: %v\n", err)
+			showUnavailable()
+			return
+		}
 	}
 	if s.ShowTitleInGraph != nil && *s.ShowTitleInGraph && s.Title == "" {
 		g.SetLabelText(0, r.Label())

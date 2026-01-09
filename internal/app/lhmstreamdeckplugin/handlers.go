@@ -29,6 +29,7 @@ func (p *Plugin) handleSensorSelect(event *streamdeck.EvSendToPlugin, sdpi *evSd
 	if settings.SensorUID != sensorid {
 		settings.SensorUID = sensorid
 		settings.ReadingID = 0
+		settings.ReadingLabel = ""
 		settings.IsValid = false
 	}
 	payload := evSendReadingsPayload{Readings: evreadings, Settings: &settings}
@@ -84,6 +85,7 @@ func (p *Plugin) handleReadingSelect(event *streamdeck.EvSendToPlugin, sdpi *evS
 	if err != nil {
 		return fmt.Errorf("handleReadingSelect getReading: %v", err)
 	}
+	settings.ReadingLabel = r.Label()
 
 	g, ok := p.graphs[event.Context]
 	if !ok {

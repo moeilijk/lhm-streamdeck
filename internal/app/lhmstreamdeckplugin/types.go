@@ -3,6 +3,7 @@ package lhmstreamdeckplugin
 type actionSettings struct {
 	SensorUID        string  `json:"sensorUid"`
 	ReadingID        int32   `json:"readingId,string"`
+	ReadingLabel     string  `json:"readingLabel"`
 	Title            string  `json:"title"`
 	TitleFontSize    float64 `json:"titleFontSize"`
 	ValueFontSize    float64 `json:"valueFontSize"`
