@@ -38,3 +38,6 @@ cmd/hwinfostreamdeckplugin/debug
 # build artifacts
 build/*.streamDeckPlugin
 build/*.sdPlugin
+
+# local build version tracking
+.last_patch
