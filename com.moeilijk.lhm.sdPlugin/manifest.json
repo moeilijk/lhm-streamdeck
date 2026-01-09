@@ -31,7 +31,7 @@
 	"Icon": "pluginIcon",
 	"CategoryIcon": "categoryIcon",
 	"URL": "https://github.com/moeilijk/lhm-streamdeck",
-	"Version": "1.0.2.0",
+	"Version": "1.0.1.0",
 	"ApplicationsToMonitor": {
 		"windows": [
 			"LibreHardwareMonitor.EXE",
