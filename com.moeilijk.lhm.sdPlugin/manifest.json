@@ -1,8 +1,8 @@
 {
 	"$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
-	"SDKVersion": 2,
+	"SDKVersion": 3,
 	"Software": {
-		"MinimumVersion": "6.4"
+		"MinimumVersion": "6.9"
 	},
 	"Actions": [
 		{
