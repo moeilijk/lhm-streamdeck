@@ -187,6 +187,17 @@ func (p *Plugin) updateTiles(data *actionData) {
 		p.sd.SetSettings(data.context, &data.settings)
 	}
 
+	pollTime, err := p.hw.PollTime()
+	if err != nil {
+		log.Printf("PollTime failed: %v\n", err)
+		showUnavailable()
+		return
+	}
+	if pollTime == 0 || time.Since(time.Unix(0, int64(pollTime))) > 5*time.Second {
+		showUnavailable()
+		return
+	}
+
 	s := data.settings
 	r, err := p.getReading(s.SensorUID, s.ReadingID)
 	if err != nil {
