@@ -9,23 +9,33 @@ import (
 type actionManager struct {
 	mux     sync.RWMutex
 	actions map[string]*actionData
+	lastRun map[string]time.Time
 }
 
 func newActionManager() *actionManager {
-	return &actionManager{actions: make(map[string]*actionData)}
+	return &actionManager{
+		actions: make(map[string]*actionData),
+		lastRun: make(map[string]time.Time),
+	}
 }
 
 func (tm *actionManager) Run(updateTiles func(*actionData)) {
 	go func() {
 		ticker := time.NewTicker(time.Second)
 		for range ticker.C {
-			tm.mux.RLock()
+			now := time.Now()
+			tm.mux.Lock()
 			for _, data := range tm.actions {
 				if data.settings.IsValid {
+					last := tm.lastRun[data.context]
+					if data.settings.InErrorState && now.Sub(last) < 5*time.Second {
+						continue
+					}
 					updateTiles(data)
+					tm.lastRun[data.context] = now
 				}
 			}
-			tm.mux.RUnlock()
+			tm.mux.Unlock()
 		}
 	}()
 }
@@ -39,6 +49,7 @@ func (tm *actionManager) SetAction(action, context string, settings *actionSetti
 func (tm *actionManager) RemoveAction(context string) {
 	tm.mux.Lock()
 	delete(tm.actions, context)
+	delete(tm.lastRun, context)
 	tm.mux.Unlock()
 }
 
