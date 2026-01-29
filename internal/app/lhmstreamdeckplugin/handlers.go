@@ -182,6 +182,21 @@ func (p *Plugin) handleDivisor(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCol
 	return nil
 }
 
+func (p *Plugin) handleSetGraphUnit(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection) error {
+	graphUnit := sdpi.Value
+	settings, err := p.am.getSettings(event.Context)
+	if err != nil {
+		return fmt.Errorf("handleSetGraphUnit getSettings: %v", err)
+	}
+	settings.GraphUnit = graphUnit
+	err = p.sd.SetSettings(event.Context, &settings)
+	if err != nil {
+		return fmt.Errorf("handleSetGraphUnit SetSettings: %v", err)
+	}
+	p.am.SetAction(event.Action, event.Context, &settings)
+	return nil
+}
+
 const (
 	hexFormat      = "#%02x%02x%02x"
 	hexShortFormat = "#%1x%1x%1x"

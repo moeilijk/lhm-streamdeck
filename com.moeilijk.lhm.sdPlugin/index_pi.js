@@ -112,6 +112,11 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
         document.querySelector("#valueFontSize input").value =
           settings.valueFontSize || 10.5;
       }
+      if (settings.graphUnit !== undefined && settings.graphUnit !== "") {
+        document.querySelector("#graphUnit").value = settings.graphUnit;
+      } else {
+        document.querySelector("#graphUnit").value = "MB"; // default
+      }
     }
   };
 }

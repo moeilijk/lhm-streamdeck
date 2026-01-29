@@ -216,6 +216,11 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			if err != nil {
 				log.Println("handleDivisor", err)
 			}
+		case "graphUnit":
+			err := p.handleSetGraphUnit(event, &sdpi)
+			if err != nil {
+				log.Println("handleSetGraphUnit", err)
+			}
 		case "foreground", "background", "highlight", "valuetext":
 			err := p.handleColorChange(event, sdpi.Key, &sdpi)
 			if err != nil {

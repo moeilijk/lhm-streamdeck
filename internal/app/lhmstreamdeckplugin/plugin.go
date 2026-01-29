@@ -6,6 +6,7 @@ import (
 	"log"
 	"os/exec"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/go-plugin"
@@ -143,6 +144,49 @@ func (p *Plugin) applyDefaultFormat(v float64, t hwsensorsservice.ReadingType, u
 	return "Bad Format"
 }
 
+// normalizeForGraph converts data size values to the target unit for consistent graph scaling.
+// This prevents jumps when LHM switches units (e.g., 1000 KB/s → 1 MB/s).
+// targetUnit can be: "B", "KB", "MB", "GB", "TB" or empty (no normalization).
+func (p *Plugin) normalizeForGraph(value float64, sourceUnit string, targetUnit string) float64 {
+	if targetUnit == "" {
+		return value // no normalization
+	}
+
+	// Convert source value to bytes first
+	sourceLower := strings.ToLower(sourceUnit)
+	var bytes float64
+	switch {
+	case strings.HasPrefix(sourceLower, "tb") || strings.HasPrefix(sourceLower, "tib"):
+		bytes = value * 1024 * 1024 * 1024 * 1024
+	case strings.HasPrefix(sourceLower, "gb") || strings.HasPrefix(sourceLower, "gib"):
+		bytes = value * 1024 * 1024 * 1024
+	case strings.HasPrefix(sourceLower, "mb") || strings.HasPrefix(sourceLower, "mib"):
+		bytes = value * 1024 * 1024
+	case strings.HasPrefix(sourceLower, "kb") || strings.HasPrefix(sourceLower, "kib"):
+		bytes = value * 1024
+	case strings.HasPrefix(sourceLower, "b/") || sourceLower == "b":
+		bytes = value
+	default:
+		return value // not a data size unit, no conversion
+	}
+
+	// Convert bytes to target unit
+	switch strings.ToUpper(targetUnit) {
+	case "TB":
+		return bytes / (1024 * 1024 * 1024 * 1024)
+	case "GB":
+		return bytes / (1024 * 1024 * 1024)
+	case "MB":
+		return bytes / (1024 * 1024)
+	case "KB":
+		return bytes / 1024
+	case "B":
+		return bytes
+	default:
+		return value
+	}
+}
+
 func (p *Plugin) updateTiles(data *actionData) {
 	if data.action != "com.moeilijk.lhm.reading" {
 		log.Printf("Unknown action updateTiles: %s\n", data.action)
@@ -236,7 +280,14 @@ func (p *Plugin) updateTiles(data *actionData) {
 		}
 		v = r.Value() / fdiv
 	}
-	g.Update(v)
+
+	// Normalize the graph value to handle unit changes (e.g., KB/s → MB/s)
+	graphValue := p.normalizeForGraph(r.Value(), r.Unit(), s.GraphUnit)
+	if s.Divisor != "" {
+		fdiv, _ := strconv.ParseFloat(s.Divisor, 64)
+		graphValue = graphValue / fdiv
+	}
+	g.Update(graphValue)
 	var text string
 	if f := s.Format; f != "" {
 		text = fmt.Sprintf(f, v)

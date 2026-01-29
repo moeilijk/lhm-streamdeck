@@ -12,6 +12,7 @@ type actionSettings struct {
 	Max              int     `json:"max"`
 	Format           string  `json:"format"`
 	Divisor          string  `json:"divisor"`
+	GraphUnit        string  `json:"graphUnit"` // B, KB, MB, GB, TB - normalizes graph values to this unit
 	IsValid          bool    `json:"isValid"`
 	TitleColor       string  `json:"titleColor"`
 	ForegroundColor  string  `json:"foregroundColor"`

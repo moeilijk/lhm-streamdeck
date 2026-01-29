@@ -15,6 +15,8 @@ I wanted a local, open replacement for Stream Deck hardware monitoring without l
 1. Install Libre Hardware Monitor **v0.9.5 or newer** (use the GitHub release; winget may still serve 0.9.4).
    v0.9.5+ is required to avoid WinRing0 driver warnings and missing tiles after LHM restarts/updates.
 
+   > **Note:** The stable 0.9.5.0 release may crash on startup due to a [DiskInfoToolkit bug](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/issues/2148) when unpartitioned drives are present. If affected, use a nightly build from [GitHub Actions](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/actions) that includes the fix.
+
     ![alt text](images/winget-lhm.gif "winget install LibreHardwareMonitor.LibreHardwareMonitor")
 2. Launch `LibreHardwareMonitor.exe`.
 
