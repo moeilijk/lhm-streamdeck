@@ -282,17 +282,28 @@ func (p *Plugin) updateTiles(data *actionData) {
 	}
 
 	// Normalize the graph value to handle unit changes (e.g., KB/s → MB/s)
+	// Only applies to throughput readings (units containing "/s")
 	graphValue := p.normalizeForGraph(r.Value(), r.Unit(), s.GraphUnit)
 	if s.Divisor != "" {
 		fdiv, _ := strconv.ParseFloat(s.Divisor, 64)
 		graphValue = graphValue / fdiv
 	}
 	g.Update(graphValue)
+
+	// Determine display value and unit
+	displayValue := v
+	displayUnit := r.Unit()
+	if s.GraphUnit != "" && strings.Contains(r.Unit(), "/s") {
+		// Convert display value to match GraphUnit
+		displayValue = p.normalizeForGraph(v, r.Unit(), s.GraphUnit)
+		displayUnit = s.GraphUnit + "/s"
+	}
+
 	var text string
 	if f := s.Format; f != "" {
-		text = fmt.Sprintf(f, v)
+		text = fmt.Sprintf(f, displayValue)
 	} else {
-		text = p.applyDefaultFormat(v, hwsensorsservice.ReadingType(r.TypeI()), r.Unit())
+		text = p.applyDefaultFormat(displayValue, hwsensorsservice.ReadingType(r.TypeI()), displayUnit)
 	}
 	g.SetLabelText(1, text)
 

@@ -47,6 +47,7 @@ type evSendReadingsPayloadReading struct {
 	ID     int32  `json:"id,string"`
 	Label  string `json:"label"`
 	Prefix string `json:"prefix"`
+	Unit   string `json:"unit"`
 }
 
 type evSendReadingsPayload struct {

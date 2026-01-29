@@ -5,6 +5,7 @@ var websocket = null,
   actionInfo = {},
   inInfo = {},
   runningApps = [],
+  currentReadings = [], // store readings to look up unit when selection changes
   isQT = navigator.appVersion.includes("QtWebEngine"),
   onchangeevt = "onchange"; // 'oninput'; // change this, if you want interactive elements act on any change, or while they're modified
 
@@ -112,10 +113,8 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
         document.querySelector("#valueFontSize input").value =
           settings.valueFontSize || 10.5;
       }
-      if (settings.graphUnit !== undefined && settings.graphUnit !== "") {
+      if (settings.graphUnit !== undefined) {
         document.querySelector("#graphUnit").value = settings.graphUnit;
-      } else {
-        document.querySelector("#graphUnit").value = "MB"; // default
       }
     }
   };
@@ -166,6 +165,9 @@ function addReadings(el, readings, settings) {
     el.remove(i);
   }
 
+  // Store readings globally for unit lookup
+  currentReadings = readings;
+
   el.removeAttribute("disabled");
 
   var option = document.createElement("option");
@@ -193,11 +195,34 @@ function addReadings(el, readings, settings) {
     }
     option.innerHTML = `${r.prefix}${spaces}${r.label}`;
     option.value = r.id;
+    option.dataset.unit = r.unit || r.prefix; // store unit in data attribute
     if (settings.isValid === true && settings.readingId === r.id) {
       option.selected = true;
+      // Show/hide graphUnit based on selected reading
+      updateGraphUnitVisibility(r.unit || r.prefix);
     }
     el.add(option);
   });
+
+  // Add change listener to show/hide graphUnit when reading changes
+  el.addEventListener("change", function() {
+    var selectedOption = el.options[el.selectedIndex];
+    if (selectedOption && selectedOption.dataset.unit) {
+      updateGraphUnitVisibility(selectedOption.dataset.unit);
+    }
+  });
+}
+
+// Show graphUnit only for throughput readings (units containing /s)
+function updateGraphUnitVisibility(unit) {
+  var container = document.querySelector("#graphUnitContainer");
+  if (container) {
+    if (unit && unit.includes("/s")) {
+      container.style.display = "";
+    } else {
+      container.style.display = "none";
+    }
+  }
 }
 
 function initPropertyInspector(initDelay) {
