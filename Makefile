@@ -38,7 +38,7 @@ debug:
 
 release: bump-version
 	-@rm build/com.moeilijk.lhm.streamDeckPlugin
-	@DistributionTool.exe -b -i com.moeilijk.lhm.sdPlugin -o build
+	streamdeck pack com.moeilijk.lhm.sdPlugin --output build --force
 
 bump-version:
 	./scripts/bump-manifest-version.sh
