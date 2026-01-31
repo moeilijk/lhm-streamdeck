@@ -19,7 +19,25 @@ type actionSettings struct {
 	BackgroundColor  string  `json:"backgroundColor"`
 	HighlightColor   string  `json:"highlightColor"`
 	ValueTextColor   string  `json:"valueTextColor"`
-	InErrorState     bool    `json:"inErrorState"`
+	InErrorState bool `json:"inErrorState"`
+	// Warning Threshold Settings
+	WarningEnabled         bool    `json:"warningEnabled"`         // Enable warning threshold
+	WarningOperator        string  `json:"warningOperator"`        // ">", "<", ">=", "<=", "=="
+	WarningValue           float64 `json:"warningValue"`           // Warning threshold value
+	WarningBackgroundColor string  `json:"warningBackgroundColor"` // Background color for warning
+	WarningForegroundColor string  `json:"warningForegroundColor"` // Graph foreground for warning
+	WarningHighlightColor  string  `json:"warningHighlightColor"`  // Graph highlight for warning
+	WarningValueTextColor  string  `json:"warningValueTextColor"`  // Value text color for warning
+	// Critical Threshold Settings
+	CriticalEnabled         bool    `json:"criticalEnabled"`         // Enable critical threshold
+	CriticalOperator        string  `json:"criticalOperator"`        // ">", "<", ">=", "<=", "=="
+	CriticalValue           float64 `json:"criticalValue"`           // Critical threshold value
+	CriticalBackgroundColor string  `json:"criticalBackgroundColor"` // Background color for critical
+	CriticalForegroundColor string  `json:"criticalForegroundColor"` // Graph foreground for critical
+	CriticalHighlightColor  string  `json:"criticalHighlightColor"`  // Graph highlight for critical
+	CriticalValueTextColor  string  `json:"criticalValueTextColor"`  // Value text color for critical
+	// Current alert state: "none", "warning", or "critical"
+	CurrentAlertState string `json:"currentAlertState"`
 }
 
 type actionData struct {
@@ -61,4 +79,5 @@ type evSdpiCollection struct {
 	Key       string   `json:"key"`
 	Selection []string `json:"selection"`
 	Value     string   `json:"value"`
+	Checked   bool     `json:"checked"` // For checkbox inputs
 }

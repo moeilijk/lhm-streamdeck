@@ -181,6 +181,86 @@
       <div class="sdpi-item-label">Highlight</div>
       <input type="color" class="sdpi-item-value" id="highlight" value="#009e00" />
     </div>
+
+    <div class="sdpi-heading">Warning Threshold</div>
+
+    <div class="sdpi-item" id="warningEnabledContainer">
+      <div class="sdpi-item-label">Enable</div>
+      <div class="sdpi-item-value">
+        <input type="checkbox" id="warningEnabled" />
+        <label for="warningEnabled"><span></span></label>
+      </div>
+    </div>
+
+    <div id="warningSettings" style="display: none;">
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Condition</div>
+        <div class="sdpi-item-value" style="display: flex; align-items: center; gap: 4px;">
+          <select id="warningOperator" style="width: 60px;">
+            <option value=">" selected>&gt;</option>
+            <option value="<">&lt;</option>
+            <option value=">=">&gt;=</option>
+            <option value="<=">&lt;=</option>
+            <option value="==">==</option>
+          </select>
+          <input type="number" id="warningValue" step="any" style="width: 70px;" placeholder="Value" />
+        </div>
+      </div>
+
+      <div type="color" class="sdpi-item">
+        <div class="sdpi-item-label">Background</div>
+        <input type="color" class="sdpi-item-value" id="warningBackground" value="#333300" />
+        <div class="sdpi-item-label">Value Text</div>
+        <input type="color" class="sdpi-item-value" id="warningValuetext" value="#ffff00" />
+      </div>
+
+      <div type="color" class="sdpi-item">
+        <div class="sdpi-item-label">Foreground</div>
+        <input type="color" class="sdpi-item-value" id="warningForeground" value="#999900" />
+        <div class="sdpi-item-label">Highlight</div>
+        <input type="color" class="sdpi-item-value" id="warningHighlight" value="#ffff00" />
+      </div>
+    </div>
+
+    <div class="sdpi-heading">Critical Threshold</div>
+
+    <div class="sdpi-item" id="criticalEnabledContainer">
+      <div class="sdpi-item-label">Enable</div>
+      <div class="sdpi-item-value">
+        <input type="checkbox" id="criticalEnabled" />
+        <label for="criticalEnabled"><span></span></label>
+      </div>
+    </div>
+
+    <div id="criticalSettings" style="display: none;">
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Condition</div>
+        <div class="sdpi-item-value" style="display: flex; align-items: center; gap: 4px;">
+          <select id="criticalOperator" style="width: 60px;">
+            <option value=">" selected>&gt;</option>
+            <option value="<">&lt;</option>
+            <option value=">=">&gt;=</option>
+            <option value="<=">&lt;=</option>
+            <option value="==">==</option>
+          </select>
+          <input type="number" id="criticalValue" step="any" style="width: 70px;" placeholder="Value" />
+        </div>
+      </div>
+
+      <div type="color" class="sdpi-item">
+        <div class="sdpi-item-label">Background</div>
+        <input type="color" class="sdpi-item-value" id="criticalBackground" value="#660000" />
+        <div class="sdpi-item-label">Value Text</div>
+        <input type="color" class="sdpi-item-value" id="criticalValuetext" value="#ff0000" />
+      </div>
+
+      <div type="color" class="sdpi-item">
+        <div class="sdpi-item-label">Foreground</div>
+        <input type="color" class="sdpi-item-value" id="criticalForeground" value="#990000" />
+        <div class="sdpi-item-label">Highlight</div>
+        <input type="color" class="sdpi-item-value" id="criticalHighlight" value="#ff3333" />
+      </div>
+    </div>
   </div>
   <!-- <script src="echomd.js"></script> -->
   <script src="index_pi.js"></script>

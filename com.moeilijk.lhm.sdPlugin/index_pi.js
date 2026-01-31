@@ -116,6 +116,54 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       if (settings.graphUnit !== undefined) {
         document.querySelector("#graphUnit").value = settings.graphUnit;
       }
+      // Restore warning threshold settings
+      if (settings.warningEnabled !== undefined) {
+        document.querySelector("#warningEnabled").checked = settings.warningEnabled;
+        document.querySelector("#warningSettings").style.display =
+          settings.warningEnabled ? "block" : "none";
+      }
+      if (settings.warningValue !== undefined && settings.warningValue !== 0) {
+        document.querySelector("#warningValue").value = settings.warningValue;
+      }
+      if (settings.warningOperator) {
+        document.querySelector("#warningOperator").value = settings.warningOperator;
+      }
+      if (settings.warningBackgroundColor) {
+        document.querySelector("#warningBackground").value = settings.warningBackgroundColor;
+      }
+      if (settings.warningForegroundColor) {
+        document.querySelector("#warningForeground").value = settings.warningForegroundColor;
+      }
+      if (settings.warningHighlightColor) {
+        document.querySelector("#warningHighlight").value = settings.warningHighlightColor;
+      }
+      if (settings.warningValueTextColor) {
+        document.querySelector("#warningValuetext").value = settings.warningValueTextColor;
+      }
+      // Restore critical threshold settings
+      if (settings.criticalEnabled !== undefined) {
+        document.querySelector("#criticalEnabled").checked = settings.criticalEnabled;
+        document.querySelector("#criticalSettings").style.display =
+          settings.criticalEnabled ? "block" : "none";
+      }
+      if (settings.criticalValue !== undefined && settings.criticalValue !== 0) {
+        document.querySelector("#criticalValue").value = settings.criticalValue;
+      }
+      if (settings.criticalOperator) {
+        document.querySelector("#criticalOperator").value = settings.criticalOperator;
+      }
+      if (settings.criticalBackgroundColor) {
+        document.querySelector("#criticalBackground").value = settings.criticalBackgroundColor;
+      }
+      if (settings.criticalForegroundColor) {
+        document.querySelector("#criticalForeground").value = settings.criticalForegroundColor;
+      }
+      if (settings.criticalHighlightColor) {
+        document.querySelector("#criticalHighlight").value = settings.criticalHighlightColor;
+      }
+      if (settings.criticalValueTextColor) {
+        document.querySelector("#criticalValuetext").value = settings.criticalValueTextColor;
+      }
     }
   };
 }
@@ -361,6 +409,76 @@ function prepareDOMElements(baseElement) {
       e.onkeyup = fn;
     }
   });
+
+  // Warning threshold toggle - show/hide settings panel
+  const warningEnabled = document.querySelector("#warningEnabled");
+  if (warningEnabled) {
+    warningEnabled.addEventListener("change", function(e) {
+      document.querySelector("#warningSettings").style.display =
+        e.target.checked ? "block" : "none";
+    });
+  }
+
+  // Critical threshold toggle - show/hide settings panel
+  const criticalEnabled = document.querySelector("#criticalEnabled");
+  if (criticalEnabled) {
+    criticalEnabled.addEventListener("change", function(e) {
+      document.querySelector("#criticalSettings").style.display =
+        e.target.checked ? "block" : "none";
+    });
+  }
+
+  // Warning value input with debounce
+  const warningValue = document.querySelector("#warningValue");
+  if (warningValue) {
+    let timeout;
+    warningValue.addEventListener("input", function(e) {
+      clearTimeout(timeout);
+      timeout = setTimeout(function() {
+        sendValueToPlugin({
+          key: "warningValue",
+          value: e.target.value
+        }, "sdpi_collection");
+      }, 300);
+    });
+  }
+
+  // Critical value input with debounce
+  const criticalValue = document.querySelector("#criticalValue");
+  if (criticalValue) {
+    let timeout;
+    criticalValue.addEventListener("input", function(e) {
+      clearTimeout(timeout);
+      timeout = setTimeout(function() {
+        sendValueToPlugin({
+          key: "criticalValue",
+          value: e.target.value
+        }, "sdpi_collection");
+      }, 300);
+    });
+  }
+
+  // Warning operator select
+  const warningOperator = document.querySelector("#warningOperator");
+  if (warningOperator) {
+    warningOperator.addEventListener("change", function(e) {
+      sendValueToPlugin({
+        key: "warningOperator",
+        value: e.target.value
+      }, "sdpi_collection");
+    });
+  }
+
+  // Critical operator select
+  const criticalOperator = document.querySelector("#criticalOperator");
+  if (criticalOperator) {
+    criticalOperator.addEventListener("change", function(e) {
+      sendValueToPlugin({
+        key: "criticalOperator",
+        value: e.target.value
+      }, "sdpi_collection");
+    });
+  }
 }
 
 function handleSdpiItemClick(e, idx) {

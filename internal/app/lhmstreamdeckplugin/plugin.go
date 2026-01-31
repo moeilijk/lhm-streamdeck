@@ -290,6 +290,29 @@ func (p *Plugin) updateTiles(data *actionData) {
 	}
 	g.Update(graphValue)
 
+	// Check threshold alerts (critical has higher priority than warning)
+	newAlertState := "none"
+	if s.CriticalEnabled && s.CriticalOperator != "" && evaluateThreshold(v, s.CriticalValue, s.CriticalOperator) {
+		newAlertState = "critical"
+	} else if s.WarningEnabled && s.WarningOperator != "" && evaluateThreshold(v, s.WarningValue, s.WarningOperator) {
+		newAlertState = "warning"
+	}
+
+	// Only change colors on state transition to avoid constant redraws
+	if newAlertState != s.CurrentAlertState {
+		switch newAlertState {
+		case "critical":
+			p.applyCriticalColors(g, s)
+		case "warning":
+			p.applyWarningColors(g, s)
+		default:
+			p.applyNormalColors(g, s)
+		}
+		s.CurrentAlertState = newAlertState
+		p.am.SetAction(data.action, data.context, s)
+		_ = p.sd.SetSettings(data.context, s)
+	}
+
 	// Determine display value and unit
 	displayValue := v
 	displayUnit := r.Unit()

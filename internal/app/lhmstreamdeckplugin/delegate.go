@@ -231,6 +231,42 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			if err != nil {
 				log.Println("handleSetTitleFontSize", err)
 			}
+		case "warningEnabled":
+			err := p.handleWarningEnabled(event, &sdpi)
+			if err != nil {
+				log.Println("handleWarningEnabled", err)
+			}
+		case "criticalEnabled":
+			err := p.handleCriticalEnabled(event, &sdpi)
+			if err != nil {
+				log.Println("handleCriticalEnabled", err)
+			}
+		case "warningValue":
+			err := p.handleWarningValue(event, &sdpi)
+			if err != nil {
+				log.Println("handleWarningValue", err)
+			}
+		case "criticalValue":
+			err := p.handleCriticalValue(event, &sdpi)
+			if err != nil {
+				log.Println("handleCriticalValue", err)
+			}
+		case "warningOperator":
+			err := p.handleWarningOperator(event, &sdpi)
+			if err != nil {
+				log.Println("handleWarningOperator", err)
+			}
+		case "criticalOperator":
+			err := p.handleCriticalOperator(event, &sdpi)
+			if err != nil {
+				log.Println("handleCriticalOperator", err)
+			}
+		case "warningBackground", "warningForeground", "warningHighlight", "warningValuetext",
+			"criticalBackground", "criticalForeground", "criticalHighlight", "criticalValuetext":
+			err := p.handleColorChange(event, sdpi.Key, &sdpi)
+			if err != nil {
+				log.Println("handleColorChange (threshold)", err)
+			}
 		default:
 			log.Printf("Unknown sdpi key: %s\n", sdpi.Key)
 		}
