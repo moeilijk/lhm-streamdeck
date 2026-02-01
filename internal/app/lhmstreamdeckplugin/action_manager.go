@@ -24,6 +24,7 @@ func (tm *actionManager) Run(updateTiles func(*actionData)) {
 		ticker := time.NewTicker(time.Second)
 		for range ticker.C {
 			now := time.Now()
+			var toUpdate []*actionData
 			tm.mux.Lock()
 			for _, data := range tm.actions {
 				if data.settings.IsValid {
@@ -31,11 +32,17 @@ func (tm *actionManager) Run(updateTiles func(*actionData)) {
 					if data.settings.InErrorState && now.Sub(last) < 5*time.Second {
 						continue
 					}
-					updateTiles(data)
-					tm.lastRun[data.context] = now
+					toUpdate = append(toUpdate, data)
 				}
 			}
 			tm.mux.Unlock()
+
+			for _, data := range toUpdate {
+				updateTiles(data)
+				tm.mux.Lock()
+				tm.lastRun[data.context] = now
+				tm.mux.Unlock()
+			}
 		}
 	}()
 }

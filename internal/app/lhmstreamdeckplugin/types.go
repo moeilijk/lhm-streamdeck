@@ -1,5 +1,20 @@
 package lhmstreamdeckplugin
 
+// Threshold represents a single configurable threshold level
+type Threshold struct {
+	ID              string  `json:"id"`              // Unique identifier
+	Name            string  `json:"name"`            // User-friendly name
+	Text            string  `json:"text"`            // Optional alert text to display when triggered
+	TextColor       string  `json:"textColor"`       // Color for alert text
+	Enabled         bool    `json:"enabled"`         // Is this threshold active?
+	Operator        string  `json:"operator"`        // ">", "<", ">=", "<=", "=="
+	Value           float64 `json:"value"`           // Threshold value
+	BackgroundColor string  `json:"backgroundColor"` // Background color when triggered
+	ForegroundColor string  `json:"foregroundColor"` // Graph foreground color
+	HighlightColor  string  `json:"highlightColor"`  // Graph highlight color
+	ValueTextColor  string  `json:"valueTextColor"`  // Value text color
+}
+
 type actionSettings struct {
 	SensorUID        string  `json:"sensorUid"`
 	ReadingID        int32   `json:"readingId,string"`
@@ -20,6 +35,29 @@ type actionSettings struct {
 	HighlightColor   string  `json:"highlightColor"`
 	ValueTextColor   string  `json:"valueTextColor"`
 	InErrorState     bool    `json:"inErrorState"`
+
+	// Dynamic threshold system
+	Thresholds         []Threshold `json:"thresholds"`
+	CurrentThresholdID string      `json:"currentThresholdId"`
+
+	// Legacy Warning Threshold Settings (kept for migration, omitempty)
+	WarningEnabled         bool    `json:"warningEnabled,omitempty"`
+	WarningOperator        string  `json:"warningOperator,omitempty"`
+	WarningValue           float64 `json:"warningValue,omitempty"`
+	WarningBackgroundColor string  `json:"warningBackgroundColor,omitempty"`
+	WarningForegroundColor string  `json:"warningForegroundColor,omitempty"`
+	WarningHighlightColor  string  `json:"warningHighlightColor,omitempty"`
+	WarningValueTextColor  string  `json:"warningValueTextColor,omitempty"`
+	// Legacy Critical Threshold Settings (kept for migration, omitempty)
+	CriticalEnabled         bool    `json:"criticalEnabled,omitempty"`
+	CriticalOperator        string  `json:"criticalOperator,omitempty"`
+	CriticalValue           float64 `json:"criticalValue,omitempty"`
+	CriticalBackgroundColor string  `json:"criticalBackgroundColor,omitempty"`
+	CriticalForegroundColor string  `json:"criticalForegroundColor,omitempty"`
+	CriticalHighlightColor  string  `json:"criticalHighlightColor,omitempty"`
+	CriticalValueTextColor  string  `json:"criticalValueTextColor,omitempty"`
+	// Legacy alert state (kept for migration)
+	CurrentAlertState string `json:"currentAlertState,omitempty"`
 }
 
 type actionData struct {
@@ -56,9 +94,11 @@ type evSendReadingsPayload struct {
 }
 
 type evSdpiCollection struct {
-	Group     bool     `json:"group"`
-	Index     int      `json:"index"`
-	Key       string   `json:"key"`
-	Selection []string `json:"selection"`
-	Value     string   `json:"value"`
+	Group       bool     `json:"group"`
+	Index       int      `json:"index"`
+	Key         string   `json:"key"`
+	Selection   []string `json:"selection"`
+	Value       string   `json:"value"`
+	Checked     bool     `json:"checked"`     // For checkbox inputs
+	ThresholdID string   `json:"thresholdId"` // For threshold-specific operations
 }

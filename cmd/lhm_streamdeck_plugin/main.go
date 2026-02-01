@@ -9,6 +9,7 @@ import (
 	// _ "net/http/pprof"
 	"os"
 	"path/filepath"
+	"time"
 
 	plugin "github.com/shayne/lhm-streamdeck/internal/app/lhmstreamdeckplugin"
 )
@@ -30,7 +31,15 @@ func main() {
 	}
 
 	// Disable logging in production
-	log.SetOutput(ioutil.Discard)
+	logPath := filepath.Join(filepath.Dir(os.Args[0]), "lhm.log")
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err == nil {
+		log.SetOutput(f)
+		log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+		log.Println("BOOT", time.Now().Format(time.RFC3339Nano))
+	} else {
+		log.SetOutput(ioutil.Discard)
+	}
 
 	flag.Parse()
 

@@ -181,6 +181,78 @@
       <div class="sdpi-item-label">Highlight</div>
       <input type="color" class="sdpi-item-value" id="highlight" value="#009e00" />
     </div>
+
+    <div class="sdpi-heading">Thresholds</div>
+
+    <div id="thresholdsContainer">
+      <!-- Dynamic threshold items will be rendered here -->
+    </div>
+
+    <div class="sdpi-item" id="addThresholdContainer">
+      <div class="sdpi-item-label">Add New</div>
+      <div class="sdpi-item-value" style="display: flex; align-items: center; gap: 4px;">
+        <input type="text" id="newThresholdName" placeholder="Name" style="width: 100px;" />
+        <button id="addThresholdBtn" class="sdpi-item-value" style="width: 60px;">Add</button>
+      </div>
+    </div>
+
+    <!-- Template for threshold items (hidden, cloned by JS) -->
+    <template id="thresholdTemplate">
+      <div class="threshold-item" data-threshold-id="">
+        <div class="sdpi-item" style="margin-top: 8px;">
+          <div class="sdpi-item-label threshold-header-label">
+            <input type="text" class="threshold-name" placeholder="Name" style="width: 70px;" />
+          </div>
+          <div class="sdpi-item-value threshold-header-value" style="display: flex; align-items: center; gap: 4px;">
+            <button class="threshold-toggle" style="width: 26px; padding: 0;">on</button>
+            <span class="threshold-arrows">
+              <button class="threshold-move-up" style="width: 18px; padding: 0;" title="Move up">&uarr;</button>
+              <button class="threshold-move-down" style="width: 18px; padding: 0;" title="Move down">&darr;</button>
+            </span>
+            <button class="threshold-remove" style="width: 18px; padding: 0; background: #a33; color: white;" title="Remove">×</button>
+          </div>
+        </div>
+
+        <div class="threshold-settings" style="display: none;">
+          <div class="sdpi-item">
+            <div class="sdpi-item-label">Text</div>
+            <input type="text" class="sdpi-item-value threshold-text" placeholder="e.g. HOT or Hot {value}" />
+          </div>
+          <div class="sdpi-item">
+            <div class="sdpi-item-label">Condition</div>
+            <div class="sdpi-item-value" style="display: flex; align-items: center; gap: 4px;">
+              <select class="threshold-operator" style="width: 55px;">
+                <option value=">">&gt;</option>
+                <option value="<">&lt;</option>
+                <option value=">=" selected>&gt;=</option>
+                <option value="<=">&lt;=</option>
+                <option value="==">==</option>
+              </select>
+              <input type="number" class="threshold-value" step="any" style="width: 60px;" placeholder="Value" />
+            </div>
+          </div>
+
+          <div type="color" class="sdpi-item">
+            <div class="sdpi-item-label">Background</div>
+            <input type="color" class="sdpi-item-value threshold-bg" value="#333300" />
+            <div class="sdpi-item-label">Value Text</div>
+            <input type="color" class="sdpi-item-value threshold-vt" value="#ffff00" />
+          </div>
+
+          <div type="color" class="sdpi-item">
+            <div class="sdpi-item-label">Foreground</div>
+            <input type="color" class="sdpi-item-value threshold-fg" value="#999900" />
+            <div class="sdpi-item-label">Highlight</div>
+            <input type="color" class="sdpi-item-value threshold-hl" value="#ffff00" />
+          </div>
+
+          <div type="color" class="sdpi-item">
+            <div class="sdpi-item-label">Alert Text</div>
+            <input type="color" class="sdpi-item-value threshold-tc" value="#ffffff" />
+          </div>
+        </div>
+      </div>
+    </template>
   </div>
   <!-- <script src="echomd.js"></script> -->
   <script src="index_pi.js"></script>
