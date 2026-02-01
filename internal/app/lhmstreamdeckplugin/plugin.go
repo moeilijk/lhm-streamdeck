@@ -168,6 +168,30 @@ func (p *Plugin) applyDefaultFormat(v float64, t hwsensorsservice.ReadingType, u
 	return "Bad Format"
 }
 
+func (p *Plugin) applyDefaultFormatValueOnly(v float64, t hwsensorsservice.ReadingType) string {
+	switch t {
+	case hwsensorsservice.ReadingTypeNone:
+		return fmt.Sprintf("%0.f", v)
+	case hwsensorsservice.ReadingTypeTemp:
+		return fmt.Sprintf("%.0f", v)
+	case hwsensorsservice.ReadingTypeVolt:
+		return fmt.Sprintf("%.0f", v)
+	case hwsensorsservice.ReadingTypeFan:
+		return fmt.Sprintf("%.0f", v)
+	case hwsensorsservice.ReadingTypeCurrent:
+		return fmt.Sprintf("%.0f", v)
+	case hwsensorsservice.ReadingTypePower:
+		return fmt.Sprintf("%0.f", v)
+	case hwsensorsservice.ReadingTypeClock:
+		return fmt.Sprintf("%.0f", v)
+	case hwsensorsservice.ReadingTypeUsage:
+		return fmt.Sprintf("%.0f", v)
+	case hwsensorsservice.ReadingTypeOther:
+		return fmt.Sprintf("%.0f", v)
+	}
+	return "Bad Format"
+}
+
 // normalizeForGraph converts data size values to the target unit for consistent graph scaling.
 // This prevents jumps when LHM switches units (e.g., 1000 KB/s → 1 MB/s).
 // targetUnit can be: "B", "KB", "MB", "GB", "TB" or empty (no normalization).
@@ -350,16 +374,27 @@ func (p *Plugin) updateTiles(data *actionData) {
 		displayUnit = s.GraphUnit + "/s"
 	}
 
-	var text string
+	valueTextNoUnit := ""
+	displayText := ""
 	if f := s.Format; f != "" {
-		text = fmt.Sprintf(f, displayValue)
+		valueTextNoUnit = fmt.Sprintf(f, displayValue)
+		displayText = valueTextNoUnit
 	} else {
-		text = p.applyDefaultFormat(displayValue, hwsensorsservice.ReadingType(r.TypeI()), displayUnit)
+		valueTextNoUnit = p.applyDefaultFormatValueOnly(displayValue, hwsensorsservice.ReadingType(r.TypeI()))
+		if displayUnit != "" {
+			if displayUnit == "%" {
+				displayText = valueTextNoUnit + displayUnit
+			} else {
+				displayText = valueTextNoUnit + " " + displayUnit
+			}
+		} else {
+			displayText = valueTextNoUnit
+		}
 	}
 
-	g.SetLabelText(1, text)
+	g.SetLabelText(1, displayText)
 	if activeThreshold != nil && activeThreshold.Text != "" {
-		alertText := p.applyThresholdText(activeThreshold.Text, text, displayUnit)
+		alertText := p.applyThresholdText(activeThreshold.Text, valueTextNoUnit, displayUnit)
 		g.SetLabelText(2, alertText)
 	} else {
 		g.SetLabelText(2, "")
@@ -378,8 +413,8 @@ func (p *Plugin) updateTiles(data *actionData) {
 	}
 }
 
-func (p *Plugin) applyThresholdText(template, valueText, unit string) string {
-	out := strings.ReplaceAll(template, "{value}", valueText)
+func (p *Plugin) applyThresholdText(template, valueTextNoUnit, unit string) string {
+	out := strings.ReplaceAll(template, "{value}", valueTextNoUnit)
 	out = strings.ReplaceAll(out, "{unit}", unit)
 	return out
 }
