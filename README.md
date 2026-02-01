@@ -71,6 +71,14 @@ I wanted a local, open replacement for Stream Deck hardware monitoring without l
 - If you enable the **Show Title** checkbox in Stream Deck’s title settings, the text renders outside the graph (the standard Stream Deck caption) while the graph can be left empty.  
 - Clearing the Title field while **Show Title** is enabled produces an empty caption, letting you hide the text entirely when you only want the graph.
 
+### Threshold alerts
+
+- Add as many thresholds as you want; each can be enabled/disabled independently.
+- Each threshold defines a comparison operator and value (e.g. `>= 70`).
+- **Order matters:** thresholds are evaluated **top → bottom**, and the **last match wins**. Use the arrow buttons to move a threshold up/down.
+- Per-threshold colors: background, foreground, highlight, value text, and **alert text**.
+- Optional alert text is shown **under** the value; supports `{value}` and `{unit}` placeholders.
+
 ## Credits
 
 Based on the excellent [hwinfo-streamdeck](https://github.com/shayne/hwinfo-streamdeck) project by Shayne. Portions of this implementation and README were drafted with AI assistance and reviewed before release.
