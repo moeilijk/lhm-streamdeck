@@ -6,6 +6,7 @@ var websocket = null,
   inInfo = {},
   runningApps = [],
   currentReadings = [], // store readings to look up unit when selection changes
+  thresholdSignature = null,
   isQT = navigator.appVersion.includes("QtWebEngine"),
   onchangeevt = "onchange"; // 'oninput'; // change this, if you want interactive elements act on any change, or while they're modified
 
@@ -78,7 +79,7 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       getPropFromString(jsonObj, "payload.thresholds") &&
       event === "sendToPropertyInspector"
     ) {
-      renderThresholds(jsonObj.payload.thresholds);
+      maybeRenderThresholds(jsonObj.payload.thresholds, true);
     }
     if (getPropFromString(jsonObj, "payload.settings")) {
       var settings = jsonObj.payload.settings;
@@ -125,7 +126,7 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       }
       // Render dynamic thresholds
       if (settings.thresholds) {
-        renderThresholds(settings.thresholds);
+        maybeRenderThresholds(settings.thresholds, false);
       }
     }
   };
@@ -659,17 +660,28 @@ function renderThresholds(thresholds) {
   // Clear existing thresholds
   container.innerHTML = "";
 
-  // Sort by priority (highest first) for display
-  const sorted = [...thresholds].sort((a, b) => b.priority - a.priority);
-
-  sorted.forEach(function(threshold) {
-    const element = createThresholdElement(threshold);
+  // Render in stored order (arrows control precedence)
+  thresholds.forEach(function(threshold, index) {
+    const element = createThresholdElement(threshold, index, thresholds.length);
     container.appendChild(element);
   });
 }
 
+function thresholdsSignature(thresholds) {
+  return thresholds.map((t) => t.id).join("|");
+}
+
+function maybeRenderThresholds(thresholds, force) {
+  if (!thresholds) return;
+  const sig = thresholdsSignature(thresholds);
+  if (force || sig !== thresholdSignature) {
+    thresholdSignature = sig;
+    renderThresholds(thresholds);
+  }
+}
+
 // Create a threshold element from the template
-function createThresholdElement(threshold) {
+function createThresholdElement(threshold, index, total) {
   const template = document.querySelector("#thresholdTemplate");
   const clone = template.content.cloneNode(true);
   const wrapper = clone.querySelector(".threshold-item");
@@ -680,8 +692,8 @@ function createThresholdElement(threshold) {
   const nameInput = clone.querySelector(".threshold-name");
   nameInput.value = threshold.name || "";
 
-  const priorityInput = clone.querySelector(".threshold-priority");
-  priorityInput.value = threshold.priority || 0;
+  const textInput = clone.querySelector(".threshold-text");
+  textInput.value = threshold.text || "";
 
   const operatorSelect = clone.querySelector(".threshold-operator");
   operatorSelect.value = threshold.operator || ">=";
@@ -700,6 +712,20 @@ function createThresholdElement(threshold) {
 
   const vtInput = clone.querySelector(".threshold-vt");
   vtInput.value = threshold.valueTextColor || "#ffff00";
+
+  const tcInput = clone.querySelector(".threshold-tc");
+  if (tcInput) {
+    tcInput.value = threshold.textColor || "#ffffff";
+  }
+
+  const moveUpBtn = clone.querySelector(".threshold-move-up");
+  const moveDownBtn = clone.querySelector(".threshold-move-down");
+  if (moveUpBtn) {
+    moveUpBtn.disabled = index === 0;
+  }
+  if (moveDownBtn) {
+    moveDownBtn.disabled = index === total - 1;
+  }
 
   // Toggle button setup
   const toggleBtn = clone.querySelector(".threshold-toggle");
@@ -732,12 +758,12 @@ function createThresholdElement(threshold) {
     }, 300);
   });
 
-  // Priority input with debounce
-  let priorityTimeout;
-  priorityInput.addEventListener("input", function(e) {
-    clearTimeout(priorityTimeout);
-    priorityTimeout = setTimeout(function() {
-      sendThresholdUpdate("thresholdPriority", thresholdId, e.target.value);
+  // Text input with debounce
+  let textTimeout;
+  textInput.addEventListener("input", function(e) {
+    clearTimeout(textTimeout);
+    textTimeout = setTimeout(function() {
+      sendThresholdUpdate("thresholdText", thresholdId, e.target.value);
     }, 300);
   });
 
@@ -771,6 +797,32 @@ function createThresholdElement(threshold) {
   vtInput.addEventListener("change", function(e) {
     sendThresholdUpdate("thresholdValueTextColor", thresholdId, e.target.value);
   });
+
+  if (tcInput) {
+    tcInput.addEventListener("change", function(e) {
+      sendThresholdUpdate("thresholdTextColor", thresholdId, e.target.value);
+    });
+  }
+
+  if (moveUpBtn) {
+    moveUpBtn.addEventListener("click", function() {
+      sendValueToPlugin({
+        key: "reorderThreshold",
+        thresholdId: thresholdId,
+        value: "up"
+      }, "sdpi_collection");
+    });
+  }
+
+  if (moveDownBtn) {
+    moveDownBtn.addEventListener("click", function() {
+      sendValueToPlugin({
+        key: "reorderThreshold",
+        thresholdId: thresholdId,
+        value: "down"
+      }, "sdpi_collection");
+    });
+  }
 
   // Remove button
   const removeBtn = clone.querySelector(".threshold-remove");

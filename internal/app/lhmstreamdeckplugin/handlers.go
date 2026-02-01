@@ -482,6 +482,11 @@ func (p *Plugin) applyNormalColors(g *graph.Graph, s *actionSettings) {
 	} else {
 		g.SetLabelColor(1, &color.RGBA{255, 255, 255, 255})
 	}
+	if s.ValueTextColor != "" {
+		g.SetLabelColor(2, hexToRGBA(s.ValueTextColor))
+	} else {
+		g.SetLabelColor(2, &color.RGBA{255, 255, 255, 255})
+	}
 }
 
 // applyWarningColors applies warning colors to the graph
@@ -559,17 +564,23 @@ func (p *Plugin) handleAddThreshold(event *streamdeck.EvSendToPlugin, sdpi *evSd
 		name = "New"
 	}
 
+	bg := defaultColor(settings.BackgroundColor, "#000000")
+	fg := defaultColor(settings.ForegroundColor, "#005128")
+	hl := defaultColor(settings.HighlightColor, "#009e00")
+	vt := defaultColor(settings.ValueTextColor, "#ffffff")
+
 	newThreshold := Threshold{
 		ID:              fmt.Sprintf("threshold_%d", time.Now().UnixNano()),
 		Name:            name,
+		Text:            "",
+		TextColor:       vt,
 		Enabled:         true,
-		Priority:        0,
 		Operator:        ">=",
 		Value:           0,
-		BackgroundColor: "#333333",
-		ForegroundColor: "#666666",
-		HighlightColor:  "#999999",
-		ValueTextColor:  "#ffffff",
+		BackgroundColor: bg,
+		ForegroundColor: fg,
+		HighlightColor:  hl,
+		ValueTextColor:  vt,
 	}
 
 	settings.Thresholds = append(settings.Thresholds, newThreshold)
@@ -615,6 +626,56 @@ func (p *Plugin) handleRemoveThreshold(event *streamdeck.EvSendToPlugin, sdpi *e
 	return p.sendThresholdsToPI(event.Action, event.Context, &settings)
 }
 
+// handleReorderThreshold moves a threshold up/down in priority order
+func (p *Plugin) handleReorderThreshold(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection) error {
+	settings, err := p.am.getSettings(event.Context)
+	if err != nil {
+		return fmt.Errorf("handleReorderThreshold getSettings: %v", err)
+	}
+
+	if len(settings.Thresholds) < 2 {
+		return nil
+	}
+
+	direction := sdpi.Value
+	if direction != "up" && direction != "down" {
+		return fmt.Errorf("handleReorderThreshold invalid direction: %s", direction)
+	}
+
+	pos := -1
+	for i := range settings.Thresholds {
+		if settings.Thresholds[i].ID == sdpi.ThresholdID {
+			pos = i
+			break
+		}
+	}
+	if pos == -1 {
+		return fmt.Errorf("threshold not found: %s", sdpi.ThresholdID)
+	}
+
+	switch direction {
+	case "up":
+		if pos == 0 {
+			return nil
+		}
+		settings.Thresholds[pos-1], settings.Thresholds[pos] = settings.Thresholds[pos], settings.Thresholds[pos-1]
+	case "down":
+		if pos == len(settings.Thresholds)-1 {
+			return nil
+		}
+		settings.Thresholds[pos], settings.Thresholds[pos+1] = settings.Thresholds[pos+1], settings.Thresholds[pos]
+	}
+
+	settings.CurrentThresholdID = "_FORCE_REEVALUATE_"
+
+	if err := p.sd.SetSettings(event.Context, &settings); err != nil {
+		return fmt.Errorf("handleReorderThreshold SetSettings: %v", err)
+	}
+	p.am.SetAction(event.Action, event.Context, &settings)
+
+	return p.sendThresholdsToPI(event.Action, event.Context, &settings)
+}
+
 // handleThresholdUpdate updates a specific field of a threshold
 func (p *Plugin) handleThresholdUpdate(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection) error {
 	settings, err := p.am.getSettings(event.Context)
@@ -637,10 +698,6 @@ func (p *Plugin) handleThresholdUpdate(event *streamdeck.EvSendToPlugin, sdpi *e
 		needsReEvaluation = true
 	case "thresholdName":
 		threshold.Name = sdpi.Value
-	case "thresholdPriority":
-		priority, _ := strconv.Atoi(sdpi.Value)
-		threshold.Priority = priority
-		needsReEvaluation = true
 	case "thresholdOperator":
 		if isValidOperator(sdpi.Value) {
 			threshold.Operator = sdpi.Value
@@ -650,6 +707,11 @@ func (p *Plugin) handleThresholdUpdate(event *streamdeck.EvSendToPlugin, sdpi *e
 		value, _ := strconv.ParseFloat(sdpi.Value, 64)
 		threshold.Value = value
 		needsReEvaluation = true
+	case "thresholdText":
+		threshold.Text = sdpi.Value
+	case "thresholdTextColor":
+		threshold.TextColor = sdpi.Value
+		needsColorUpdate = settings.CurrentThresholdID == threshold.ID
 	case "thresholdBackgroundColor":
 		threshold.BackgroundColor = sdpi.Value
 		needsColorUpdate = settings.CurrentThresholdID == threshold.ID
@@ -697,6 +759,9 @@ func (p *Plugin) applyThresholdColors(g *graph.Graph, t *Threshold) {
 	}
 	if t.ValueTextColor != "" {
 		g.SetLabelColor(1, hexToRGBA(t.ValueTextColor))
+	}
+	if t.TextColor != "" {
+		g.SetLabelColor(2, hexToRGBA(t.TextColor))
 	}
 }
 

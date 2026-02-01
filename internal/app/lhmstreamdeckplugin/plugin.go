@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os/exec"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -357,7 +356,14 @@ func (p *Plugin) updateTiles(data *actionData) {
 	} else {
 		text = p.applyDefaultFormat(displayValue, hwsensorsservice.ReadingType(r.TypeI()), displayUnit)
 	}
+
 	g.SetLabelText(1, text)
+	if activeThreshold != nil && activeThreshold.Text != "" {
+		alertText := p.applyThresholdText(activeThreshold.Text, text, displayUnit)
+		g.SetLabelText(2, alertText)
+	} else {
+		g.SetLabelText(2, "")
+	}
 
 	b, err := g.EncodePNG()
 	if err != nil {
@@ -372,6 +378,12 @@ func (p *Plugin) updateTiles(data *actionData) {
 	}
 }
 
+func (p *Plugin) applyThresholdText(template, valueText, unit string) string {
+	out := strings.ReplaceAll(template, "{value}", valueText)
+	out = strings.ReplaceAll(out, "{unit}", unit)
+	return out
+}
+
 // evaluateThresholds checks all thresholds and returns the highest priority matching one
 func (p *Plugin) evaluateThresholds(value float64, thresholds []Threshold) *Threshold {
 	if len(thresholds) == 0 {
@@ -381,28 +393,20 @@ func (p *Plugin) evaluateThresholds(value float64, thresholds []Threshold) *Thre
 
 	log.Printf("evaluateThresholds: checking %d thresholds for value %.2f", len(thresholds), value)
 
-	// Sort by priority (highest first)
-	sorted := make([]Threshold, len(thresholds))
-	copy(sorted, thresholds)
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].Priority > sorted[j].Priority
-	})
-
-	// Find first matching threshold
-	for i := range sorted {
-		t := &sorted[i]
+	// Apply top-to-bottom filter: the last matching threshold wins
+	var active *Threshold
+	for i := range thresholds {
+		t := &thresholds[i]
 		matches := evaluateThreshold(value, t.Value, t.Operator)
 		log.Printf("  Threshold '%s': enabled=%v, operator='%s', value=%.2f, matches=%v",
 			t.Name, t.Enabled, t.Operator, t.Value, matches)
 		if t.Enabled && t.Operator != "" && matches {
-			// Find original threshold (not copy) to return pointer
-			for j := range thresholds {
-				if thresholds[j].ID == t.ID {
-					log.Printf("  -> Returning threshold '%s' (ID: %s)", t.Name, t.ID)
-					return &thresholds[j]
-				}
-			}
+			active = t
 		}
+	}
+	if active != nil {
+		log.Printf("  -> Returning threshold '%s' (ID: %s)", active.Name, active.ID)
+		return active
 	}
 	log.Printf("evaluateThresholds: no matching threshold found")
 	return nil

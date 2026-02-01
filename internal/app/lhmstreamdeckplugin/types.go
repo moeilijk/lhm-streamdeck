@@ -4,8 +4,9 @@ package lhmstreamdeckplugin
 type Threshold struct {
 	ID              string  `json:"id"`              // Unique identifier
 	Name            string  `json:"name"`            // User-friendly name
+	Text            string  `json:"text"`            // Optional alert text to display when triggered
+	TextColor       string  `json:"textColor"`       // Color for alert text
 	Enabled         bool    `json:"enabled"`         // Is this threshold active?
-	Priority        int     `json:"priority"`        // Higher number = higher priority (evaluated first)
 	Operator        string  `json:"operator"`        // ">", "<", ">=", "<=", "=="
 	Value           float64 `json:"value"`           // Threshold value
 	BackgroundColor string  `json:"backgroundColor"` // Background color when triggered

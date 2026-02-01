@@ -167,13 +167,13 @@ func migrateToThresholds(settings *actionSettings) bool {
 			ID:              fmt.Sprintf("threshold_%d", time.Now().UnixNano()),
 			Name:            "Warning",
 			Enabled:         settings.WarningEnabled,
-			Priority:        50,
 			Operator:        defaultOperator(settings.WarningOperator),
 			Value:           settings.WarningValue,
 			BackgroundColor: defaultColor(settings.WarningBackgroundColor, "#333300"),
 			ForegroundColor: defaultColor(settings.WarningForegroundColor, "#999900"),
 			HighlightColor:  defaultColor(settings.WarningHighlightColor, "#ffff00"),
 			ValueTextColor:  defaultColor(settings.WarningValueTextColor, "#ffff00"),
+			TextColor:       defaultColor(settings.WarningValueTextColor, "#ffff00"),
 		})
 		migrated = true
 	}
@@ -184,13 +184,13 @@ func migrateToThresholds(settings *actionSettings) bool {
 			ID:              fmt.Sprintf("threshold_%d", time.Now().UnixNano()+1),
 			Name:            "Critical",
 			Enabled:         settings.CriticalEnabled,
-			Priority:        100,
 			Operator:        defaultOperator(settings.CriticalOperator),
 			Value:           settings.CriticalValue,
 			BackgroundColor: defaultColor(settings.CriticalBackgroundColor, "#660000"),
 			ForegroundColor: defaultColor(settings.CriticalForegroundColor, "#990000"),
 			HighlightColor:  defaultColor(settings.CriticalHighlightColor, "#ff3333"),
 			ValueTextColor:  defaultColor(settings.CriticalValueTextColor, "#ff0000"),
+			TextColor:       defaultColor(settings.CriticalValueTextColor, "#ff0000"),
 		})
 		migrated = true
 	}

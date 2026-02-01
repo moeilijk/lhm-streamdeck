@@ -81,6 +81,8 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 	g.SetLabelFontSize(0, tfSize)
 	g.SetLabel(1, "", 44, vtColor)
 	g.SetLabelFontSize(1, vfSize)
+	g.SetLabel(2, "", 56, vtColor)
+	g.SetLabelFontSize(2, vfSize)
 	if drawTitle {
 		g.SetLabelText(0, settings.Title)
 	}
@@ -355,8 +357,13 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			if err != nil {
 				log.Println("handleRemoveThreshold", err)
 			}
-		case "thresholdEnabled", "thresholdName", "thresholdPriority",
-			"thresholdOperator", "thresholdValue",
+		case "reorderThreshold":
+			err := p.handleReorderThreshold(event, &sdpi)
+			if err != nil {
+				log.Println("handleReorderThreshold", err)
+			}
+		case "thresholdEnabled", "thresholdName",
+			"thresholdOperator", "thresholdValue", "thresholdText", "thresholdTextColor",
 			"thresholdBackgroundColor", "thresholdForegroundColor",
 			"thresholdHighlightColor", "thresholdValueTextColor":
 			err := p.handleThresholdUpdate(event, &sdpi)
