@@ -76,7 +76,7 @@ I wanted a local, open replacement for Stream Deck hardware monitoring without l
 - Add as many thresholds as you want; each can be enabled/disabled independently.
 - Each threshold defines a comparison operator and value (e.g. `>= 70`).
 - **Order matters:** thresholds are evaluated **top → bottom**, and the **last match wins**. Use the arrow buttons to move a threshold up/down.
-- Per-threshold colors: background, foreground, highlight, value text, and **alert text**.
+- Per-threshold colors: background, foreground, highlight, value text, and alert text.
 - Optional alert text is shown **under** the value; supports `{value}` and `{unit}` placeholders.
 
 ## Credits
