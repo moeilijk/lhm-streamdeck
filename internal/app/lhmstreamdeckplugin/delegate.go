@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"image/color"
 	"log"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/shayne/lhm-streamdeck/pkg/graph"
+	hwsensorsservice "github.com/shayne/lhm-streamdeck/pkg/service"
 	"github.com/shayne/lhm-streamdeck/pkg/streamdeck"
 )
 
@@ -26,8 +28,7 @@ func (p *Plugin) OnConnected(c *websocket.Conn) {
 
 // OnWillAppear event
 func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
-	var settings actionSettings
-	err := json.Unmarshal(*event.Payload.Settings, &settings)
+	settings, migrated, err := decodeActionSettings(event.Payload.Settings)
 	if err != nil {
 		log.Println("OnWillAppear settings unmarshal", err)
 	}
@@ -84,13 +85,29 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 		g.SetLabelText(0, settings.Title)
 	}
 	p.graphs[event.Context] = g
+	// Reset alert state so updateTiles will re-evaluate and apply correct colors on first run
+	if settings.CurrentAlertState != "" {
+		settings.CurrentAlertState = ""
+		migrated = true
+	}
+	// Set default operators if threshold is enabled but operator is empty
+	if settings.WarningEnabled && settings.WarningOperator == "" {
+		settings.WarningOperator = ">="
+		migrated = true
+	}
+	if settings.CriticalEnabled && settings.CriticalOperator == "" {
+		settings.CriticalOperator = ">="
+		migrated = true
+	}
 	p.am.SetAction(event.Action, event.Context, &settings)
+	if migrated {
+		_ = p.sd.SetSettings(event.Context, &settings)
+	}
 }
 
 // OnWillDisappear event
 func (p *Plugin) OnWillDisappear(event *streamdeck.EvWillDisappear) {
-	var settings actionSettings
-	err := json.Unmarshal(*event.Payload.Settings, &settings)
+	_, _, err := decodeActionSettings(event.Payload.Settings)
 	if err != nil {
 		log.Println("OnWillAppear settings unmarshal", err)
 	}
@@ -106,14 +123,19 @@ func (p *Plugin) OnApplicationDidTerminate(event *streamdeck.EvApplication) {}
 
 // OnTitleParametersDidChange event
 func (p *Plugin) OnTitleParametersDidChange(event *streamdeck.EvTitleParametersDidChange) {
-	var settings actionSettings
-	err := json.Unmarshal(*event.Payload.Settings, &settings)
+	// Get existing settings from actionManager to preserve threshold settings
+	// Do NOT decode from event payload as it may have stale/different settings
+	settings, err := p.am.getSettings(event.Context)
 	if err != nil {
-		log.Println("OnWillAppear settings unmarshal", err)
+		// If no settings in actionManager yet, decode from payload as fallback
+		settings, _, err = decodeActionSettings(event.Payload.Settings)
+		if err != nil {
+			log.Println("OnTitleParametersDidChange settings unmarshal", err)
+		}
 	}
 	g, ok := p.graphs[event.Context]
 	if !ok {
-		log.Printf("handleSetMax no graph for context: %s\n", event.Context)
+		log.Printf("OnTitleParametersDidChange no graph for context: %s\n", event.Context)
 		return
 	}
 	drawTitle := !event.Payload.TitleParameters.ShowTitle
@@ -126,13 +148,14 @@ func (p *Plugin) OnTitleParametersDidChange(event *streamdeck.EvTitleParametersD
 	} else {
 		g.SetLabelText(0, "")
 	}
+	// Only update title-related fields, preserving threshold settings
 	settings.Title = event.Payload.Title
 	settings.TitleColor = event.Payload.TitleParameters.TitleColor
 	settings.ShowTitleInGraph = boolPtr(drawTitle)
 
 	err = p.sd.SetSettings(event.Context, &settings)
 	if err != nil {
-		log.Printf("handleSetTitle SetSettings: %v\n", err)
+		log.Printf("OnTitleParametersDidChange SetSettings: %v\n", err)
 		return
 	}
 	p.am.SetAction(event.Action, event.Context, &settings)
@@ -140,13 +163,15 @@ func (p *Plugin) OnTitleParametersDidChange(event *streamdeck.EvTitleParametersD
 
 // OnPropertyInspectorConnected event
 func (p *Plugin) OnPropertyInspectorConnected(event *streamdeck.EvSendToPlugin) {
+	log.Println("OnPropertyInspectorConnected enter", event.Context)
 	settings, err := p.am.getSettings(event.Context)
 	if err != nil {
 		log.Println("OnPropertyInspectorConnected getSettings", err)
 	}
-	sensors, err := p.hw.Sensors()
+	sensors, err := p.sensorsWithTimeout(2 * time.Second)
 	if err != nil {
 		log.Println("OnPropertyInspectorConnected Sensors", err)
+		go p.restartBridge()
 		payload := evStatus{Error: true, Message: "Libre Hardware Monitor Unavailable"}
 		err := p.sd.SendToPropertyInspector(event.Action, event.Context, payload)
 		settings.InErrorState = true
@@ -169,7 +194,43 @@ func (p *Plugin) OnPropertyInspectorConnected(event *streamdeck.EvSendToPlugin) 
 	err = p.sd.SendToPropertyInspector(event.Action, event.Context, payload)
 	if err != nil {
 		log.Println("OnPropertyInspectorConnected SendToPropertyInspector", err)
+	} else {
+		log.Printf("OnPropertyInspectorConnected Sent sensors: %d\n", len(evsensors))
 	}
+	if settings.SensorUID != "" {
+		readings, rerr := p.sendReadingsToPropertyInspector(event.Action, event.Context, settings.SensorUID, &settings)
+		if rerr == nil {
+			if syncSettingsWithReadings(&settings, readings) {
+				_ = p.sd.SetSettings(event.Context, &settings)
+				p.am.SetAction(event.Action, event.Context, &settings)
+			}
+		}
+	}
+}
+
+func (p *Plugin) sendReadingsToPropertyInspector(action, context, sensorID string, settings *actionSettings) ([]hwsensorsservice.Reading, error) {
+	readings, err := p.hw.ReadingsForSensorID(sensorID)
+	if err != nil {
+		log.Println("sendReadingsToPropertyInspector ReadingsForSensorID", err)
+		return nil, err
+	}
+	evreadings := make([]*evSendReadingsPayloadReading, 0, len(readings))
+	for _, r := range readings {
+		evreadings = append(evreadings, &evSendReadingsPayloadReading{
+			ID:     r.ID(),
+			Label:  r.Label(),
+			Prefix: r.Unit(),
+			Unit:   r.Unit(),
+		})
+	}
+	payload := evSendReadingsPayload{Readings: evreadings, Settings: settings}
+	err = p.sd.SendToPropertyInspector(action, context, payload)
+	if err != nil {
+		log.Println("sendReadingsToPropertyInspector SendToPropertyInspector", err)
+	} else {
+		log.Printf("sendReadingsToPropertyInspector Sent readings: %d\n", len(evreadings))
+	}
+	return readings, nil
 }
 
 // OnSendToPlugin event

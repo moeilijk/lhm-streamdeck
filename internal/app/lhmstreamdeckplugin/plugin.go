@@ -26,6 +26,32 @@ type Plugin struct {
 	graphs map[string]*graph.Graph
 }
 
+type sensorResult struct {
+	sensors []hwsensorsservice.Sensor
+	err     error
+}
+
+func (p *Plugin) sensorsWithTimeout(d time.Duration) ([]hwsensorsservice.Sensor, error) {
+	ch := make(chan sensorResult, 1)
+	go func() {
+		s, err := p.hw.Sensors()
+		ch <- sensorResult{sensors: s, err: err}
+	}()
+	select {
+	case res := <-ch:
+		return res.sensors, res.err
+	case <-time.After(d):
+		return nil, fmt.Errorf("sensors timeout")
+	}
+}
+
+func (p *Plugin) restartBridge() {
+	if p.c != nil {
+		p.c.Kill()
+	}
+	_ = p.startClient()
+}
+
 func (p *Plugin) startClient() error {
 	cmd := exec.Command("./lhm-bridge.exe")
 
@@ -68,8 +94,6 @@ func (p *Plugin) startClient() error {
 
 // NewPlugin creates an instance and initializes the plugin
 func NewPlugin(port, uuid, event, info string) (*Plugin, error) {
-	// We don't want to see the plugin logs.
-	// log.SetOutput(ioutil.Discard)
 	p := &Plugin{
 		am:     newActionManager(),
 		graphs: make(map[string]*graph.Graph),
