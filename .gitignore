@@ -41,3 +41,6 @@ build/*.sdPlugin
 
 # local build version tracking
 .last_patch
+
+# Node dependencies
+node_modules/

@@ -26,6 +26,32 @@ type Plugin struct {
 	graphs map[string]*graph.Graph
 }
 
+type sensorResult struct {
+	sensors []hwsensorsservice.Sensor
+	err     error
+}
+
+func (p *Plugin) sensorsWithTimeout(d time.Duration) ([]hwsensorsservice.Sensor, error) {
+	ch := make(chan sensorResult, 1)
+	go func() {
+		s, err := p.hw.Sensors()
+		ch <- sensorResult{sensors: s, err: err}
+	}()
+	select {
+	case res := <-ch:
+		return res.sensors, res.err
+	case <-time.After(d):
+		return nil, fmt.Errorf("sensors timeout")
+	}
+}
+
+func (p *Plugin) restartBridge() {
+	if p.c != nil {
+		p.c.Kill()
+	}
+	_ = p.startClient()
+}
+
 func (p *Plugin) startClient() error {
 	cmd := exec.Command("./lhm-bridge.exe")
 
@@ -68,8 +94,6 @@ func (p *Plugin) startClient() error {
 
 // NewPlugin creates an instance and initializes the plugin
 func NewPlugin(port, uuid, event, info string) (*Plugin, error) {
-	// We don't want to see the plugin logs.
-	// log.SetOutput(ioutil.Discard)
 	p := &Plugin{
 		am:     newActionManager(),
 		graphs: make(map[string]*graph.Graph),
@@ -290,6 +314,33 @@ func (p *Plugin) updateTiles(data *actionData) {
 	}
 	g.Update(graphValue)
 
+	// Check threshold alerts (evaluate by priority, highest first)
+	activeThreshold := p.evaluateThresholds(v, s.Thresholds)
+
+	newThresholdID := ""
+	if activeThreshold != nil {
+		newThresholdID = activeThreshold.ID
+	}
+
+	// Check if forced re-evaluation or state transition
+	forceUpdate := s.CurrentThresholdID == "_FORCE_REEVALUATE_"
+	if forceUpdate || newThresholdID != s.CurrentThresholdID {
+		log.Printf("Threshold state change: '%s' -> '%s' (forced=%v)", s.CurrentThresholdID, newThresholdID, forceUpdate)
+		if activeThreshold != nil {
+			log.Printf("Applying threshold colors for '%s': bg=%s, fg=%s, hl=%s, vt=%s",
+				activeThreshold.Name, activeThreshold.BackgroundColor, activeThreshold.ForegroundColor,
+				activeThreshold.HighlightColor, activeThreshold.ValueTextColor)
+			p.applyThresholdColors(g, activeThreshold)
+		} else {
+			log.Printf("Applying normal colors: bg=%s, fg=%s, hl=%s, vt=%s",
+				s.BackgroundColor, s.ForegroundColor, s.HighlightColor, s.ValueTextColor)
+			p.applyNormalColors(g, s)
+		}
+		s.CurrentThresholdID = newThresholdID
+		p.am.SetAction(data.action, data.context, s)
+		_ = p.sd.SetSettings(data.context, s)
+	}
+
 	// Determine display value and unit
 	displayValue := v
 	displayUnit := r.Unit()
@@ -305,7 +356,14 @@ func (p *Plugin) updateTiles(data *actionData) {
 	} else {
 		text = p.applyDefaultFormat(displayValue, hwsensorsservice.ReadingType(r.TypeI()), displayUnit)
 	}
+
 	g.SetLabelText(1, text)
+	if activeThreshold != nil && activeThreshold.Text != "" {
+		alertText := p.applyThresholdText(activeThreshold.Text, text, displayUnit)
+		g.SetLabelText(2, alertText)
+	} else {
+		g.SetLabelText(2, "")
+	}
 
 	b, err := g.EncodePNG()
 	if err != nil {
@@ -318,4 +376,38 @@ func (p *Plugin) updateTiles(data *actionData) {
 		log.Printf("Failed to setImage: %v\n", err)
 		return
 	}
+}
+
+func (p *Plugin) applyThresholdText(template, valueText, unit string) string {
+	out := strings.ReplaceAll(template, "{value}", valueText)
+	out = strings.ReplaceAll(out, "{unit}", unit)
+	return out
+}
+
+// evaluateThresholds checks all thresholds and returns the highest priority matching one
+func (p *Plugin) evaluateThresholds(value float64, thresholds []Threshold) *Threshold {
+	if len(thresholds) == 0 {
+		log.Printf("evaluateThresholds: no thresholds defined")
+		return nil
+	}
+
+	log.Printf("evaluateThresholds: checking %d thresholds for value %.2f", len(thresholds), value)
+
+	// Apply top-to-bottom filter: the last matching threshold wins
+	var active *Threshold
+	for i := range thresholds {
+		t := &thresholds[i]
+		matches := evaluateThreshold(value, t.Value, t.Operator)
+		log.Printf("  Threshold '%s': enabled=%v, operator='%s', value=%.2f, matches=%v",
+			t.Name, t.Enabled, t.Operator, t.Value, matches)
+		if t.Enabled && t.Operator != "" && matches {
+			active = t
+		}
+	}
+	if active != nil {
+		log.Printf("  -> Returning threshold '%s' (ID: %s)", active.Name, active.ID)
+		return active
+	}
+	log.Printf("evaluateThresholds: no matching threshold found")
+	return nil
 }

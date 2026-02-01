@@ -177,6 +177,16 @@ func (sd *StreamDeck) spawnMessageReader() {
 			if err != nil {
 				log.Fatal("onSendToPlugin", err)
 			}
+		case "propertyInspectorDidAppear":
+			var ev EvSendToPlugin
+			err := json.Unmarshal(message, &ev)
+			if err != nil {
+				log.Fatal("propertyInspectorDidAppear unmarshal", err)
+			}
+			log.Println("propertyInspectorDidAppear dispatch")
+			if sd.delegate != nil {
+				sd.delegate.OnPropertyInspectorConnected(&ev)
+			}
 		case "applicationDidLaunch":
 			var ev EvApplication
 			err := json.Unmarshal(message, &ev)

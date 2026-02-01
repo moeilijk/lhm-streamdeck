@@ -16,3 +16,18 @@ body,
 .hidden {
   display: block;
 }
+
+.threshold-header-label:after {
+  content: "";
+}
+
+.threshold-arrows {
+  display: flex;
+  gap: 0;
+  margin-right: -2px;
+}
+
+.threshold-arrows .threshold-move-up,
+.threshold-arrows .threshold-move-down {
+  margin: 0;
+}

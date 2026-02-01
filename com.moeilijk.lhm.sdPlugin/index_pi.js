@@ -6,6 +6,7 @@ var websocket = null,
   inInfo = {},
   runningApps = [],
   currentReadings = [], // store readings to look up unit when selection changes
+  thresholdSignature = null,
   isQT = navigator.appVersion.includes("QtWebEngine"),
   onchangeevt = "onchange"; // 'oninput'; // change this, if you want interactive elements act on any change, or while they're modified
 
@@ -73,6 +74,13 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
         jsonObj.payload.settings
       );
     }
+    // Handle threshold updates from plugin (after add/remove)
+    if (
+      getPropFromString(jsonObj, "payload.thresholds") &&
+      event === "sendToPropertyInspector"
+    ) {
+      maybeRenderThresholds(jsonObj.payload.thresholds, true);
+    }
     if (getPropFromString(jsonObj, "payload.settings")) {
       var settings = jsonObj.payload.settings;
       if (settings.min === 0 && settings.max === 0) {
@@ -116,6 +124,10 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       if (settings.graphUnit !== undefined) {
         document.querySelector("#graphUnit").value = settings.graphUnit;
       }
+      // Render dynamic thresholds
+      if (settings.thresholds) {
+        maybeRenderThresholds(settings.thresholds, false);
+      }
     }
   };
 }
@@ -148,7 +160,7 @@ function addSensors(el, sensors, settings) {
     var option = document.createElement("option");
     option.text = s.name;
     option.value = s.uid;
-    if (settings.isValid === true && settings.sensorUid === s.uid) {
+    if (settings.sensorUid === s.uid) {
       option.selected = true;
       setTimeout(function () {
         var event = new Event("change");
@@ -196,7 +208,7 @@ function addReadings(el, readings, settings) {
     option.innerHTML = `${r.prefix}${spaces}${r.label}`;
     option.value = r.id;
     option.dataset.unit = r.unit || r.prefix; // store unit in data attribute
-    if (settings.isValid === true && settings.readingId === r.id) {
+    if (settings.readingId === r.id) {
       option.selected = true;
       // Show/hide graphUnit based on selected reading
       updateGraphUnitVisibility(r.unit || r.prefix);
@@ -361,6 +373,30 @@ function prepareDOMElements(baseElement) {
       e.onkeyup = fn;
     }
   });
+
+  // Add threshold button handler
+  const addThresholdBtn = document.querySelector("#addThresholdBtn");
+  if (addThresholdBtn) {
+    addThresholdBtn.addEventListener("click", function() {
+      const nameInput = document.querySelector("#newThresholdName");
+      const name = nameInput.value.trim() || "New Threshold";
+      sendValueToPlugin({
+        key: "addThreshold",
+        value: name
+      }, "sdpi_collection");
+      nameInput.value = "";
+    });
+  }
+
+  // Allow Enter key to add threshold
+  const newThresholdName = document.querySelector("#newThresholdName");
+  if (newThresholdName) {
+    newThresholdName.addEventListener("keypress", function(e) {
+      if (e.key === "Enter") {
+        document.querySelector("#addThresholdBtn").click();
+      }
+    });
+  }
 }
 
 function handleSdpiItemClick(e, idx) {
@@ -598,4 +634,206 @@ function fadeColor(col, amt) {
   const g = min(255, max((num & 0x0000ff) + amt, 0));
   const b = min(255, max(((num >> 8) & 0x00ff) + amt, 0));
   return "#" + (g | (b << 8) | (r << 16)).toString(16).padStart(6, 0);
+}
+
+/** DYNAMIC THRESHOLDS */
+
+// Send a threshold update to the plugin
+function sendThresholdUpdate(key, thresholdId, value, checked) {
+  var payload = {
+    key: key,
+    thresholdId: thresholdId,
+    value: value
+  };
+  // For checkbox inputs, include the checked boolean
+  if (typeof checked === "boolean") {
+    payload.checked = checked;
+  }
+  sendValueToPlugin(payload, "sdpi_collection");
+}
+
+// Render all thresholds from the settings
+function renderThresholds(thresholds) {
+  const container = document.querySelector("#thresholdsContainer");
+  if (!container) return;
+
+  // Clear existing thresholds
+  container.innerHTML = "";
+
+  // Render in stored order (arrows control precedence)
+  thresholds.forEach(function(threshold, index) {
+    const element = createThresholdElement(threshold, index, thresholds.length);
+    container.appendChild(element);
+  });
+}
+
+function thresholdsSignature(thresholds) {
+  return thresholds.map((t) => t.id).join("|");
+}
+
+function maybeRenderThresholds(thresholds, force) {
+  if (!thresholds) return;
+  const sig = thresholdsSignature(thresholds);
+  if (force || sig !== thresholdSignature) {
+    thresholdSignature = sig;
+    renderThresholds(thresholds);
+  }
+}
+
+// Create a threshold element from the template
+function createThresholdElement(threshold, index, total) {
+  const template = document.querySelector("#thresholdTemplate");
+  const clone = template.content.cloneNode(true);
+  const wrapper = clone.querySelector(".threshold-item");
+
+  wrapper.dataset.thresholdId = threshold.id;
+
+  // Set values
+  const nameInput = clone.querySelector(".threshold-name");
+  nameInput.value = threshold.name || "";
+
+  const textInput = clone.querySelector(".threshold-text");
+  textInput.value = threshold.text || "";
+
+  const operatorSelect = clone.querySelector(".threshold-operator");
+  operatorSelect.value = threshold.operator || ">=";
+
+  const valueInput = clone.querySelector(".threshold-value");
+  valueInput.value = threshold.value || "";
+
+  const bgInput = clone.querySelector(".threshold-bg");
+  bgInput.value = threshold.backgroundColor || "#333300";
+
+  const fgInput = clone.querySelector(".threshold-fg");
+  fgInput.value = threshold.foregroundColor || "#999900";
+
+  const hlInput = clone.querySelector(".threshold-hl");
+  hlInput.value = threshold.highlightColor || "#ffff00";
+
+  const vtInput = clone.querySelector(".threshold-vt");
+  vtInput.value = threshold.valueTextColor || "#ffff00";
+
+  const tcInput = clone.querySelector(".threshold-tc");
+  if (tcInput) {
+    tcInput.value = threshold.textColor || "#ffffff";
+  }
+
+  const moveUpBtn = clone.querySelector(".threshold-move-up");
+  const moveDownBtn = clone.querySelector(".threshold-move-down");
+  if (moveUpBtn) {
+    moveUpBtn.disabled = index === 0;
+  }
+  if (moveDownBtn) {
+    moveDownBtn.disabled = index === total - 1;
+  }
+
+  // Toggle button setup
+  const toggleBtn = clone.querySelector(".threshold-toggle");
+  const settingsDiv = clone.querySelector(".threshold-settings");
+  let isEnabled = threshold.enabled;
+
+  function updateToggleState() {
+    toggleBtn.textContent = isEnabled ? "on" : "off";
+    toggleBtn.style.background = isEnabled ? "#4a4" : "#a44";
+    settingsDiv.style.display = isEnabled ? "block" : "none";
+  }
+  updateToggleState();
+
+  // Add event listeners
+  const thresholdId = threshold.id;
+
+  // Enable/disable toggle button
+  toggleBtn.addEventListener("click", function() {
+    isEnabled = !isEnabled;
+    updateToggleState();
+    sendThresholdUpdate("thresholdEnabled", thresholdId, isEnabled ? "true" : "false", isEnabled);
+  });
+
+  // Name input with debounce
+  let nameTimeout;
+  nameInput.addEventListener("input", function(e) {
+    clearTimeout(nameTimeout);
+    nameTimeout = setTimeout(function() {
+      sendThresholdUpdate("thresholdName", thresholdId, e.target.value);
+    }, 300);
+  });
+
+  // Text input with debounce
+  let textTimeout;
+  textInput.addEventListener("input", function(e) {
+    clearTimeout(textTimeout);
+    textTimeout = setTimeout(function() {
+      sendThresholdUpdate("thresholdText", thresholdId, e.target.value);
+    }, 300);
+  });
+
+  // Operator select
+  operatorSelect.addEventListener("change", function(e) {
+    sendThresholdUpdate("thresholdOperator", thresholdId, e.target.value);
+  });
+
+  // Value input with debounce
+  let valueTimeout;
+  valueInput.addEventListener("input", function(e) {
+    clearTimeout(valueTimeout);
+    valueTimeout = setTimeout(function() {
+      sendThresholdUpdate("thresholdValue", thresholdId, e.target.value);
+    }, 300);
+  });
+
+  // Color inputs
+  bgInput.addEventListener("change", function(e) {
+    sendThresholdUpdate("thresholdBackgroundColor", thresholdId, e.target.value);
+  });
+
+  fgInput.addEventListener("change", function(e) {
+    sendThresholdUpdate("thresholdForegroundColor", thresholdId, e.target.value);
+  });
+
+  hlInput.addEventListener("change", function(e) {
+    sendThresholdUpdate("thresholdHighlightColor", thresholdId, e.target.value);
+  });
+
+  vtInput.addEventListener("change", function(e) {
+    sendThresholdUpdate("thresholdValueTextColor", thresholdId, e.target.value);
+  });
+
+  if (tcInput) {
+    tcInput.addEventListener("change", function(e) {
+      sendThresholdUpdate("thresholdTextColor", thresholdId, e.target.value);
+    });
+  }
+
+  if (moveUpBtn) {
+    moveUpBtn.addEventListener("click", function() {
+      sendValueToPlugin({
+        key: "reorderThreshold",
+        thresholdId: thresholdId,
+        value: "up"
+      }, "sdpi_collection");
+    });
+  }
+
+  if (moveDownBtn) {
+    moveDownBtn.addEventListener("click", function() {
+      sendValueToPlugin({
+        key: "reorderThreshold",
+        thresholdId: thresholdId,
+        value: "down"
+      }, "sdpi_collection");
+    });
+  }
+
+  // Remove button
+  const removeBtn = clone.querySelector(".threshold-remove");
+  removeBtn.addEventListener("click", function() {
+    sendValueToPlugin({
+      key: "removeThreshold",
+      thresholdId: thresholdId
+    }, "sdpi_collection");
+    // Remove from DOM immediately for responsiveness
+    wrapper.remove();
+  });
+
+  return clone;
 }
