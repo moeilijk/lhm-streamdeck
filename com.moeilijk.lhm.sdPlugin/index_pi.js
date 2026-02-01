@@ -196,7 +196,7 @@ function addSensors(el, sensors, settings) {
     var option = document.createElement("option");
     option.text = s.name;
     option.value = s.uid;
-    if (settings.isValid === true && settings.sensorUid === s.uid) {
+    if (settings.sensorUid === s.uid) {
       option.selected = true;
       setTimeout(function () {
         var event = new Event("change");
@@ -244,7 +244,7 @@ function addReadings(el, readings, settings) {
     option.innerHTML = `${r.prefix}${spaces}${r.label}`;
     option.value = r.id;
     option.dataset.unit = r.unit || r.prefix; // store unit in data attribute
-    if (settings.isValid === true && settings.readingId === r.id) {
+    if (settings.readingId === r.id) {
       option.selected = true;
       // Show/hide graphUnit based on selected reading
       updateGraphUnitVisibility(r.unit || r.prefix);
@@ -410,21 +410,33 @@ function prepareDOMElements(baseElement) {
     }
   });
 
-  // Warning threshold toggle - show/hide settings panel
+  // Warning threshold toggle - show/hide settings panel AND send to plugin
   const warningEnabled = document.querySelector("#warningEnabled");
   if (warningEnabled) {
     warningEnabled.addEventListener("change", function(e) {
       document.querySelector("#warningSettings").style.display =
         e.target.checked ? "block" : "none";
+      // Send checkbox state to plugin
+      sendValueToPlugin({
+        key: "warningEnabled",
+        value: e.target.checked ? "true" : "false",
+        checked: e.target.checked
+      }, "sdpi_collection");
     });
   }
 
-  // Critical threshold toggle - show/hide settings panel
+  // Critical threshold toggle - show/hide settings panel AND send to plugin
   const criticalEnabled = document.querySelector("#criticalEnabled");
   if (criticalEnabled) {
     criticalEnabled.addEventListener("change", function(e) {
       document.querySelector("#criticalSettings").style.display =
         e.target.checked ? "block" : "none";
+      // Send checkbox state to plugin
+      sendValueToPlugin({
+        key: "criticalEnabled",
+        value: e.target.checked ? "true" : "false",
+        checked: e.target.checked
+      }, "sdpi_collection");
     });
   }
 

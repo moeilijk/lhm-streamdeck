@@ -312,6 +312,10 @@ func (p *Plugin) handleWarningEnabled(event *streamdeck.EvSendToPlugin, sdpi *ev
 		return fmt.Errorf("handleWarningEnabled getSettings: %v", err)
 	}
 	settings.WarningEnabled = enabled
+	// Set default operator if not set (HTML default is ">")
+	if enabled && settings.WarningOperator == "" {
+		settings.WarningOperator = ">"
+	}
 	// Reset alert state when disabled and not in critical
 	if !enabled && settings.CurrentAlertState == "warning" {
 		settings.CurrentAlertState = "none"
@@ -334,6 +338,10 @@ func (p *Plugin) handleCriticalEnabled(event *streamdeck.EvSendToPlugin, sdpi *e
 		return fmt.Errorf("handleCriticalEnabled getSettings: %v", err)
 	}
 	settings.CriticalEnabled = enabled
+	// Set default operator if not set (HTML default is ">")
+	if enabled && settings.CriticalOperator == "" {
+		settings.CriticalOperator = ">"
+	}
 	// Reset alert state when disabled
 	if !enabled && settings.CurrentAlertState == "critical" {
 		settings.CurrentAlertState = "none"
