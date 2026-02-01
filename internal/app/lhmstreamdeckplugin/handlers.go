@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"strconv"
+	"time"
 
 	"github.com/shayne/lhm-streamdeck/pkg/graph"
 	hwsensorsservice "github.com/shayne/lhm-streamdeck/pkg/service"
@@ -451,7 +452,9 @@ func evaluateThreshold(value, threshold float64, operator string) bool {
 	case "<=":
 		return value <= threshold
 	case "==":
-		return value == threshold
+		// For == comparison, round both to integers since displayed values are typically integers
+		// e.g., displayed "52%" might actually be 52.34, user expects == 52 to match
+		return int(value+0.5) == int(threshold+0.5)
 	default:
 		return false
 	}
@@ -527,4 +530,181 @@ func (p *Plugin) applyCriticalColors(g *graph.Graph, s *actionSettings) {
 	} else {
 		g.SetLabelColor(1, &color.RGBA{255, 0, 0, 255}) // red
 	}
+}
+
+// ============================================================================
+// Dynamic Threshold Handlers
+// ============================================================================
+
+// findThresholdByID returns pointer to threshold and its index
+func (s *actionSettings) findThresholdByID(id string) (*Threshold, int) {
+	for i := range s.Thresholds {
+		if s.Thresholds[i].ID == id {
+			return &s.Thresholds[i], i
+		}
+	}
+	return nil, -1
+}
+
+// handleAddThreshold adds a new threshold to the settings
+func (p *Plugin) handleAddThreshold(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection) error {
+	settings, err := p.am.getSettings(event.Context)
+	if err != nil {
+		return fmt.Errorf("handleAddThreshold getSettings: %v", err)
+	}
+
+	// New thresholds get priority 0 (lowest, appears at bottom since list is sorted highest first)
+	name := sdpi.Value
+	if name == "" {
+		name = "New"
+	}
+
+	newThreshold := Threshold{
+		ID:              fmt.Sprintf("threshold_%d", time.Now().UnixNano()),
+		Name:            name,
+		Enabled:         true,
+		Priority:        0,
+		Operator:        ">=",
+		Value:           0,
+		BackgroundColor: "#333333",
+		ForegroundColor: "#666666",
+		HighlightColor:  "#999999",
+		ValueTextColor:  "#ffffff",
+	}
+
+	settings.Thresholds = append(settings.Thresholds, newThreshold)
+
+	if err := p.sd.SetSettings(event.Context, &settings); err != nil {
+		return fmt.Errorf("handleAddThreshold SetSettings: %v", err)
+	}
+	p.am.SetAction(event.Action, event.Context, &settings)
+
+	// Send updated thresholds to PI
+	return p.sendThresholdsToPI(event.Action, event.Context, &settings)
+}
+
+// handleRemoveThreshold removes a threshold from the settings
+func (p *Plugin) handleRemoveThreshold(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection) error {
+	settings, err := p.am.getSettings(event.Context)
+	if err != nil {
+		return fmt.Errorf("handleRemoveThreshold getSettings: %v", err)
+	}
+
+	thresholdID := sdpi.ThresholdID
+	_, idx := settings.findThresholdByID(thresholdID)
+	if idx == -1 {
+		return fmt.Errorf("threshold not found: %s", thresholdID)
+	}
+
+	// Remove threshold from slice
+	settings.Thresholds = append(settings.Thresholds[:idx], settings.Thresholds[idx+1:]...)
+
+	// Clear current threshold if it was the removed one
+	if settings.CurrentThresholdID == thresholdID {
+		settings.CurrentThresholdID = ""
+		if g, ok := p.graphs[event.Context]; ok {
+			p.applyNormalColors(g, &settings)
+		}
+	}
+
+	if err := p.sd.SetSettings(event.Context, &settings); err != nil {
+		return fmt.Errorf("handleRemoveThreshold SetSettings: %v", err)
+	}
+	p.am.SetAction(event.Action, event.Context, &settings)
+
+	return p.sendThresholdsToPI(event.Action, event.Context, &settings)
+}
+
+// handleThresholdUpdate updates a specific field of a threshold
+func (p *Plugin) handleThresholdUpdate(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection) error {
+	settings, err := p.am.getSettings(event.Context)
+	if err != nil {
+		return fmt.Errorf("handleThresholdUpdate getSettings: %v", err)
+	}
+
+	threshold, _ := settings.findThresholdByID(sdpi.ThresholdID)
+	if threshold == nil {
+		return fmt.Errorf("threshold not found: %s", sdpi.ThresholdID)
+	}
+
+	needsReEvaluation := false
+	needsColorUpdate := false
+
+	// Update based on key
+	switch sdpi.Key {
+	case "thresholdEnabled":
+		threshold.Enabled = sdpi.Checked
+		needsReEvaluation = true
+	case "thresholdName":
+		threshold.Name = sdpi.Value
+	case "thresholdPriority":
+		priority, _ := strconv.Atoi(sdpi.Value)
+		threshold.Priority = priority
+		needsReEvaluation = true
+	case "thresholdOperator":
+		if isValidOperator(sdpi.Value) {
+			threshold.Operator = sdpi.Value
+			needsReEvaluation = true
+		}
+	case "thresholdValue":
+		value, _ := strconv.ParseFloat(sdpi.Value, 64)
+		threshold.Value = value
+		needsReEvaluation = true
+	case "thresholdBackgroundColor":
+		threshold.BackgroundColor = sdpi.Value
+		needsColorUpdate = settings.CurrentThresholdID == threshold.ID
+	case "thresholdForegroundColor":
+		threshold.ForegroundColor = sdpi.Value
+		needsColorUpdate = settings.CurrentThresholdID == threshold.ID
+	case "thresholdHighlightColor":
+		threshold.HighlightColor = sdpi.Value
+		needsColorUpdate = settings.CurrentThresholdID == threshold.ID
+	case "thresholdValueTextColor":
+		threshold.ValueTextColor = sdpi.Value
+		needsColorUpdate = settings.CurrentThresholdID == threshold.ID
+	}
+
+	// Re-evaluate thresholds and apply colors immediately if needed
+	if needsReEvaluation {
+		// Mark as needing re-evaluation by using special marker
+		settings.CurrentThresholdID = "_FORCE_REEVALUATE_"
+	}
+
+	// If this threshold is currently active and its colors changed, apply immediately
+	if needsColorUpdate {
+		if g, ok := p.graphs[event.Context]; ok {
+			p.applyThresholdColors(g, threshold)
+		}
+	}
+
+	if err := p.sd.SetSettings(event.Context, &settings); err != nil {
+		return fmt.Errorf("handleThresholdUpdate SetSettings: %v", err)
+	}
+	p.am.SetAction(event.Action, event.Context, &settings)
+	return nil
+}
+
+// applyThresholdColors applies colors from a specific threshold to the graph
+func (p *Plugin) applyThresholdColors(g *graph.Graph, t *Threshold) {
+	if t.BackgroundColor != "" {
+		g.SetBackgroundColor(hexToRGBA(t.BackgroundColor))
+	}
+	if t.ForegroundColor != "" {
+		g.SetForegroundColor(hexToRGBA(t.ForegroundColor))
+	}
+	if t.HighlightColor != "" {
+		g.SetHighlightColor(hexToRGBA(t.HighlightColor))
+	}
+	if t.ValueTextColor != "" {
+		g.SetLabelColor(1, hexToRGBA(t.ValueTextColor))
+	}
+}
+
+// sendThresholdsToPI sends the current thresholds to the Property Inspector
+func (p *Plugin) sendThresholdsToPI(action, context string, settings *actionSettings) error {
+	payload := map[string]interface{}{
+		"thresholds": settings.Thresholds,
+		"settings":   settings,
+	}
+	return p.sd.SendToPropertyInspector(action, context, payload)
 }

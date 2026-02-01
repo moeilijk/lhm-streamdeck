@@ -85,12 +85,27 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 		g.SetLabelText(0, settings.Title)
 	}
 	p.graphs[event.Context] = g
-	// Reset alert state so updateTiles will re-evaluate and apply correct colors on first run
+
+	// Reset threshold state so updateTiles will re-evaluate and apply correct colors on first run
+	if settings.CurrentThresholdID != "" {
+		settings.CurrentThresholdID = ""
+		migrated = true
+	}
+	// Legacy: reset old alert state
 	if settings.CurrentAlertState != "" {
 		settings.CurrentAlertState = ""
 		migrated = true
 	}
-	// Set default operators if threshold is enabled but operator is empty
+
+	// Ensure all enabled thresholds have operators
+	for i := range settings.Thresholds {
+		if settings.Thresholds[i].Enabled && settings.Thresholds[i].Operator == "" {
+			settings.Thresholds[i].Operator = ">="
+			migrated = true
+		}
+	}
+
+	// Legacy: Set default operators for old Warning/Critical if still present
 	if settings.WarningEnabled && settings.WarningOperator == "" {
 		settings.WarningOperator = ">="
 		migrated = true
@@ -99,6 +114,7 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 		settings.CriticalOperator = ">="
 		migrated = true
 	}
+
 	p.am.SetAction(event.Action, event.Context, &settings)
 	if migrated {
 		_ = p.sd.SetSettings(event.Context, &settings)
@@ -327,6 +343,25 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			err := p.handleColorChange(event, sdpi.Key, &sdpi)
 			if err != nil {
 				log.Println("handleColorChange (threshold)", err)
+			}
+		// Dynamic threshold handlers
+		case "addThreshold":
+			err := p.handleAddThreshold(event, &sdpi)
+			if err != nil {
+				log.Println("handleAddThreshold", err)
+			}
+		case "removeThreshold":
+			err := p.handleRemoveThreshold(event, &sdpi)
+			if err != nil {
+				log.Println("handleRemoveThreshold", err)
+			}
+		case "thresholdEnabled", "thresholdName", "thresholdPriority",
+			"thresholdOperator", "thresholdValue",
+			"thresholdBackgroundColor", "thresholdForegroundColor",
+			"thresholdHighlightColor", "thresholdValueTextColor":
+			err := p.handleThresholdUpdate(event, &sdpi)
+			if err != nil {
+				log.Println("handleThresholdUpdate", err)
 			}
 		default:
 			log.Printf("Unknown sdpi key: %s\n", sdpi.Key)

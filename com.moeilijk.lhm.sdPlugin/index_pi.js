@@ -73,6 +73,13 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
         jsonObj.payload.settings
       );
     }
+    // Handle threshold updates from plugin (after add/remove)
+    if (
+      getPropFromString(jsonObj, "payload.thresholds") &&
+      event === "sendToPropertyInspector"
+    ) {
+      renderThresholds(jsonObj.payload.thresholds);
+    }
     if (getPropFromString(jsonObj, "payload.settings")) {
       var settings = jsonObj.payload.settings;
       if (settings.min === 0 && settings.max === 0) {
@@ -116,53 +123,9 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       if (settings.graphUnit !== undefined) {
         document.querySelector("#graphUnit").value = settings.graphUnit;
       }
-      // Restore warning threshold settings
-      if (settings.warningEnabled !== undefined) {
-        document.querySelector("#warningEnabled").checked = settings.warningEnabled;
-        document.querySelector("#warningSettings").style.display =
-          settings.warningEnabled ? "block" : "none";
-      }
-      if (settings.warningValue !== undefined && settings.warningValue !== 0) {
-        document.querySelector("#warningValue").value = settings.warningValue;
-      }
-      if (settings.warningOperator) {
-        document.querySelector("#warningOperator").value = settings.warningOperator;
-      }
-      if (settings.warningBackgroundColor) {
-        document.querySelector("#warningBackground").value = settings.warningBackgroundColor;
-      }
-      if (settings.warningForegroundColor) {
-        document.querySelector("#warningForeground").value = settings.warningForegroundColor;
-      }
-      if (settings.warningHighlightColor) {
-        document.querySelector("#warningHighlight").value = settings.warningHighlightColor;
-      }
-      if (settings.warningValueTextColor) {
-        document.querySelector("#warningValuetext").value = settings.warningValueTextColor;
-      }
-      // Restore critical threshold settings
-      if (settings.criticalEnabled !== undefined) {
-        document.querySelector("#criticalEnabled").checked = settings.criticalEnabled;
-        document.querySelector("#criticalSettings").style.display =
-          settings.criticalEnabled ? "block" : "none";
-      }
-      if (settings.criticalValue !== undefined && settings.criticalValue !== 0) {
-        document.querySelector("#criticalValue").value = settings.criticalValue;
-      }
-      if (settings.criticalOperator) {
-        document.querySelector("#criticalOperator").value = settings.criticalOperator;
-      }
-      if (settings.criticalBackgroundColor) {
-        document.querySelector("#criticalBackground").value = settings.criticalBackgroundColor;
-      }
-      if (settings.criticalForegroundColor) {
-        document.querySelector("#criticalForeground").value = settings.criticalForegroundColor;
-      }
-      if (settings.criticalHighlightColor) {
-        document.querySelector("#criticalHighlight").value = settings.criticalHighlightColor;
-      }
-      if (settings.criticalValueTextColor) {
-        document.querySelector("#criticalValuetext").value = settings.criticalValueTextColor;
+      // Render dynamic thresholds
+      if (settings.thresholds) {
+        renderThresholds(settings.thresholds);
       }
     }
   };
@@ -410,85 +373,27 @@ function prepareDOMElements(baseElement) {
     }
   });
 
-  // Warning threshold toggle - show/hide settings panel AND send to plugin
-  const warningEnabled = document.querySelector("#warningEnabled");
-  if (warningEnabled) {
-    warningEnabled.addEventListener("change", function(e) {
-      document.querySelector("#warningSettings").style.display =
-        e.target.checked ? "block" : "none";
-      // Send checkbox state to plugin
+  // Add threshold button handler
+  const addThresholdBtn = document.querySelector("#addThresholdBtn");
+  if (addThresholdBtn) {
+    addThresholdBtn.addEventListener("click", function() {
+      const nameInput = document.querySelector("#newThresholdName");
+      const name = nameInput.value.trim() || "New Threshold";
       sendValueToPlugin({
-        key: "warningEnabled",
-        value: e.target.checked ? "true" : "false",
-        checked: e.target.checked
+        key: "addThreshold",
+        value: name
       }, "sdpi_collection");
+      nameInput.value = "";
     });
   }
 
-  // Critical threshold toggle - show/hide settings panel AND send to plugin
-  const criticalEnabled = document.querySelector("#criticalEnabled");
-  if (criticalEnabled) {
-    criticalEnabled.addEventListener("change", function(e) {
-      document.querySelector("#criticalSettings").style.display =
-        e.target.checked ? "block" : "none";
-      // Send checkbox state to plugin
-      sendValueToPlugin({
-        key: "criticalEnabled",
-        value: e.target.checked ? "true" : "false",
-        checked: e.target.checked
-      }, "sdpi_collection");
-    });
-  }
-
-  // Warning value input with debounce
-  const warningValue = document.querySelector("#warningValue");
-  if (warningValue) {
-    let timeout;
-    warningValue.addEventListener("input", function(e) {
-      clearTimeout(timeout);
-      timeout = setTimeout(function() {
-        sendValueToPlugin({
-          key: "warningValue",
-          value: e.target.value
-        }, "sdpi_collection");
-      }, 300);
-    });
-  }
-
-  // Critical value input with debounce
-  const criticalValue = document.querySelector("#criticalValue");
-  if (criticalValue) {
-    let timeout;
-    criticalValue.addEventListener("input", function(e) {
-      clearTimeout(timeout);
-      timeout = setTimeout(function() {
-        sendValueToPlugin({
-          key: "criticalValue",
-          value: e.target.value
-        }, "sdpi_collection");
-      }, 300);
-    });
-  }
-
-  // Warning operator select
-  const warningOperator = document.querySelector("#warningOperator");
-  if (warningOperator) {
-    warningOperator.addEventListener("change", function(e) {
-      sendValueToPlugin({
-        key: "warningOperator",
-        value: e.target.value
-      }, "sdpi_collection");
-    });
-  }
-
-  // Critical operator select
-  const criticalOperator = document.querySelector("#criticalOperator");
-  if (criticalOperator) {
-    criticalOperator.addEventListener("change", function(e) {
-      sendValueToPlugin({
-        key: "criticalOperator",
-        value: e.target.value
-      }, "sdpi_collection");
+  // Allow Enter key to add threshold
+  const newThresholdName = document.querySelector("#newThresholdName");
+  if (newThresholdName) {
+    newThresholdName.addEventListener("keypress", function(e) {
+      if (e.key === "Enter") {
+        document.querySelector("#addThresholdBtn").click();
+      }
     });
   }
 }
@@ -728,4 +633,155 @@ function fadeColor(col, amt) {
   const g = min(255, max((num & 0x0000ff) + amt, 0));
   const b = min(255, max(((num >> 8) & 0x00ff) + amt, 0));
   return "#" + (g | (b << 8) | (r << 16)).toString(16).padStart(6, 0);
+}
+
+/** DYNAMIC THRESHOLDS */
+
+// Send a threshold update to the plugin
+function sendThresholdUpdate(key, thresholdId, value, checked) {
+  var payload = {
+    key: key,
+    thresholdId: thresholdId,
+    value: value
+  };
+  // For checkbox inputs, include the checked boolean
+  if (typeof checked === "boolean") {
+    payload.checked = checked;
+  }
+  sendValueToPlugin(payload, "sdpi_collection");
+}
+
+// Render all thresholds from the settings
+function renderThresholds(thresholds) {
+  const container = document.querySelector("#thresholdsContainer");
+  if (!container) return;
+
+  // Clear existing thresholds
+  container.innerHTML = "";
+
+  // Sort by priority (highest first) for display
+  const sorted = [...thresholds].sort((a, b) => b.priority - a.priority);
+
+  sorted.forEach(function(threshold) {
+    const element = createThresholdElement(threshold);
+    container.appendChild(element);
+  });
+}
+
+// Create a threshold element from the template
+function createThresholdElement(threshold) {
+  const template = document.querySelector("#thresholdTemplate");
+  const clone = template.content.cloneNode(true);
+  const wrapper = clone.querySelector(".threshold-item");
+
+  wrapper.dataset.thresholdId = threshold.id;
+
+  // Set values
+  const nameInput = clone.querySelector(".threshold-name");
+  nameInput.value = threshold.name || "";
+
+  const priorityInput = clone.querySelector(".threshold-priority");
+  priorityInput.value = threshold.priority || 0;
+
+  const operatorSelect = clone.querySelector(".threshold-operator");
+  operatorSelect.value = threshold.operator || ">=";
+
+  const valueInput = clone.querySelector(".threshold-value");
+  valueInput.value = threshold.value || "";
+
+  const bgInput = clone.querySelector(".threshold-bg");
+  bgInput.value = threshold.backgroundColor || "#333300";
+
+  const fgInput = clone.querySelector(".threshold-fg");
+  fgInput.value = threshold.foregroundColor || "#999900";
+
+  const hlInput = clone.querySelector(".threshold-hl");
+  hlInput.value = threshold.highlightColor || "#ffff00";
+
+  const vtInput = clone.querySelector(".threshold-vt");
+  vtInput.value = threshold.valueTextColor || "#ffff00";
+
+  // Toggle button setup
+  const toggleBtn = clone.querySelector(".threshold-toggle");
+  const settingsDiv = clone.querySelector(".threshold-settings");
+  let isEnabled = threshold.enabled;
+
+  function updateToggleState() {
+    toggleBtn.textContent = isEnabled ? "on" : "off";
+    toggleBtn.style.background = isEnabled ? "#4a4" : "#a44";
+    settingsDiv.style.display = isEnabled ? "block" : "none";
+  }
+  updateToggleState();
+
+  // Add event listeners
+  const thresholdId = threshold.id;
+
+  // Enable/disable toggle button
+  toggleBtn.addEventListener("click", function() {
+    isEnabled = !isEnabled;
+    updateToggleState();
+    sendThresholdUpdate("thresholdEnabled", thresholdId, isEnabled ? "true" : "false", isEnabled);
+  });
+
+  // Name input with debounce
+  let nameTimeout;
+  nameInput.addEventListener("input", function(e) {
+    clearTimeout(nameTimeout);
+    nameTimeout = setTimeout(function() {
+      sendThresholdUpdate("thresholdName", thresholdId, e.target.value);
+    }, 300);
+  });
+
+  // Priority input with debounce
+  let priorityTimeout;
+  priorityInput.addEventListener("input", function(e) {
+    clearTimeout(priorityTimeout);
+    priorityTimeout = setTimeout(function() {
+      sendThresholdUpdate("thresholdPriority", thresholdId, e.target.value);
+    }, 300);
+  });
+
+  // Operator select
+  operatorSelect.addEventListener("change", function(e) {
+    sendThresholdUpdate("thresholdOperator", thresholdId, e.target.value);
+  });
+
+  // Value input with debounce
+  let valueTimeout;
+  valueInput.addEventListener("input", function(e) {
+    clearTimeout(valueTimeout);
+    valueTimeout = setTimeout(function() {
+      sendThresholdUpdate("thresholdValue", thresholdId, e.target.value);
+    }, 300);
+  });
+
+  // Color inputs
+  bgInput.addEventListener("change", function(e) {
+    sendThresholdUpdate("thresholdBackgroundColor", thresholdId, e.target.value);
+  });
+
+  fgInput.addEventListener("change", function(e) {
+    sendThresholdUpdate("thresholdForegroundColor", thresholdId, e.target.value);
+  });
+
+  hlInput.addEventListener("change", function(e) {
+    sendThresholdUpdate("thresholdHighlightColor", thresholdId, e.target.value);
+  });
+
+  vtInput.addEventListener("change", function(e) {
+    sendThresholdUpdate("thresholdValueTextColor", thresholdId, e.target.value);
+  });
+
+  // Remove button
+  const removeBtn = clone.querySelector(".threshold-remove");
+  removeBtn.addEventListener("click", function() {
+    sendValueToPlugin({
+      key: "removeThreshold",
+      thresholdId: thresholdId
+    }, "sdpi_collection");
+    // Remove from DOM immediately for responsiveness
+    wrapper.remove();
+  });
+
+  return clone;
 }

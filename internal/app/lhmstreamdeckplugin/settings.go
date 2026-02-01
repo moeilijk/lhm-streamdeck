@@ -2,9 +2,11 @@ package lhmstreamdeckplugin
 
 import (
 	"encoding/json"
+	"fmt"
 	"hash/fnv"
 	"strconv"
 	"strings"
+	"time"
 
 	hwsensorsservice "github.com/shayne/lhm-streamdeck/pkg/service"
 )
@@ -57,6 +59,12 @@ func decodeActionSettings(raw *json.RawMessage) (actionSettings, bool, error) {
 	if err := json.Unmarshal(b, &settings); err != nil {
 		return settings, migrated, err
 	}
+
+	// Migrate legacy Warning/Critical thresholds to new dynamic system
+	if migrateToThresholds(&settings) {
+		migrated = true
+	}
+
 	return settings, migrated, nil
 }
 
@@ -143,4 +151,92 @@ func syncSettingsWithReadings(settings *actionSettings, readings []hwsensorsserv
 		}
 	}
 	return changed
+}
+
+// migrateToThresholds converts legacy Warning/Critical threshold settings to the new dynamic threshold array
+func migrateToThresholds(settings *actionSettings) bool {
+	if len(settings.Thresholds) > 0 {
+		return false // Already has thresholds, no migration needed
+	}
+
+	migrated := false
+
+	// Migrate Warning threshold
+	if settings.WarningEnabled || settings.WarningValue != 0 || settings.WarningOperator != "" {
+		settings.Thresholds = append(settings.Thresholds, Threshold{
+			ID:              fmt.Sprintf("threshold_%d", time.Now().UnixNano()),
+			Name:            "Warning",
+			Enabled:         settings.WarningEnabled,
+			Priority:        50,
+			Operator:        defaultOperator(settings.WarningOperator),
+			Value:           settings.WarningValue,
+			BackgroundColor: defaultColor(settings.WarningBackgroundColor, "#333300"),
+			ForegroundColor: defaultColor(settings.WarningForegroundColor, "#999900"),
+			HighlightColor:  defaultColor(settings.WarningHighlightColor, "#ffff00"),
+			ValueTextColor:  defaultColor(settings.WarningValueTextColor, "#ffff00"),
+		})
+		migrated = true
+	}
+
+	// Migrate Critical threshold
+	if settings.CriticalEnabled || settings.CriticalValue != 0 || settings.CriticalOperator != "" {
+		settings.Thresholds = append(settings.Thresholds, Threshold{
+			ID:              fmt.Sprintf("threshold_%d", time.Now().UnixNano()+1),
+			Name:            "Critical",
+			Enabled:         settings.CriticalEnabled,
+			Priority:        100,
+			Operator:        defaultOperator(settings.CriticalOperator),
+			Value:           settings.CriticalValue,
+			BackgroundColor: defaultColor(settings.CriticalBackgroundColor, "#660000"),
+			ForegroundColor: defaultColor(settings.CriticalForegroundColor, "#990000"),
+			HighlightColor:  defaultColor(settings.CriticalHighlightColor, "#ff3333"),
+			ValueTextColor:  defaultColor(settings.CriticalValueTextColor, "#ff0000"),
+		})
+		migrated = true
+	}
+
+	// Clear legacy fields after migration
+	if migrated {
+		// Map old CurrentAlertState to new CurrentThresholdID
+		if settings.CurrentAlertState != "" && settings.CurrentAlertState != "none" {
+			for _, t := range settings.Thresholds {
+				if strings.EqualFold(t.Name, settings.CurrentAlertState) {
+					settings.CurrentThresholdID = t.ID
+					break
+				}
+			}
+		}
+		// Clear legacy fields
+		settings.WarningEnabled = false
+		settings.WarningOperator = ""
+		settings.WarningValue = 0
+		settings.WarningBackgroundColor = ""
+		settings.WarningForegroundColor = ""
+		settings.WarningHighlightColor = ""
+		settings.WarningValueTextColor = ""
+		settings.CriticalEnabled = false
+		settings.CriticalOperator = ""
+		settings.CriticalValue = 0
+		settings.CriticalBackgroundColor = ""
+		settings.CriticalForegroundColor = ""
+		settings.CriticalHighlightColor = ""
+		settings.CriticalValueTextColor = ""
+		settings.CurrentAlertState = ""
+	}
+
+	return migrated
+}
+
+func defaultOperator(op string) string {
+	if op == "" {
+		return ">="
+	}
+	return op
+}
+
+func defaultColor(color, defaultVal string) string {
+	if color == "" {
+		return defaultVal
+	}
+	return color
 }

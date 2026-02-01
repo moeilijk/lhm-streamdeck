@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -314,25 +315,29 @@ func (p *Plugin) updateTiles(data *actionData) {
 	}
 	g.Update(graphValue)
 
-	// Check threshold alerts (critical has higher priority than warning)
-	newAlertState := "none"
-	if s.CriticalEnabled && s.CriticalOperator != "" && evaluateThreshold(v, s.CriticalValue, s.CriticalOperator) {
-		newAlertState = "critical"
-	} else if s.WarningEnabled && s.WarningOperator != "" && evaluateThreshold(v, s.WarningValue, s.WarningOperator) {
-		newAlertState = "warning"
+	// Check threshold alerts (evaluate by priority, highest first)
+	activeThreshold := p.evaluateThresholds(v, s.Thresholds)
+
+	newThresholdID := ""
+	if activeThreshold != nil {
+		newThresholdID = activeThreshold.ID
 	}
 
-	// Only change colors on state transition to avoid constant redraws
-	if newAlertState != s.CurrentAlertState {
-		switch newAlertState {
-		case "critical":
-			p.applyCriticalColors(g, s)
-		case "warning":
-			p.applyWarningColors(g, s)
-		default:
+	// Check if forced re-evaluation or state transition
+	forceUpdate := s.CurrentThresholdID == "_FORCE_REEVALUATE_"
+	if forceUpdate || newThresholdID != s.CurrentThresholdID {
+		log.Printf("Threshold state change: '%s' -> '%s' (forced=%v)", s.CurrentThresholdID, newThresholdID, forceUpdate)
+		if activeThreshold != nil {
+			log.Printf("Applying threshold colors for '%s': bg=%s, fg=%s, hl=%s, vt=%s",
+				activeThreshold.Name, activeThreshold.BackgroundColor, activeThreshold.ForegroundColor,
+				activeThreshold.HighlightColor, activeThreshold.ValueTextColor)
+			p.applyThresholdColors(g, activeThreshold)
+		} else {
+			log.Printf("Applying normal colors: bg=%s, fg=%s, hl=%s, vt=%s",
+				s.BackgroundColor, s.ForegroundColor, s.HighlightColor, s.ValueTextColor)
 			p.applyNormalColors(g, s)
 		}
-		s.CurrentAlertState = newAlertState
+		s.CurrentThresholdID = newThresholdID
 		p.am.SetAction(data.action, data.context, s)
 		_ = p.sd.SetSettings(data.context, s)
 	}
@@ -365,4 +370,40 @@ func (p *Plugin) updateTiles(data *actionData) {
 		log.Printf("Failed to setImage: %v\n", err)
 		return
 	}
+}
+
+// evaluateThresholds checks all thresholds and returns the highest priority matching one
+func (p *Plugin) evaluateThresholds(value float64, thresholds []Threshold) *Threshold {
+	if len(thresholds) == 0 {
+		log.Printf("evaluateThresholds: no thresholds defined")
+		return nil
+	}
+
+	log.Printf("evaluateThresholds: checking %d thresholds for value %.2f", len(thresholds), value)
+
+	// Sort by priority (highest first)
+	sorted := make([]Threshold, len(thresholds))
+	copy(sorted, thresholds)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Priority > sorted[j].Priority
+	})
+
+	// Find first matching threshold
+	for i := range sorted {
+		t := &sorted[i]
+		matches := evaluateThreshold(value, t.Value, t.Operator)
+		log.Printf("  Threshold '%s': enabled=%v, operator='%s', value=%.2f, matches=%v",
+			t.Name, t.Enabled, t.Operator, t.Value, matches)
+		if t.Enabled && t.Operator != "" && matches {
+			// Find original threshold (not copy) to return pointer
+			for j := range thresholds {
+				if thresholds[j].ID == t.ID {
+					log.Printf("  -> Returning threshold '%s' (ID: %s)", t.Name, t.ID)
+					return &thresholds[j]
+				}
+			}
+		}
+	}
+	log.Printf("evaluateThresholds: no matching threshold found")
+	return nil
 }
