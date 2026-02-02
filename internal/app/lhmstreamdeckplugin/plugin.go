@@ -349,15 +349,9 @@ func (p *Plugin) updateTiles(data *actionData) {
 	// Check if forced re-evaluation or state transition
 	forceUpdate := s.CurrentThresholdID == "_FORCE_REEVALUATE_"
 	if forceUpdate || newThresholdID != s.CurrentThresholdID {
-		log.Printf("Threshold state change: '%s' -> '%s' (forced=%v)", s.CurrentThresholdID, newThresholdID, forceUpdate)
 		if activeThreshold != nil {
-			log.Printf("Applying threshold colors for '%s': bg=%s, fg=%s, hl=%s, vt=%s",
-				activeThreshold.Name, activeThreshold.BackgroundColor, activeThreshold.ForegroundColor,
-				activeThreshold.HighlightColor, activeThreshold.ValueTextColor)
 			p.applyThresholdColors(g, activeThreshold)
 		} else {
-			log.Printf("Applying normal colors: bg=%s, fg=%s, hl=%s, vt=%s",
-				s.BackgroundColor, s.ForegroundColor, s.HighlightColor, s.ValueTextColor)
 			p.applyNormalColors(g, s)
 		}
 		s.CurrentThresholdID = newThresholdID
@@ -419,30 +413,18 @@ func (p *Plugin) applyThresholdText(template, valueTextNoUnit, unit string) stri
 	return out
 }
 
-// evaluateThresholds checks all thresholds and returns the highest priority matching one
+// evaluateThresholds checks all thresholds top-to-bottom, last matching wins
 func (p *Plugin) evaluateThresholds(value float64, thresholds []Threshold) *Threshold {
 	if len(thresholds) == 0 {
-		log.Printf("evaluateThresholds: no thresholds defined")
 		return nil
 	}
 
-	log.Printf("evaluateThresholds: checking %d thresholds for value %.2f", len(thresholds), value)
-
-	// Apply top-to-bottom filter: the last matching threshold wins
 	var active *Threshold
 	for i := range thresholds {
 		t := &thresholds[i]
-		matches := evaluateThreshold(value, t.Value, t.Operator)
-		log.Printf("  Threshold '%s': enabled=%v, operator='%s', value=%.2f, matches=%v",
-			t.Name, t.Enabled, t.Operator, t.Value, matches)
-		if t.Enabled && t.Operator != "" && matches {
+		if t.Enabled && t.Operator != "" && evaluateThreshold(value, t.Value, t.Operator) {
 			active = t
 		}
 	}
-	if active != nil {
-		log.Printf("  -> Returning threshold '%s' (ID: %s)", active.Name, active.ID)
-		return active
-	}
-	log.Printf("evaluateThresholds: no matching threshold found")
-	return nil
+	return active
 }
