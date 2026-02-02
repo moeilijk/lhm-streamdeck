@@ -44,3 +44,10 @@ build/*.sdPlugin
 
 # Node dependencies
 node_modules/
+
+# Local development scripts (private)
+scripts/deploy-local.sh
+install-plugin.bat
+kill-streamdeck.bat
+start-streamdeck.bat
+make-release.bat
