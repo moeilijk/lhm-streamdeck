@@ -82,8 +82,3 @@ I wanted a local, open replacement for Stream Deck hardware monitoring without l
 ## Credits
 
 Based on the excellent [hwinfo-streamdeck](https://github.com/shayne/hwinfo-streamdeck) project by Shayne. Portions of this implementation and README were drafted with AI assistance and reviewed before release.
-
-## Upstream diff (proof of origin)
-
-Upstream is archived (read-only). Changes in this fork are visible here:
-https://github.com/shayne/hwinfo-streamdeck/compare/main...moeilijk:lhm
