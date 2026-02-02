@@ -241,13 +241,16 @@ func (g *Graph) Update(value float64) {
 		g.lvay = int(g.yvals[lyvals-1])
 		g.redraw = false
 	} else if g.drawn {
-		// shift the graph left 1px
+		// shift the graph left 1px (in-place, avoid allocations)
+		stride := g.img.Stride
 		for y := 0; y < g.height; y++ {
-			idx := g.img.PixOffset(0, y)
-			p1 := g.img.Pix[:idx]
-			p2 := g.img.Pix[idx+4 : idx+(g.width*4)]
-			p3 := g.img.Pix[idx+(g.width*4):]
-			g.img.Pix = append(p1, append(append(p2, []uint8{0, 0, 0, 0}...), p3...)...)
+			rowStart := y * stride
+			row := g.img.Pix[rowStart : rowStart+stride]
+			copy(row, row[4:])
+			row[stride-4] = 0
+			row[stride-3] = 0
+			row[stride-2] = 0
+			row[stride-1] = 0
 		}
 		g.drawGraph(int(g.width)-1, int(vay), g.width-1)
 	} else {

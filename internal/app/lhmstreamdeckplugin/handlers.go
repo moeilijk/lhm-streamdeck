@@ -83,7 +83,7 @@ func (p *Plugin) handleReadingSelect(event *streamdeck.EvSendToPlugin, sdpi *evS
 	settings.ReadingID = rid
 
 	// set default min/max
-	r, err := p.getReading(settings.SensorUID, settings.ReadingID)
+	r, _, err := p.getReading(settings.SensorUID, settings.ReadingID)
 	if err != nil {
 		return fmt.Errorf("handleReadingSelect getReading: %v", err)
 	}
@@ -205,9 +205,15 @@ const (
 	hexToRGBFactor = 17
 )
 
-func hexToRGBA(hex string) *color.RGBA {
-	var r, g, b uint8
+// colorCache stores parsed colors to avoid repeated parsing
+var colorCache = make(map[string]*color.RGBA)
 
+func hexToRGBA(hex string) *color.RGBA {
+	if c, ok := colorCache[hex]; ok {
+		return c
+	}
+
+	var r, g, b uint8
 	if len(hex) == 4 {
 		fmt.Sscanf(hex, hexShortFormat, &r, &g, &b)
 		r *= hexToRGBFactor
@@ -217,7 +223,9 @@ func hexToRGBA(hex string) *color.RGBA {
 		fmt.Sscanf(hex, hexFormat, &r, &g, &b)
 	}
 
-	return &color.RGBA{R: r, G: g, B: b, A: 255}
+	c := &color.RGBA{R: r, G: g, B: b, A: 255}
+	colorCache[hex] = c
+	return c
 }
 
 func (p *Plugin) handleColorChange(event *streamdeck.EvSendToPlugin, key string, sdpi *evSdpiCollection) error {
@@ -486,54 +494,6 @@ func (p *Plugin) applyNormalColors(g *graph.Graph, s *actionSettings) {
 		g.SetLabelColor(2, hexToRGBA(s.ValueTextColor))
 	} else {
 		g.SetLabelColor(2, &color.RGBA{255, 255, 255, 255})
-	}
-}
-
-// applyWarningColors applies warning colors to the graph
-func (p *Plugin) applyWarningColors(g *graph.Graph, s *actionSettings) {
-	if s.WarningBackgroundColor != "" {
-		g.SetBackgroundColor(hexToRGBA(s.WarningBackgroundColor))
-	} else {
-		g.SetBackgroundColor(&color.RGBA{51, 51, 0, 255}) // dark yellow
-	}
-	if s.WarningForegroundColor != "" {
-		g.SetForegroundColor(hexToRGBA(s.WarningForegroundColor))
-	} else {
-		g.SetForegroundColor(&color.RGBA{153, 153, 0, 255}) // medium yellow
-	}
-	if s.WarningHighlightColor != "" {
-		g.SetHighlightColor(hexToRGBA(s.WarningHighlightColor))
-	} else {
-		g.SetHighlightColor(&color.RGBA{255, 255, 0, 255}) // bright yellow
-	}
-	if s.WarningValueTextColor != "" {
-		g.SetLabelColor(1, hexToRGBA(s.WarningValueTextColor))
-	} else {
-		g.SetLabelColor(1, &color.RGBA{255, 255, 0, 255}) // yellow
-	}
-}
-
-// applyCriticalColors applies critical colors to the graph
-func (p *Plugin) applyCriticalColors(g *graph.Graph, s *actionSettings) {
-	if s.CriticalBackgroundColor != "" {
-		g.SetBackgroundColor(hexToRGBA(s.CriticalBackgroundColor))
-	} else {
-		g.SetBackgroundColor(&color.RGBA{102, 0, 0, 255}) // dark red
-	}
-	if s.CriticalForegroundColor != "" {
-		g.SetForegroundColor(hexToRGBA(s.CriticalForegroundColor))
-	} else {
-		g.SetForegroundColor(&color.RGBA{153, 0, 0, 255}) // medium red
-	}
-	if s.CriticalHighlightColor != "" {
-		g.SetHighlightColor(hexToRGBA(s.CriticalHighlightColor))
-	} else {
-		g.SetHighlightColor(&color.RGBA{255, 51, 51, 255}) // bright red
-	}
-	if s.CriticalValueTextColor != "" {
-		g.SetLabelColor(1, hexToRGBA(s.CriticalValueTextColor))
-	} else {
-		g.SetLabelColor(1, &color.RGBA{255, 0, 0, 255}) // red
 	}
 }
 
