@@ -13,6 +13,15 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// debugMode enables verbose logging when LHM_DEBUG=1
+var debugMode = os.Getenv("LHM_DEBUG") == "1"
+
+func debugLog(format string, v ...interface{}) {
+	if debugMode {
+		log.Printf(format, v...)
+	}
+}
+
 // EventDelegate receives callbacks for Stream Deck SDK events
 type EventDelegate interface {
 	OnConnected(*websocket.Conn)
@@ -54,7 +63,7 @@ func (sd *StreamDeck) SetDelegate(ed EventDelegate) {
 func (sd *StreamDeck) register() error {
 	reg := evRegister{Event: sd.RegisterEvent, UUID: sd.PluginUUID}
 	data, err := json.Marshal(reg)
-	log.Println(string(data))
+	debugLog("register: %s", data)
 	if err != nil {
 		return err
 	}
@@ -136,7 +145,7 @@ func (sd *StreamDeck) spawnMessageReader() {
 			log.Println("read:", err)
 			return
 		}
-		log.Printf("recv: %s", message)
+		debugLog("recv: %s", message)
 
 		var objmap map[string]*json.RawMessage
 		err = json.Unmarshal(message, &objmap)
@@ -183,7 +192,7 @@ func (sd *StreamDeck) spawnMessageReader() {
 			if err != nil {
 				log.Fatal("propertyInspectorDidAppear unmarshal", err)
 			}
-			log.Println("propertyInspectorDidAppear dispatch")
+			debugLog("propertyInspectorDidAppear dispatch")
 			if sd.delegate != nil {
 				sd.delegate.OnPropertyInspectorConnected(&ev)
 			}

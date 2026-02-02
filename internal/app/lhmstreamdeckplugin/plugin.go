@@ -2,8 +2,8 @@ package lhmstreamdeckplugin
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -24,12 +24,26 @@ type Plugin struct {
 	sd     *streamdeck.StreamDeck
 	am     *actionManager
 	graphs map[string]*graph.Graph
+
+	// Cached assets and state for performance
+	launchLHMImage   []byte            // cached launch-lhm.png
+	cachedPollTime   uint64            // cached PollTime value
+	cachedPollTimeAt time.Time         // when cachedPollTime was fetched
+	lastPollTime     map[string]uint64 // last processed PollTime per context
+	divisorCache     map[string]divisorCacheEntry
 }
 
 type sensorResult struct {
 	sensors []hwsensorsservice.Sensor
 	err     error
 }
+
+type divisorCacheEntry struct {
+	raw   string
+	value float64
+}
+
+const pollTimeCacheTTL = time.Second
 
 func (p *Plugin) sensorsWithTimeout(d time.Duration) ([]hwsensorsservice.Sensor, error) {
 	ch := make(chan sensorResult, 1)
@@ -95,9 +109,19 @@ func (p *Plugin) startClient() error {
 // NewPlugin creates an instance and initializes the plugin
 func NewPlugin(port, uuid, event, info string) (*Plugin, error) {
 	p := &Plugin{
-		am:     newActionManager(),
-		graphs: make(map[string]*graph.Graph),
+		am:           newActionManager(),
+		graphs:       make(map[string]*graph.Graph),
+		lastPollTime: make(map[string]uint64),
+		divisorCache: make(map[string]divisorCacheEntry),
 	}
+
+	// Cache launch-lhm.png at startup (optimization #2)
+	if bts, err := os.ReadFile("./launch-lhm.png"); err == nil {
+		p.launchLHMImage = bts
+	} else {
+		log.Printf("Warning: could not cache launch-lhm.png: %v\n", err)
+	}
+
 	p.startClient()
 	p.sd = streamdeck.NewStreamDeck(port, uuid, event, info)
 	return p, nil
@@ -131,41 +155,17 @@ func (p *Plugin) RunForever() error {
 	return nil
 }
 
-func (p *Plugin) getReading(suid string, rid int32) (hwsensorsservice.Reading, error) {
+func (p *Plugin) getReading(suid string, rid int32) (hwsensorsservice.Reading, []hwsensorsservice.Reading, error) {
 	rbs, err := p.hw.ReadingsForSensorID(suid)
 	if err != nil {
-		return nil, fmt.Errorf("getReading ReadingsBySensor failed: %v", err)
+		return nil, nil, fmt.Errorf("getReading ReadingsBySensor failed: %v", err)
 	}
 	for _, r := range rbs {
 		if r.ID() == rid {
-			return r, nil
+			return r, rbs, nil
 		}
 	}
-	return nil, fmt.Errorf("ReadingID does not exist: %s", suid)
-}
-
-func (p *Plugin) applyDefaultFormat(v float64, t hwsensorsservice.ReadingType, u string) string {
-	switch t {
-	case hwsensorsservice.ReadingTypeNone:
-		return fmt.Sprintf("%0.f %s", v, u)
-	case hwsensorsservice.ReadingTypeTemp:
-		return fmt.Sprintf("%.0f %s", v, u)
-	case hwsensorsservice.ReadingTypeVolt:
-		return fmt.Sprintf("%.0f %s", v, u)
-	case hwsensorsservice.ReadingTypeFan:
-		return fmt.Sprintf("%.0f %s", v, u)
-	case hwsensorsservice.ReadingTypeCurrent:
-		return fmt.Sprintf("%.0f %s", v, u)
-	case hwsensorsservice.ReadingTypePower:
-		return fmt.Sprintf("%0.f %s", v, u)
-	case hwsensorsservice.ReadingTypeClock:
-		return fmt.Sprintf("%.0f %s", v, u)
-	case hwsensorsservice.ReadingTypeUsage:
-		return fmt.Sprintf("%.0f%s", v, u)
-	case hwsensorsservice.ReadingTypeOther:
-		return fmt.Sprintf("%.0f %s", v, u)
-	}
-	return "Bad Format"
+	return nil, rbs, fmt.Errorf("ReadingID does not exist: %s", suid)
 }
 
 func (p *Plugin) applyDefaultFormatValueOnly(v float64, t hwsensorsservice.ReadingType) string {
@@ -235,6 +235,38 @@ func (p *Plugin) normalizeForGraph(value float64, sourceUnit string, targetUnit 
 	}
 }
 
+func (p *Plugin) getCachedPollTime() (uint64, error) {
+	if !p.cachedPollTimeAt.IsZero() && time.Since(p.cachedPollTimeAt) < pollTimeCacheTTL {
+		return p.cachedPollTime, nil
+	}
+
+	pollTime, err := p.hw.PollTime()
+	if err != nil {
+		p.cachedPollTime = 0
+		p.cachedPollTimeAt = time.Now()
+		return 0, err
+	}
+
+	p.cachedPollTime = pollTime
+	p.cachedPollTimeAt = time.Now()
+	return pollTime, nil
+}
+
+func (p *Plugin) getCachedDivisor(context, raw string) (float64, error) {
+	if raw == "" {
+		return 1, nil
+	}
+	if entry, ok := p.divisorCache[context]; ok && entry.raw == raw {
+		return entry.value, nil
+	}
+	fdiv, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0, err
+	}
+	p.divisorCache[context] = divisorCacheEntry{raw: raw, value: fdiv}
+	return fdiv, nil
+}
+
 func (p *Plugin) updateTiles(data *actionData) {
 	if data.action != "com.moeilijk.lhm.reading" {
 		log.Printf("Unknown action updateTiles: %s\n", data.action)
@@ -256,16 +288,16 @@ func (p *Plugin) updateTiles(data *actionData) {
 			}
 			data.settings.InErrorState = true
 			p.sd.SetSettings(data.context, &data.settings)
+
+			// Only set image on state transition (optimization #2)
+			if len(p.launchLHMImage) > 0 {
+				if err := p.sd.SetImage(data.context, p.launchLHMImage); err != nil {
+					log.Printf("Failed to setImage: %v\n", err)
+				}
+			}
 		}
-		bts, err := ioutil.ReadFile("./launch-lhm.png")
-		if err != nil {
-			log.Printf("Failed to read launch-lhm.png: %v\n", err)
-			return
-		}
-		err = p.sd.SetImage(data.context, bts)
-		if err != nil {
-			log.Printf("Failed to setImage: %v\n", err)
-		}
+		// Clear lastPollTime so we re-render when LHM comes back
+		delete(p.lastPollTime, data.context)
 	}
 
 	// show ui on property inspector if in error state
@@ -279,7 +311,10 @@ func (p *Plugin) updateTiles(data *actionData) {
 		p.sd.SetSettings(data.context, &data.settings)
 	}
 
-	pollTime, err := p.hw.PollTime()
+	s := data.settings
+	forceUpdate := s.CurrentThresholdID == "_FORCE_REEVALUATE_"
+
+	pollTime, err := p.getCachedPollTime()
 	if err != nil {
 		log.Printf("PollTime failed: %v\n", err)
 		showUnavailable()
@@ -290,21 +325,22 @@ func (p *Plugin) updateTiles(data *actionData) {
 		return
 	}
 
-	s := data.settings
-	r, err := p.getReading(s.SensorUID, s.ReadingID)
+	if !forceUpdate {
+		if last, ok := p.lastPollTime[data.context]; ok && last == pollTime {
+			return
+		}
+	}
+	r, readings, err := p.getReading(s.SensorUID, s.ReadingID)
 	if err != nil {
 		if s.ReadingLabel != "" {
-			readings, rerr := p.hw.ReadingsForSensorID(s.SensorUID)
-			if rerr == nil {
-				for _, candidate := range readings {
-					if candidate.Label() == s.ReadingLabel {
-						s.ReadingID = candidate.ID()
-						r = candidate
-						err = nil
-						_ = p.sd.SetSettings(data.context, s)
-						p.am.SetAction(data.action, data.context, s)
-						break
-					}
+			for _, candidate := range readings {
+				if candidate.Label() == s.ReadingLabel {
+					s.ReadingID = candidate.ID()
+					r = candidate
+					err = nil
+					_ = p.sd.SetSettings(data.context, s)
+					p.am.SetAction(data.action, data.context, s)
+					break
 				}
 			}
 		}
@@ -319,22 +355,23 @@ func (p *Plugin) updateTiles(data *actionData) {
 	}
 
 	v := r.Value()
-	if s.Divisor != "" {
-		fdiv := 1.
-		fdiv, err := strconv.ParseFloat(s.Divisor, 64)
-		if err != nil {
-			log.Printf("Failed to parse float: %s\n", s.Divisor)
-			return
-		}
-		v = r.Value() / fdiv
+	divisor, err := p.getCachedDivisor(data.context, s.Divisor)
+	if err != nil {
+		log.Printf("Failed to parse float: %s\n", s.Divisor)
+		return
+	}
+	if divisor != 1 {
+		v = r.Value() / divisor
 	}
 
 	// Normalize the graph value to handle unit changes (e.g., KB/s → MB/s)
 	// Only applies to throughput readings (units containing "/s")
-	graphValue := p.normalizeForGraph(r.Value(), r.Unit(), s.GraphUnit)
-	if s.Divisor != "" {
-		fdiv, _ := strconv.ParseFloat(s.Divisor, 64)
-		graphValue = graphValue / fdiv
+	graphValue := r.Value()
+	if s.GraphUnit != "" && strings.Contains(r.Unit(), "/s") {
+		graphValue = p.normalizeForGraph(r.Value(), r.Unit(), s.GraphUnit)
+	}
+	if divisor != 1 {
+		graphValue = graphValue / divisor
 	}
 	g.Update(graphValue)
 
@@ -347,7 +384,6 @@ func (p *Plugin) updateTiles(data *actionData) {
 	}
 
 	// Check if forced re-evaluation or state transition
-	forceUpdate := s.CurrentThresholdID == "_FORCE_REEVALUATE_"
 	if forceUpdate || newThresholdID != s.CurrentThresholdID {
 		if activeThreshold != nil {
 			p.applyThresholdColors(g, activeThreshold)
@@ -405,6 +441,8 @@ func (p *Plugin) updateTiles(data *actionData) {
 		log.Printf("Failed to setImage: %v\n", err)
 		return
 	}
+
+	p.lastPollTime[data.context] = pollTime
 }
 
 func (p *Plugin) applyThresholdText(template, valueTextNoUnit, unit string) string {

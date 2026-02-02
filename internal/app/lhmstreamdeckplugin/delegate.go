@@ -130,6 +130,7 @@ func (p *Plugin) OnWillDisappear(event *streamdeck.EvWillDisappear) {
 		log.Println("OnWillAppear settings unmarshal", err)
 	}
 	delete(p.graphs, event.Context)
+	delete(p.divisorCache, event.Context)
 	p.am.RemoveAction(event.Context)
 }
 
