@@ -34,7 +34,15 @@ jobs:
         with:
           languages: ${{ matrix.language }}
 
-      - name: Autobuild
+      - name: Autobuild (Go)
+        if: matrix.language == 'go'
+        uses: github/codeql-action/autobuild@v3
+        env:
+          GOOS: windows
+          GOARCH: amd64
+
+      - name: Autobuild (JavaScript)
+        if: matrix.language == 'javascript'
         uses: github/codeql-action/autobuild@v3
 
       - name: Perform CodeQL Analysis
