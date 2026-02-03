@@ -10,7 +10,7 @@ require (
 	github.com/shayne/go-winpeg v0.0.0-20200807055429-803ae16a07c6
 	golang.org/x/image v0.3.0
 	google.golang.org/grpc v1.52.0
-	google.golang.org/protobuf v1.28.1
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
