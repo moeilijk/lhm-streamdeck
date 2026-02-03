@@ -201,11 +201,9 @@ function addReadings(el, readings, settings) {
   readings.sort(sortByLabel).forEach((r) => {
     var option = document.createElement("option");
     option.style = "white-space: pre";
-    var spaces = "&nbsp;";
-    for (i = 0; i < maxL - r.prefix.length; ++i) {
-      spaces += "&nbsp;";
-    }
-    option.innerHTML = `${r.prefix}${spaces}${r.label}`;
+    var padLen = Math.max(0, maxL - r.prefix.length + 1);
+    var spaces = " ".repeat(padLen);
+    option.textContent = `${r.prefix}${spaces}${r.label}`;
     option.value = r.id;
     option.dataset.unit = r.unit || r.prefix; // store unit in data attribute
     if (settings.readingId === r.id) {
