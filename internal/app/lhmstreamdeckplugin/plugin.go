@@ -46,6 +46,9 @@ type divisorCacheEntry struct {
 const pollTimeCacheTTL = time.Second
 
 func (p *Plugin) sensorsWithTimeout(d time.Duration) ([]hwsensorsservice.Sensor, error) {
+	if p.hw == nil {
+		return nil, fmt.Errorf("LHM bridge not ready")
+	}
 	ch := make(chan sensorResult, 1)
 	go func() {
 		s, err := p.hw.Sensors()
@@ -85,12 +88,10 @@ func (p *Plugin) startClient() error {
 	}
 
 	g, err := winpeg.NewProcessExitGroup()
-	if err != nil {
-		return err
-	}
-
-	if err := g.AddProcess(cmd.Process); err != nil {
-		return err
+	if err == nil {
+		if attachProcessToJob(g, cmd.Process) == nil {
+			p.peg = g
+		}
 	}
 
 	// Request the plugin
@@ -100,7 +101,6 @@ func (p *Plugin) startClient() error {
 	}
 
 	p.c = client
-	p.peg = g
 	p.hw = raw.(hwsensorsservice.HardwareService)
 
 	return nil
@@ -130,8 +130,12 @@ func NewPlugin(port, uuid, event, info string) (*Plugin, error) {
 // RunForever starts the plugin and waits for events, indefinitely
 func (p *Plugin) RunForever() error {
 	defer func() {
-		p.c.Kill()
-		p.peg.Dispose()
+		if p.c != nil {
+			p.c.Kill()
+		}
+		if p.peg != 0 {
+			_ = p.peg.Dispose()
+		}
 	}()
 
 	p.sd.SetDelegate(p)
@@ -139,8 +143,14 @@ func (p *Plugin) RunForever() error {
 
 	go func() {
 		for {
-			if p.c.Exited() {
-				p.startClient()
+			if p.c == nil {
+				if err := p.startClient(); err != nil {
+					log.Printf("startClient failed: %v\n", err)
+				}
+			} else if p.c.Exited() {
+				if err := p.startClient(); err != nil {
+					log.Printf("restartClient failed: %v\n", err)
+				}
 			}
 			time.Sleep(1 * time.Second)
 		}
@@ -156,6 +166,9 @@ func (p *Plugin) RunForever() error {
 }
 
 func (p *Plugin) getReading(suid string, rid int32) (hwsensorsservice.Reading, []hwsensorsservice.Reading, error) {
+	if p.hw == nil {
+		return nil, nil, fmt.Errorf("LHM bridge not ready")
+	}
 	rbs, err := p.hw.ReadingsForSensorID(suid)
 	if err != nil {
 		return nil, nil, fmt.Errorf("getReading ReadingsBySensor failed: %v", err)
@@ -236,6 +249,9 @@ func (p *Plugin) normalizeForGraph(value float64, sourceUnit string, targetUnit 
 }
 
 func (p *Plugin) getCachedPollTime() (uint64, error) {
+	if p.hw == nil {
+		return 0, fmt.Errorf("LHM bridge not ready")
+	}
 	if !p.cachedPollTimeAt.IsZero() && time.Since(p.cachedPollTimeAt) < pollTimeCacheTTL {
 		return p.cachedPollTime, nil
 	}

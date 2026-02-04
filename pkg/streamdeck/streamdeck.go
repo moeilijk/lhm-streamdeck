@@ -157,8 +157,8 @@ func (sd *StreamDeck) spawnMessageReader() {
 		if err != nil {
 			log.Fatal("event unmarshal", err)
 		}
-		switch event {
-		case "willAppear":
+	switch event {
+	case "willAppear":
 			var ev EvWillAppear
 			err := json.Unmarshal(message, &ev)
 			if err != nil {
@@ -205,18 +205,22 @@ func (sd *StreamDeck) spawnMessageReader() {
 			if sd.delegate != nil {
 				sd.delegate.OnApplicationDidLaunch(&ev)
 			}
-		case "applicationDidTerminate":
-			var ev EvApplication
-			err := json.Unmarshal(message, &ev)
-			if err != nil {
-				log.Fatal("applicationDidTerminate unmarshal", err)
-			}
-			if sd.delegate != nil {
-				sd.delegate.OnApplicationDidTerminate(&ev)
-			}
-		default:
-			log.Printf("Unknown event: %s\n", event)
+	case "applicationDidTerminate":
+		var ev EvApplication
+		err := json.Unmarshal(message, &ev)
+		if err != nil {
+			log.Fatal("applicationDidTerminate unmarshal", err)
 		}
+		if sd.delegate != nil {
+			sd.delegate.OnApplicationDidTerminate(&ev)
+		}
+	case "deviceDidConnect":
+		// No-op: Stream Deck device connect event (not needed by this plugin).
+	case "deviceDidDisconnect":
+		// No-op: Stream Deck device disconnect event (not needed by this plugin).
+	default:
+		debugLog("Unknown event: %s\n", event)
+	}
 	}
 }
 
