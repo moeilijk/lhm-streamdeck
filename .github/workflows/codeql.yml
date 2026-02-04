@@ -33,7 +33,7 @@ jobs:
             build_mode: autobuild
           - language: javascript
             category: /language:javascript-typescript
-            build_mode: autobuild
+            build_mode: none
           - language: actions
             category: /language:actions
             build_mode: none
@@ -53,7 +53,7 @@ jobs:
         uses: github/codeql-action/autobuild@v4
 
       - name: Autobuild (JavaScript)
-        if: matrix.language == 'javascript'
+        if: matrix.language == 'javascript' && matrix.build_mode == 'autobuild'
         uses: github/codeql-action/autobuild@v4
 
       - name: Perform CodeQL Analysis
