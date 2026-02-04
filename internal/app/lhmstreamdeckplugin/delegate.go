@@ -2,6 +2,7 @@ package lhmstreamdeckplugin
 
 import (
 	"encoding/json"
+	"fmt"
 	"image/color"
 	"log"
 	"time"
@@ -228,6 +229,9 @@ func (p *Plugin) OnPropertyInspectorConnected(event *streamdeck.EvSendToPlugin) 
 }
 
 func (p *Plugin) sendReadingsToPropertyInspector(action, context, sensorID string, settings *actionSettings) ([]hwsensorsservice.Reading, error) {
+	if p.hw == nil {
+		return nil, fmt.Errorf("LHM bridge not ready")
+	}
 	readings, err := p.hw.ReadingsForSensorID(sensorID)
 	if err != nil {
 		log.Println("sendReadingsToPropertyInspector ReadingsForSensorID", err)

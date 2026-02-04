@@ -12,6 +12,9 @@ import (
 )
 
 func (p *Plugin) handleSensorSelect(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection) error {
+	if p.hw == nil {
+		return fmt.Errorf("LHM bridge not ready")
+	}
 	sensorid := sdpi.Value
 	readings, err := p.hw.ReadingsForSensorID(sensorid)
 	if err != nil {
