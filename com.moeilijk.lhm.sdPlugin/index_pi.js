@@ -511,7 +511,7 @@ function addDynamicStyles(clrs, fromWhere) {
   const metersActiveColor = fadeColor(clr, -60);
 
   node.setAttribute("id", "sdpi-dynamic-styles");
-  node.innerHTML = `
+  node.textContent = `
 
     input[type="radio"]:checked + label span,
     input[type="checkbox"]:checked + label span {
@@ -576,15 +576,35 @@ function sdpiCreateList(el, obj, cb) {
       subel.style.display = obj.value.length ? "flex" : "none";
     });
     if (obj.value.length) {
-      el.innerHTML = `<div class="sdpi-item" ${obj.type ? `class="${obj.type}"` : ""
-        } id="${obj.id || window.btoa(new Date().getTime().toString()).substr(0, 8)
-        }">
-            <div class="sdpi-item-label">${obj.label || ""}</div>
-            <ul class="sdpi-item-value ${obj.selectionType ? obj.selectionType : ""
-        }">
-                    ${obj.value.map((e) => `<li>${e.name}</li>`).join("")}
-                </ul>
-            </div>`;
+      // Build DOM safely instead of injecting HTML.
+      el.textContent = "";
+      const wrapper = document.createElement("div");
+      wrapper.className = "sdpi-item";
+      if (obj.type) {
+        wrapper.className += " " + String(obj.type);
+      }
+      wrapper.id =
+        obj.id || window.btoa(new Date().getTime().toString()).substr(0, 8);
+
+      const label = document.createElement("div");
+      label.className = "sdpi-item-label";
+      label.textContent = obj.label || "";
+
+      const list = document.createElement("ul");
+      list.className = "sdpi-item-value";
+      if (obj.selectionType) {
+        list.className += " " + String(obj.selectionType);
+      }
+
+      obj.value.forEach((e) => {
+        const li = document.createElement("li");
+        li.textContent = e && e.name ? e.name : "";
+        list.appendChild(li);
+      });
+
+      wrapper.appendChild(label);
+      wrapper.appendChild(list);
+      el.appendChild(wrapper);
       setTimeout(function () {
         prepareDOMElements(el);
         if (cb) cb();
