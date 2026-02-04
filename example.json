@@ -1,0 +1,43 @@
+{
+  "Text": "root",
+  "Min": "",
+  "Value": "",
+  "Max": "",
+  "SensorId": "",
+  "Type": "",
+  "ImageURL": "",
+  "Children": [
+    {
+      "Text": "AMD Ryzen 7 9800X3D",
+      "Min": "",
+      "Value": "",
+      "Max": "",
+      "SensorId": "",
+      "Type": "",
+      "ImageURL": "",
+      "Children": [
+        {
+          "Text": "Temperatures",
+          "Min": "",
+          "Value": "",
+          "Max": "",
+          "SensorId": "",
+          "Type": "",
+          "ImageURL": "",
+          "Children": [
+            {
+              "Text": "CPU Total",
+              "Min": "40 C",
+              "Value": "50 C",
+              "Max": "60 C",
+              "SensorId": "/amdcpu/0/temperature/0",
+              "Type": "Temperature",
+              "ImageURL": "",
+              "Children": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
