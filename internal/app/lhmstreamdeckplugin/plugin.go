@@ -31,6 +31,11 @@ type Plugin struct {
 	cachedPollTimeAt time.Time         // when cachedPollTime was fetched
 	lastPollTime     map[string]uint64 // last processed PollTime per context
 	divisorCache     map[string]divisorCacheEntry
+
+	// Global settings
+	globalSettings   globalSettings    // plugin-wide settings (poll interval)
+	pollTimeCacheTTL time.Duration     // cache TTL (matches poll interval)
+	settingsContexts map[string]bool   // tracks settings action contexts
 }
 
 type sensorResult struct {
@@ -43,7 +48,7 @@ type divisorCacheEntry struct {
 	value float64
 }
 
-const pollTimeCacheTTL = time.Second
+const defaultPollInterval = time.Second
 
 func (p *Plugin) sensorsWithTimeout(d time.Duration) ([]hwsensorsservice.Sensor, error) {
 	if p.hw == nil {
@@ -109,10 +114,12 @@ func (p *Plugin) startClient() error {
 // NewPlugin creates an instance and initializes the plugin
 func NewPlugin(port, uuid, event, info string) (*Plugin, error) {
 	p := &Plugin{
-		am:           newActionManager(),
-		graphs:       make(map[string]*graph.Graph),
-		lastPollTime: make(map[string]uint64),
-		divisorCache: make(map[string]divisorCacheEntry),
+		am:               newActionManager(defaultPollInterval),
+		graphs:           make(map[string]*graph.Graph),
+		lastPollTime:     make(map[string]uint64),
+		divisorCache:     make(map[string]divisorCacheEntry),
+		pollTimeCacheTTL: defaultPollInterval,
+		settingsContexts: make(map[string]bool),
 	}
 
 	// Cache launch-lhm.png at startup (optimization #2)
@@ -252,7 +259,11 @@ func (p *Plugin) getCachedPollTime() (uint64, error) {
 	if p.hw == nil {
 		return 0, fmt.Errorf("LHM bridge not ready")
 	}
-	if !p.cachedPollTimeAt.IsZero() && time.Since(p.cachedPollTimeAt) < pollTimeCacheTTL {
+	cacheTTL := p.pollTimeCacheTTL
+	if cacheTTL == 0 {
+		cacheTTL = defaultPollInterval
+	}
+	if !p.cachedPollTimeAt.IsZero() && time.Since(p.cachedPollTimeAt) < cacheTTL {
 		return p.cachedPollTime, nil
 	}
 
@@ -481,4 +492,64 @@ func (p *Plugin) evaluateThresholds(value float64, thresholds []Threshold) *Thre
 		}
 	}
 	return active
+}
+
+// updateSettingsTile updates the settings tile with current interval
+func (p *Plugin) updateSettingsTile(context string) {
+	interval := p.am.GetInterval()
+	title := fmt.Sprintf("%dms", interval.Milliseconds())
+	if err := p.sd.SetTitle(context, title); err != nil {
+		log.Printf("updateSettingsTile SetTitle failed: %v\n", err)
+	}
+}
+
+// updateAllSettingsTiles updates all settings tiles
+func (p *Plugin) updateAllSettingsTiles() {
+	for context := range p.settingsContexts {
+		p.updateSettingsTile(context)
+	}
+}
+
+// setPollInterval changes the polling interval dynamically
+func (p *Plugin) setPollInterval(intervalMs int) {
+	if intervalMs < 250 {
+		intervalMs = 250
+	}
+	if intervalMs > 2000 {
+		intervalMs = 2000
+	}
+
+	interval := time.Duration(intervalMs) * time.Millisecond
+
+	// Update action manager ticker
+	p.am.SetInterval(interval)
+
+	// Update cache TTL
+	p.pollTimeCacheTTL = interval
+
+	// Restart bridge with new interval
+	p.restartBridgeWithInterval(interval)
+
+	// Update all settings tiles
+	p.updateAllSettingsTiles()
+
+	// Save to global settings
+	p.globalSettings.PollInterval = intervalMs
+	if err := p.sd.SetGlobalSettings(p.globalSettings); err != nil {
+		log.Printf("SetGlobalSettings failed: %v\n", err)
+	}
+
+	log.Printf("Poll interval changed to %v\n", interval)
+}
+
+// restartBridgeWithInterval restarts the bridge with a new poll interval
+func (p *Plugin) restartBridgeWithInterval(interval time.Duration) {
+	if p.c != nil {
+		p.c.Kill()
+	}
+	// Set env var for new bridge process
+	os.Setenv("LHM_POLL_INTERVAL", interval.String())
+	if err := p.startClient(); err != nil {
+		log.Printf("restartBridgeWithInterval failed: %v\n", err)
+	}
 }

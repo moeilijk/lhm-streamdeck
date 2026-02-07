@@ -1,5 +1,10 @@
 package lhmstreamdeckplugin
 
+// globalSettings represents plugin-wide settings (not per-action)
+type globalSettings struct {
+	PollInterval int `json:"pollInterval"` // milliseconds: 250, 500, 1000
+}
+
 // Threshold represents a single configurable threshold level
 type Threshold struct {
 	ID              string  `json:"id"`              // Unique identifier

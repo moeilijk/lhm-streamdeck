@@ -25,10 +25,21 @@ func boolPtr(v bool) *bool {
 // OnConnected event
 func (p *Plugin) OnConnected(c *websocket.Conn) {
 	log.Println("OnConnected")
+	// Request global settings on connect
+	if err := p.sd.GetGlobalSettings(); err != nil {
+		log.Printf("GetGlobalSettings failed: %v\n", err)
+	}
 }
 
 // OnWillAppear event
 func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
+	// Handle settings action separately
+	if event.Action == "com.moeilijk.lhm.settings" {
+		p.settingsContexts[event.Context] = true
+		p.updateSettingsTile(event.Context)
+		return
+	}
+
 	settings, migrated, err := decodeActionSettings(event.Payload.Settings)
 	if err != nil {
 		log.Println("OnWillAppear settings unmarshal", err)
@@ -126,9 +137,15 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 
 // OnWillDisappear event
 func (p *Plugin) OnWillDisappear(event *streamdeck.EvWillDisappear) {
+	// Handle settings action
+	if event.Action == "com.moeilijk.lhm.settings" {
+		delete(p.settingsContexts, event.Context)
+		return
+	}
+
 	_, _, err := decodeActionSettings(event.Payload.Settings)
 	if err != nil {
-		log.Println("OnWillAppear settings unmarshal", err)
+		log.Println("OnWillDisappear settings unmarshal", err)
 	}
 	delete(p.graphs, event.Context)
 	delete(p.divisorCache, event.Context)
@@ -263,6 +280,39 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 	if err != nil {
 		log.Println("OnSendToPlugin unmarshal", err)
 	}
+
+	// Handle settings action commands
+	if event.Action == "com.moeilijk.lhm.settings" {
+		// Check for settingsConnected
+		if _, ok := payload["settingsConnected"]; ok {
+			log.Println("Settings PI connected")
+			// Send current status to settings PI
+			status := "Disconnected"
+			if p.hw != nil {
+				if _, err := p.hw.PollTime(); err == nil {
+					status = "Connected"
+				}
+			}
+			statusPayload := map[string]interface{}{
+				"connectionStatus": status,
+				"currentRate":      p.am.GetInterval().Milliseconds(),
+			}
+			if err := p.sd.SendToPropertyInspector(event.Action, event.Context, statusPayload); err != nil {
+				log.Printf("SendToPropertyInspector failed: %v\n", err)
+			}
+			return
+		}
+
+		// Check for setPollInterval
+		if raw, ok := payload["setPollInterval"]; ok {
+			var intervalMs int
+			if err := json.Unmarshal(*raw, &intervalMs); err == nil && intervalMs > 0 {
+				p.setPollInterval(intervalMs)
+			}
+			return
+		}
+	}
+
 	if data, ok := payload["sdpi_collection"]; ok {
 		sdpi := evSdpiCollection{}
 		err = json.Unmarshal(*data, &sdpi)
@@ -379,5 +429,33 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			log.Printf("Unknown sdpi key: %s\n", sdpi.Key)
 		}
 		return
+	}
+}
+
+// OnDidReceiveGlobalSettings handles global settings from Stream Deck
+func (p *Plugin) OnDidReceiveGlobalSettings(event *streamdeck.EvDidReceiveGlobalSettings) {
+	if event.Payload.Settings == nil {
+		return
+	}
+
+	var gs globalSettings
+	if err := json.Unmarshal(*event.Payload.Settings, &gs); err != nil {
+		log.Printf("OnDidReceiveGlobalSettings unmarshal failed: %v\n", err)
+		return
+	}
+
+	log.Printf("Received global settings: pollInterval=%d\n", gs.PollInterval)
+
+	// Apply settings if valid and different from current
+	if gs.PollInterval > 0 && gs.PollInterval != p.globalSettings.PollInterval {
+		p.globalSettings = gs
+		interval := time.Duration(gs.PollInterval) * time.Millisecond
+		p.am.SetInterval(interval)
+		p.pollTimeCacheTTL = interval
+		p.updateAllSettingsTiles()
+		log.Printf("Applied global settings: interval=%v\n", interval)
+	} else if gs.PollInterval == 0 {
+		// First time, no settings saved yet
+		p.globalSettings.PollInterval = int(defaultPollInterval.Milliseconds())
 	}
 }

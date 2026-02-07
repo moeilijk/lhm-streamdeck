@@ -26,11 +26,13 @@ func debugLog(format string, v ...interface{}) {
 type EventDelegate interface {
 	OnConnected(*websocket.Conn)
 	OnWillAppear(*EvWillAppear)
+	OnWillDisappear(*EvWillDisappear)
 	OnTitleParametersDidChange(*EvTitleParametersDidChange)
 	OnPropertyInspectorConnected(*EvSendToPlugin)
 	OnSendToPlugin(*EvSendToPlugin)
 	OnApplicationDidLaunch(*EvApplication)
 	OnApplicationDidTerminate(*EvApplication)
+	OnDidReceiveGlobalSettings(*EvDidReceiveGlobalSettings)
 }
 
 // StreamDeck SDK APIs
@@ -166,6 +168,24 @@ func (sd *StreamDeck) spawnMessageReader() {
 			}
 			if sd.delegate != nil {
 				sd.delegate.OnWillAppear(&ev)
+			}
+		case "willDisappear":
+			var ev EvWillDisappear
+			err := json.Unmarshal(message, &ev)
+			if err != nil {
+				log.Fatal("willDisappear unmarshal", err)
+			}
+			if sd.delegate != nil {
+				sd.delegate.OnWillDisappear(&ev)
+			}
+		case "didReceiveGlobalSettings":
+			var ev EvDidReceiveGlobalSettings
+			err := json.Unmarshal(message, &ev)
+			if err != nil {
+				log.Fatal("didReceiveGlobalSettings unmarshal", err)
+			}
+			if sd.delegate != nil {
+				sd.delegate.OnDidReceiveGlobalSettings(&ev)
 			}
 		case "titleParametersDidChange":
 			var ev EvTitleParametersDidChange
@@ -313,6 +333,48 @@ func (sd *StreamDeck) SetImage(context string, bts []byte) error {
 	err = sd.conn.WriteMessage(websocket.TextMessage, data)
 	if err != nil {
 		return fmt.Errorf("setImage write: %v", err)
+	}
+	return nil
+}
+
+// GetGlobalSettings requests the global settings from Stream Deck
+func (sd *StreamDeck) GetGlobalSettings() error {
+	event := struct {
+		Event   string `json:"event"`
+		Context string `json:"context"`
+	}{
+		Event:   "getGlobalSettings",
+		Context: sd.PluginUUID,
+	}
+	data, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("getGlobalSettings: %v", err)
+	}
+	err = sd.conn.WriteMessage(websocket.TextMessage, data)
+	if err != nil {
+		return fmt.Errorf("getGlobalSettings write: %v", err)
+	}
+	return nil
+}
+
+// SetGlobalSettings saves persistent global settings
+func (sd *StreamDeck) SetGlobalSettings(payload interface{}) error {
+	event := struct {
+		Event   string      `json:"event"`
+		Context string      `json:"context"`
+		Payload interface{} `json:"payload"`
+	}{
+		Event:   "setGlobalSettings",
+		Context: sd.PluginUUID,
+		Payload: payload,
+	}
+	data, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("setGlobalSettings: %v", err)
+	}
+	err = sd.conn.WriteMessage(websocket.TextMessage, data)
+	if err != nil {
+		return fmt.Errorf("setGlobalSettings write: %v", err)
 	}
 	return nil
 }
