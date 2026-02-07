@@ -2,46 +2,70 @@ package lhmstreamdeckplugin
 
 import (
 	"fmt"
+	"log"
 	"sync"
 	"time"
 )
 
 type actionManager struct {
-	mux     sync.RWMutex
-	actions map[string]*actionData
-	lastRun map[string]time.Time
+	mux            sync.RWMutex
+	actions        map[string]*actionData
+	lastRun        map[string]time.Time
+	updateInterval time.Duration
+	intervalChan   chan time.Duration
 }
 
-func newActionManager() *actionManager {
+func newActionManager(interval time.Duration) *actionManager {
+	if interval < 250*time.Millisecond {
+		interval = 250 * time.Millisecond
+	}
+	if interval > 2*time.Second {
+		interval = 2 * time.Second
+	}
 	return &actionManager{
-		actions: make(map[string]*actionData),
-		lastRun: make(map[string]time.Time),
+		actions:        make(map[string]*actionData),
+		lastRun:        make(map[string]time.Time),
+		updateInterval: interval,
+		intervalChan:   make(chan time.Duration, 1),
 	}
 }
 
 func (tm *actionManager) Run(updateTiles func(*actionData)) {
 	go func() {
-		ticker := time.NewTicker(time.Second)
-		for range ticker.C {
-			now := time.Now()
-			var toUpdate []*actionData
-			tm.mux.Lock()
-			for _, data := range tm.actions {
-				if data.settings.IsValid {
-					last := tm.lastRun[data.context]
-					if data.settings.InErrorState && now.Sub(last) < 5*time.Second {
-						continue
-					}
-					toUpdate = append(toUpdate, data)
-				}
-			}
-			tm.mux.Unlock()
+		ticker := time.NewTicker(tm.updateInterval)
+		defer ticker.Stop()
 
-			for _, data := range toUpdate {
-				updateTiles(data)
+		for {
+			select {
+			case newInterval := <-tm.intervalChan:
+				ticker.Stop()
 				tm.mux.Lock()
-				tm.lastRun[data.context] = now
+				tm.updateInterval = newInterval
 				tm.mux.Unlock()
+				ticker = time.NewTicker(newInterval)
+				log.Printf("Ticker updated to %v", newInterval)
+
+			case <-ticker.C:
+				now := time.Now()
+				var toUpdate []*actionData
+				tm.mux.Lock()
+				for _, data := range tm.actions {
+					if data.settings.IsValid {
+						last := tm.lastRun[data.context]
+						if data.settings.InErrorState && now.Sub(last) < 5*time.Second {
+							continue
+						}
+						toUpdate = append(toUpdate, data)
+					}
+				}
+				tm.mux.Unlock()
+
+				for _, data := range toUpdate {
+					updateTiles(data)
+					tm.mux.Lock()
+					tm.lastRun[data.context] = now
+					tm.mux.Unlock()
+				}
 			}
 		}
 	}()
@@ -69,4 +93,26 @@ func (tm *actionManager) getSettings(context string) (actionSettings, error) {
 	}
 	// return full copy of settings, not reference to stored settings
 	return *data.settings, nil
+}
+
+// SetInterval dynamically updates the polling interval
+func (tm *actionManager) SetInterval(d time.Duration) {
+	if d < 250*time.Millisecond {
+		d = 250 * time.Millisecond
+	}
+	if d > 2*time.Second {
+		d = 2 * time.Second
+	}
+	select {
+	case tm.intervalChan <- d:
+	default:
+		// Channel full, skip (previous update pending)
+	}
+}
+
+// GetInterval returns the current polling interval
+func (tm *actionManager) GetInterval() time.Duration {
+	tm.mux.RLock()
+	defer tm.mux.RUnlock()
+	return tm.updateInterval
 }

@@ -122,3 +122,14 @@ type evSetImage struct {
 	Context string            `json:"context"`
 	Payload evSetImagePayload `json:"payload"`
 }
+
+// EvDidReceiveGlobalSettingsPayload is the payload from didReceiveGlobalSettings event
+type EvDidReceiveGlobalSettingsPayload struct {
+	Settings *json.RawMessage `json:"settings"`
+}
+
+// EvDidReceiveGlobalSettings is the payload from the didReceiveGlobalSettings event
+type EvDidReceiveGlobalSettings struct {
+	Event   string                            `json:"event"`
+	Payload EvDidReceiveGlobalSettingsPayload `json:"payload"`
+}

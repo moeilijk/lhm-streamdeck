@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport"
+    content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,minimal-ui,viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  <title>LHM Settings</title>
+  <link rel="stylesheet" href="css/sdpi.css" />
+  <link rel="stylesheet" href="css/local.css" />
+</head>
+
+<body>
+  <div class="sdpi-wrapper localbody">
+    <div class="sdpi-heading">Performance</div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Refresh Rate</div>
+      <select class="sdpi-item-value select" id="pollInterval">
+        <option value="250">250ms (Fast)</option>
+        <option value="500">500ms (Balanced)</option>
+        <option value="1000" selected>1000ms (Default)</option>
+      </select>
+    </div>
+
+    <div class="sdpi-item">
+      <details class="message info">
+        <summary>Info</summary>
+        <p>Lower values = faster updates but higher CPU usage.</p>
+        <p>Changes apply immediately to all sensor tiles.</p>
+      </details>
+    </div>
+
+    <div class="sdpi-heading">Status</div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">LHM Connection</div>
+      <div class="sdpi-item-value" id="connectionStatus" style="color: #999;">Checking...</div>
+    </div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Current Rate</div>
+      <div class="sdpi-item-value" id="currentRate" style="color: #999;">--</div>
+    </div>
+  </div>
+
+  <script src="settings_pi.js"></script>
+</body>
+
+</html>

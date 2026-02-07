@@ -20,6 +20,23 @@
 			"SupportedInMultiActions": false,
 			"Tooltip": "Display sensor readings from Libre Hardware Monitor",
 			"UUID": "com.moeilijk.lhm.reading"
+		},
+		{
+			"Icon": "settingsIcon",
+			"Name": "LHM Settings",
+			"States": [
+				{
+					"Image": "settingsImage",
+					"TitleAlignment": "bottom",
+					"FontSize": 10,
+					"TitleColor": "#b7b7b7",
+					"ShowTitle": true
+				}
+			],
+			"SupportedInMultiActions": false,
+			"Tooltip": "Configure Libre Hardware Monitor plugin settings",
+			"UUID": "com.moeilijk.lhm.settings",
+			"PropertyInspectorPath": "settings_pi.html"
 		}
 	],
 	"Author": "moeilijk",

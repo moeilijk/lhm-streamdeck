@@ -17,6 +17,8 @@ import (
 const (
 	defaultEndpoint   = "http://127.0.0.1:8085/data.json"
 	defaultPollPeriod = time.Second
+	minPollPeriod     = 250 * time.Millisecond
+	maxPollPeriod     = 2 * time.Second
 )
 
 // node mirrors the structure returned by LHM's data.json endpoint.
@@ -84,10 +86,20 @@ func StartService() *Service {
 	if url == "" {
 		url = defaultEndpoint
 	}
+
+	pollInterval := defaultPollPeriod
+	if envInterval := os.Getenv("LHM_POLL_INTERVAL"); envInterval != "" {
+		if parsed, err := time.ParseDuration(envInterval); err == nil {
+			if parsed >= minPollPeriod && parsed <= maxPollPeriod {
+				pollInterval = parsed
+			}
+		}
+	}
+
 	return &Service{
 		url:          url,
 		client:       &http.Client{Timeout: 2 * time.Second},
-		pollInterval: defaultPollPeriod,
+		pollInterval: pollInterval,
 	}
 }
 
