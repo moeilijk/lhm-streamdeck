@@ -24,7 +24,7 @@ LHM HTTP Server (data.json)
 LHM Bridge (cache + mutex)
         ^
         | gRPC
-Plugin ticker (action manager interval: 250-2000ms)
+Plugin ticker (action manager interval: 100-30000ms)
         |
 Stream Deck tiles
 ```

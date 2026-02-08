@@ -2,7 +2,7 @@ package lhmstreamdeckplugin
 
 // globalSettings represents plugin-wide settings (not per-action)
 type globalSettings struct {
-	PollInterval int `json:"pollInterval"` // milliseconds: 250, 500, 1000
+	PollInterval int `json:"pollInterval"` // milliseconds: 100..30000
 }
 
 // settingsTileSettings stores per-tile appearance settings for the settings action

@@ -27,6 +27,7 @@ Note: the bridge now runs in an on-demand fetch model with the plugin ticker as 
 - `showLabel=false` uses solid configured background.
 - Fallback render path keeps the interval text visible.
 - Title handling on settings tile is now image-rendered (custom title or `Refresh Rate` fallback), with native Stream Deck title disabled for this action.
+- Refresh-rate range now supports 100ms up to 30000ms (30s), with additional options after 2000ms.
 
 ---
 
