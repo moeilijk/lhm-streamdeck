@@ -8,6 +8,7 @@ var websocket = null,
   appearanceSignature = null,
   appearancePollTimer = null,
   uiBound = false;
+var allowedIntervals = [250, 500, 1000, 2000, 5000, 10000];
 
 function parseJSONOrEmpty(raw) {
   if (!raw || typeof raw !== "string") {
@@ -22,6 +23,29 @@ function parseJSONOrEmpty(raw) {
 
 function byId(id) {
   return document.getElementById(id);
+}
+
+function normalizeInterval(value) {
+  var v = parseInt(value, 10);
+  if (isNaN(v)) {
+    return 1000;
+  }
+  for (var i = 0; i < allowedIntervals.length; i++) {
+    if (allowedIntervals[i] === v) {
+      return v;
+    }
+  }
+  // Map unknown values to the nearest supported option.
+  var nearest = allowedIntervals[0];
+  var nearestDiff = Math.abs(v - nearest);
+  for (var j = 1; j < allowedIntervals.length; j++) {
+    var diff = Math.abs(v - allowedIntervals[j]);
+    if (diff < nearestDiff) {
+      nearest = allowedIntervals[j];
+      nearestDiff = diff;
+    }
+  }
+  return nearest;
 }
 
 function sdkContext() {
@@ -186,7 +210,7 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       if (jsonObj.payload && jsonObj.payload.settings) {
         settings = jsonObj.payload.settings;
       }
-      var interval = settings.pollInterval || 1000;
+      var interval = normalizeInterval(settings.pollInterval || 1000);
       var pollEl = byId("pollInterval");
       var rateEl = byId("currentRate");
       if (pollEl) {
@@ -295,10 +319,8 @@ function bindUIHandlers() {
     if (!websocket || websocket.readyState !== 1) {
       return;
     }
-    var interval = parseInt(e.target.value);
-    if (isNaN(interval) || interval <= 0) {
-      interval = 1000;
-    }
+    var interval = normalizeInterval(e.target.value);
+    e.target.value = interval;
 
     sendJson({
       event: "setGlobalSettings",

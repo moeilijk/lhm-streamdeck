@@ -35,6 +35,11 @@ I wanted a local, open replacement for Stream Deck hardware monitoring without l
    a specific local IP, you can also use that IP in the URL. Keep Libre Hardware Monitor running while you use the Stream
    Deck action.
 
+7. Keep **LHM -> Options -> Update Interval** in sync with the plugin settings tile.
+   The plugin does not change LHM's update interval automatically.
+
+    ![alt text](images/updateinterval.png "LHM Update Interval")
+
 > Advanced: set the `LHM_ENDPOINT` environment variable before launching Stream Deck if you prefer another URL (e.g. a different port or host). If you bind LHM to a specific local IP, set `LHM_ENDPOINT` to match that IP and port. The default endpoint is `http://127.0.0.1:8085/data.json`.
 
 

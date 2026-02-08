@@ -116,14 +116,14 @@ function testPollIntervalEvents() {
   const { sandbox, elements, sent } = loadSandbox();
   sandbox.context = "ctx-settings";
   sandbox.uuid = "ctx-fallback";
-  elements.pollInterval.value = "1500";
+  elements.pollInterval.value = "2000";
   elements.pollInterval.trigger("change");
 
   const global = sent.find((m) => m.event === "setGlobalSettings");
   assert(global, "missing setGlobalSettings");
-  assert(global.payload.pollInterval === 1500, "poll interval payload mismatch");
+  assert(global.payload.pollInterval === 2000, "poll interval payload mismatch");
 
-  const pollMsgs = sent.filter((m) => m.event === "sendToPlugin" && m.payload && m.payload.setPollInterval === 1500);
+  const pollMsgs = sent.filter((m) => m.event === "sendToPlugin" && m.payload && m.payload.setPollInterval === 2000);
   assert(pollMsgs.length === 1, "expected one setPollInterval message");
 }
 
