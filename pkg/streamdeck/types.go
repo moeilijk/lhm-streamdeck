@@ -88,6 +88,20 @@ type EvSendToPlugin struct {
 	Payload *json.RawMessage `json:"payload"`
 }
 
+// EvDidReceiveSettingsPayload is the payload from didReceiveSettings event.
+type EvDidReceiveSettingsPayload struct {
+	Settings *json.RawMessage `json:"settings"`
+}
+
+// EvDidReceiveSettings is emitted after setSettings for an action instance.
+type EvDidReceiveSettings struct {
+	Action  string                      `json:"action"`
+	Event   string                      `json:"event"`
+	Context string                      `json:"context"`
+	Device  string                      `json:"device"`
+	Payload EvDidReceiveSettingsPayload `json:"payload"`
+}
+
 type evSendToPropertyInspector struct {
 	Action  string      `json:"action"`
 	Event   string      `json:"event"`

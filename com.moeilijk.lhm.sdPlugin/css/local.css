@@ -31,3 +31,13 @@ body,
 .threshold-arrows .threshold-move-down {
   margin: 0;
 }
+
+/* Use a native checkbox for settings PI showLabel to avoid hidden/custom toggle issues. */
+#showLabel {
+  display: inline-block !important;
+  appearance: auto;
+  -webkit-appearance: checkbox;
+  width: 16px;
+  height: 16px;
+  margin-top: 4px;
+}

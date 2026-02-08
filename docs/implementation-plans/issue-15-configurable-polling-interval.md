@@ -2,13 +2,31 @@
 
 **Issue:** [#15 - Feature request: Make polling interval configurable (e.g., 250/500/1000ms)](https://github.com/moeilijk/lhm-streamdeck/issues/15)
 
-**Status:** Planning
+**Status:** Partially implemented (see `docs/implementation-plans/issue-15-progress.md`)
 
 ---
 
 ## Summary
 
 Add a user-configurable polling interval setting to allow faster refresh rates for sensors that change quickly (CPU/GPU power, clocks, fan RPM), while keeping the default at 1000ms for backward compatibility.
+
+Note: the bridge now runs in an on-demand fetch model with the plugin ticker as the primary clock. The original two-tier polling section below is historical design context.
+
+### 2026-02-08 Debug Addendum
+
+- Settings tile appearance save path was hardened:
+- PI now writes tile settings only to the active action context.
+- Plugin also persists `updateTileAppearance` via `SetSettings` as a backup.
+
+- Poll timing behavior was adjusted:
+- PollTime cache TTL is now derived from interval (half interval, bounded), not equal to the full interval.
+- This avoids stale PollTime reuse on the next tick (notably visible at `2000ms`).
+
+- Settings tile rendering behavior:
+- `showLabel=true` keeps placeholder background path.
+- `showLabel=false` uses solid configured background.
+- Fallback render path keeps the interval text visible.
+- Title handling on settings tile is now image-rendered (custom title or `Refresh Rate` fallback), with native Stream Deck title disabled for this action.
 
 ---
 

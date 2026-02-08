@@ -27,10 +27,11 @@
 			"States": [
 				{
 					"Image": "settingsImage",
-					"TitleAlignment": "bottom",
-					"FontSize": 10,
+					"Title": "Refresh Rate",
+					"TitleAlignment": "top",
+					"FontSize": 9,
 					"TitleColor": "#b7b7b7",
-					"ShowTitle": true
+					"ShowTitle": false
 				}
 			],
 			"SupportedInMultiActions": false,

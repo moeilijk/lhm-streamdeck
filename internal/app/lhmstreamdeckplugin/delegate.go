@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image/color"
 	"log"
+	"sort"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -22,6 +23,67 @@ func boolPtr(v bool) *bool {
 	return &v
 }
 
+func (p *Plugin) isSettingsAction(action, context string) bool {
+	if action == "com.moeilijk.lhm.settings" {
+		return true
+	}
+	_, ok := p.settingsContexts[context]
+	return ok
+}
+
+func (p *Plugin) resolveSettingsContext(context string) string {
+	if _, ok := p.settingsContexts[context]; ok {
+		return context
+	}
+	if len(p.settingsContexts) == 1 {
+		for k := range p.settingsContexts {
+			return k
+		}
+	}
+	return context
+}
+
+func payloadKeys(m map[string]*json.RawMessage) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func isSettingsPayload(m map[string]*json.RawMessage) bool {
+	if m == nil {
+		return false
+	}
+	for _, k := range []string{"settingsConnected", "setPollInterval", "updateTileAppearance"} {
+		if _, ok := m[k]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *Plugin) sendSettingsStatus(action, context string) {
+	status := "Disconnected"
+	if p.hw != nil {
+		if _, err := p.hw.PollTime(); err == nil {
+			status = "Connected"
+		}
+	}
+	currentRate := p.globalSettings.PollInterval
+	if currentRate <= 0 {
+		currentRate = int(p.am.GetInterval().Milliseconds())
+	}
+	statusPayload := map[string]interface{}{
+		"connectionStatus": status,
+		"currentRate":      currentRate,
+	}
+	if err := p.sd.SendToPropertyInspector(action, context, statusPayload); err != nil {
+		log.Printf("SendToPropertyInspector settings status failed: %v\n", err)
+	}
+}
+
 // OnConnected event
 func (p *Plugin) OnConnected(c *websocket.Conn) {
 	log.Println("OnConnected")
@@ -35,7 +97,60 @@ func (p *Plugin) OnConnected(c *websocket.Conn) {
 func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 	// Handle settings action separately
 	if event.Action == "com.moeilijk.lhm.settings" {
-		p.settingsContexts[event.Context] = true
+		// Decode tile appearance settings from payload
+		var tileSettings settingsTileSettings
+		hasShowLabel := false
+		hasTitle := false
+		hasTitleColor := false
+		hasShowTitleInGraph := false
+		if event.Payload.Settings != nil {
+			var rawSettings map[string]json.RawMessage
+			if err := json.Unmarshal(*event.Payload.Settings, &rawSettings); err == nil {
+				_, hasShowLabel = rawSettings["showLabel"]
+				_, hasTitle = rawSettings["title"]
+				_, hasTitleColor = rawSettings["titleColor"]
+				_, hasShowTitleInGraph = rawSettings["showTitleInGraph"]
+			}
+			if err := json.Unmarshal(*event.Payload.Settings, &tileSettings); err != nil {
+				log.Printf("OnWillAppear settings tile unmarshal: %v\n", err)
+			}
+		}
+		if existing := p.settingsContexts[event.Context]; existing != nil {
+			if !hasTitle {
+				tileSettings.Title = existing.Title
+			}
+			if !hasTitleColor {
+				tileSettings.TitleColor = existing.TitleColor
+			}
+			if !hasShowTitleInGraph {
+				tileSettings.ShowTitleInGraph = existing.ShowTitleInGraph
+			}
+		}
+		// Set defaults if not set
+		if tileSettings.TileBackground == "" {
+			tileSettings.TileBackground = "#000000"
+		}
+		if tileSettings.TileTextColor == "" {
+			tileSettings.TileTextColor = "#ffffff"
+		}
+		if !hasShowLabel {
+			tileSettings.ShowLabel = true
+		}
+		if tileSettings.TitleColor == "" {
+			tileSettings.TitleColor = "#b7b7b7"
+		}
+		if tileSettings.ShowTitleInGraph == nil {
+			tileSettings.ShowTitleInGraph = boolPtr(true)
+		}
+		log.Printf(
+			"OnWillAppear settings context=%s bg=%s text=%s showLabel=%t hasShowLabel=%t\n",
+			event.Context,
+			tileSettings.TileBackground,
+			tileSettings.TileTextColor,
+			tileSettings.ShowLabel,
+			hasShowLabel,
+		)
+		p.settingsContexts[event.Context] = &tileSettings
 		p.updateSettingsTile(event.Context)
 		return
 	}
@@ -160,6 +275,43 @@ func (p *Plugin) OnApplicationDidTerminate(event *streamdeck.EvApplication) {}
 
 // OnTitleParametersDidChange event
 func (p *Plugin) OnTitleParametersDidChange(event *streamdeck.EvTitleParametersDidChange) {
+	if p.isSettingsAction(event.Action, event.Context) {
+		targetContext := p.resolveSettingsContext(event.Context)
+		tileSettings := p.settingsContexts[targetContext]
+		if tileSettings == nil {
+			tileSettings = &settingsTileSettings{
+				TileBackground: "#000000",
+				TileTextColor:  "#ffffff",
+				ShowLabel:      true,
+				Title:          "",
+				TitleColor:     "#b7b7b7",
+			}
+		}
+
+		tileSettings.Title = event.Payload.Title
+		if event.Payload.TitleParameters.TitleColor != "" {
+			tileSettings.TitleColor = event.Payload.TitleParameters.TitleColor
+		} else if tileSettings.TitleColor == "" {
+			tileSettings.TitleColor = "#b7b7b7"
+		}
+		drawTitle := !event.Payload.TitleParameters.ShowTitle
+		tileSettings.ShowTitleInGraph = boolPtr(drawTitle)
+		log.Printf(
+			"OnTitleParametersDidChange settings context=%s title=%q drawTitle=%t nativeShowTitle=%t\n",
+			targetContext,
+			tileSettings.Title,
+			drawTitle,
+			event.Payload.TitleParameters.ShowTitle,
+		)
+
+		p.settingsContexts[targetContext] = tileSettings
+		if err := p.sd.SetSettings(targetContext, tileSettings); err != nil {
+			log.Printf("OnTitleParametersDidChange settings SetSettings: %v\n", err)
+		}
+		p.updateSettingsTile(targetContext)
+		return
+	}
+
 	// Get existing settings from actionManager to preserve threshold settings
 	// Do NOT decode from event payload as it may have stale/different settings
 	settings, err := p.am.getSettings(event.Context)
@@ -200,6 +352,12 @@ func (p *Plugin) OnTitleParametersDidChange(event *streamdeck.EvTitleParametersD
 
 // OnPropertyInspectorConnected event
 func (p *Plugin) OnPropertyInspectorConnected(event *streamdeck.EvSendToPlugin) {
+	if p.isSettingsAction(event.Action, event.Context) {
+		log.Printf("OnPropertyInspectorConnected settings context=%s action=%s\n", event.Context, event.Action)
+		p.sendSettingsStatus("com.moeilijk.lhm.settings", event.Context)
+		return
+	}
+
 	log.Println("OnPropertyInspectorConnected enter", event.Context)
 	settings, err := p.am.getSettings(event.Context)
 	if err != nil {
@@ -275,6 +433,8 @@ func (p *Plugin) sendReadingsToPropertyInspector(action, context, sensorID strin
 
 // OnSendToPlugin event
 func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
+	log.Printf("OnSendToPlugin action=%s context=%s\n", event.Action, event.Context)
+
 	var payload map[string]*json.RawMessage
 	err := json.Unmarshal(*event.Payload, &payload)
 	if err != nil {
@@ -282,24 +442,19 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 	}
 
 	// Handle settings action commands
-	if event.Action == "com.moeilijk.lhm.settings" {
+	if p.isSettingsAction(event.Action, event.Context) || isSettingsPayload(payload) {
+		targetContext := p.resolveSettingsContext(event.Context)
+		log.Printf(
+			"OnSendToPlugin settings action=%s context=%s target=%s keys=%v\n",
+			event.Action,
+			event.Context,
+			targetContext,
+			payloadKeys(payload),
+		)
 		// Check for settingsConnected
 		if _, ok := payload["settingsConnected"]; ok {
 			log.Println("Settings PI connected")
-			// Send current status to settings PI
-			status := "Disconnected"
-			if p.hw != nil {
-				if _, err := p.hw.PollTime(); err == nil {
-					status = "Connected"
-				}
-			}
-			statusPayload := map[string]interface{}{
-				"connectionStatus": status,
-				"currentRate":      p.am.GetInterval().Milliseconds(),
-			}
-			if err := p.sd.SendToPropertyInspector(event.Action, event.Context, statusPayload); err != nil {
-				log.Printf("SendToPropertyInspector failed: %v\n", err)
-			}
+			p.sendSettingsStatus("com.moeilijk.lhm.settings", targetContext)
 			return
 		}
 
@@ -308,6 +463,52 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			var intervalMs int
 			if err := json.Unmarshal(*raw, &intervalMs); err == nil && intervalMs > 0 {
 				p.setPollInterval(intervalMs)
+			}
+			return
+		}
+
+		// Check for updateTileAppearance
+		if raw, ok := payload["updateTileAppearance"]; ok {
+			var appearance settingsTileSettings
+			if err := json.Unmarshal(*raw, &appearance); err == nil {
+				log.Printf(
+					"updateTileAppearance context=%s target=%s bg=%s text=%s showLabel=%t\n",
+					event.Context,
+					targetContext,
+					appearance.TileBackground,
+					appearance.TileTextColor,
+					appearance.ShowLabel,
+				)
+				// Update stored settings
+				if appearance.TileBackground == "" {
+					appearance.TileBackground = "#000000"
+				}
+				if appearance.TileTextColor == "" {
+					appearance.TileTextColor = "#ffffff"
+				}
+				if existing := p.settingsContexts[targetContext]; existing != nil {
+					if appearance.Title == "" {
+						appearance.Title = existing.Title
+					}
+					if appearance.TitleColor == "" {
+						appearance.TitleColor = existing.TitleColor
+					}
+					if appearance.ShowTitleInGraph == nil {
+						appearance.ShowTitleInGraph = existing.ShowTitleInGraph
+					}
+				}
+				if appearance.TitleColor == "" {
+					appearance.TitleColor = "#b7b7b7"
+				}
+				if appearance.ShowTitleInGraph == nil {
+					appearance.ShowTitleInGraph = boolPtr(true)
+				}
+				p.settingsContexts[targetContext] = &appearance
+				if err := p.sd.SetSettings(targetContext, &appearance); err != nil {
+					log.Printf("updateTileAppearance SetSettings failed: %v\n", err)
+				}
+				p.updateSettingsTile(targetContext)
+				p.sendSettingsStatus("com.moeilijk.lhm.settings", targetContext)
 			}
 			return
 		}
@@ -432,6 +633,79 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 	}
 }
 
+// OnDidReceiveSettings handles action settings updates persisted by Stream Deck.
+func (p *Plugin) OnDidReceiveSettings(event *streamdeck.EvDidReceiveSettings) {
+	if !p.isSettingsAction(event.Action, event.Context) {
+		return
+	}
+	if event.Payload.Settings == nil {
+		return
+	}
+	log.Printf("OnDidReceiveSettings raw context=%s payload=%s\n", event.Context, string(*event.Payload.Settings))
+
+	var rawSettings map[string]json.RawMessage
+	hasShowLabel := false
+	hasTitle := false
+	hasTitleColor := false
+	hasShowTitleInGraph := false
+	if err := json.Unmarshal(*event.Payload.Settings, &rawSettings); err == nil {
+		_, hasShowLabel = rawSettings["showLabel"]
+		_, hasTitle = rawSettings["title"]
+		_, hasTitleColor = rawSettings["titleColor"]
+		_, hasShowTitleInGraph = rawSettings["showTitleInGraph"]
+	}
+
+	var tileSettings settingsTileSettings
+	if err := json.Unmarshal(*event.Payload.Settings, &tileSettings); err != nil {
+		log.Printf("OnDidReceiveSettings settings tile unmarshal: %v\n", err)
+		return
+	}
+
+	if tileSettings.TileBackground == "" {
+		tileSettings.TileBackground = "#000000"
+	}
+	if tileSettings.TileTextColor == "" {
+		tileSettings.TileTextColor = "#ffffff"
+	}
+	if !hasShowLabel {
+		tileSettings.ShowLabel = true
+	}
+	if existing := p.settingsContexts[event.Context]; existing != nil {
+		if !hasTitle {
+			tileSettings.Title = existing.Title
+		}
+		if !hasTitleColor {
+			tileSettings.TitleColor = existing.TitleColor
+		}
+		if !hasShowTitleInGraph {
+			tileSettings.ShowTitleInGraph = existing.ShowTitleInGraph
+		}
+	}
+	if tileSettings.TitleColor == "" {
+		tileSettings.TitleColor = "#b7b7b7"
+	}
+	if tileSettings.ShowTitleInGraph == nil {
+		tileSettings.ShowTitleInGraph = boolPtr(true)
+	}
+
+	p.settingsContexts[event.Context] = &tileSettings
+	log.Printf(
+		"OnDidReceiveSettings context=%s bg=%s text=%s showLabel=%t\n",
+		event.Context,
+		tileSettings.TileBackground,
+		tileSettings.TileTextColor,
+		tileSettings.ShowLabel,
+	)
+	// Repair partial payloads (e.g. PI sending only color/showLabel) so title fields persist.
+	if !hasShowLabel || !hasTitle || !hasTitleColor || !hasShowTitleInGraph {
+		if err := p.sd.SetSettings(event.Context, &tileSettings); err != nil {
+			log.Printf("OnDidReceiveSettings repair SetSettings failed: %v\n", err)
+		}
+	}
+	p.updateSettingsTile(event.Context)
+	p.sendSettingsStatus("com.moeilijk.lhm.settings", event.Context)
+}
+
 // OnDidReceiveGlobalSettings handles global settings from Stream Deck
 func (p *Plugin) OnDidReceiveGlobalSettings(event *streamdeck.EvDidReceiveGlobalSettings) {
 	if event.Payload.Settings == nil {
@@ -446,16 +720,28 @@ func (p *Plugin) OnDidReceiveGlobalSettings(event *streamdeck.EvDidReceiveGlobal
 
 	log.Printf("Received global settings: pollInterval=%d\n", gs.PollInterval)
 
-	// Apply settings if valid and different from current
-	if gs.PollInterval > 0 && gs.PollInterval != p.globalSettings.PollInterval {
-		p.globalSettings = gs
+	if gs.PollInterval <= 0 {
+		// First time, no settings saved yet.
+		p.globalSettings.PollInterval = int(defaultPollInterval.Milliseconds())
+		return
+	}
+
+	if gs.PollInterval < 250 {
+		gs.PollInterval = 250
+	}
+	if gs.PollInterval > 2000 {
+		gs.PollInterval = 2000
+	}
+
+	// Keep the cached global settings in sync even when value did not change.
+	changed := gs.PollInterval != p.globalSettings.PollInterval
+	p.globalSettings = gs
+
+	if changed {
 		interval := time.Duration(gs.PollInterval) * time.Millisecond
 		p.am.SetInterval(interval)
-		p.pollTimeCacheTTL = interval
-		p.updateAllSettingsTiles()
+		p.pollTimeCacheTTL = pollTimeCacheTTLForInterval(interval)
 		log.Printf("Applied global settings: interval=%v\n", interval)
-	} else if gs.PollInterval == 0 {
-		// First time, no settings saved yet
-		p.globalSettings.PollInterval = int(defaultPollInterval.Milliseconds())
 	}
+	p.updateAllSettingsTiles()
 }

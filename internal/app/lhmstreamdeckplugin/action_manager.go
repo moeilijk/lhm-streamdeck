@@ -103,10 +103,21 @@ func (tm *actionManager) SetInterval(d time.Duration) {
 	if d > 2*time.Second {
 		d = 2 * time.Second
 	}
+
+	// Update the cached interval immediately so GetInterval reflects the latest value.
+	tm.mux.Lock()
+	tm.updateInterval = d
+	tm.mux.Unlock()
+
 	select {
 	case tm.intervalChan <- d:
 	default:
-		// Channel full, skip (previous update pending)
+		// Replace the queued value so the ticker switches to the newest interval.
+		select {
+		case <-tm.intervalChan:
+		default:
+		}
+		tm.intervalChan <- d
 	}
 }
 
