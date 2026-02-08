@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+# Keep plugin manifest build number in sync with each commit.
+bash scripts/bump-manifest-version.sh >/dev/null
+git add com.moeilijk.lhm.sdPlugin/manifest.json
