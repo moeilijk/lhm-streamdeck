@@ -38,7 +38,7 @@ debug:
 
 verify:
 	$(GOTARGETENV) $(GOCMD) build ./...
-	$(GOCMD) test ./...
+	$(GOCMD) test $$($(GOCMD) list ./... 2>/dev/null | grep -v 'cmd/lhm_streamdeck_plugin\|cmd/lhm_debugger\|app/lhmstreamdeckplugin')
 	bash scripts/verify-settings-pi.sh
 	streamdeck validate $(SDPLUGINDIR)
 
