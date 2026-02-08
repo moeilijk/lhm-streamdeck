@@ -12,9 +12,9 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/golang/freetype/truetype"
 	"github.com/hashicorp/go-plugin"
 	"github.com/shayne/go-winpeg"
 	"github.com/shayne/lhm-streamdeck/pkg/graph"
@@ -26,6 +26,9 @@ import (
 
 // Plugin handles information between Libre Hardware Monitor and Stream Deck
 type Plugin struct {
+	mu   sync.RWMutex // protects maps and cached state below
+	hwMu sync.RWMutex // protects c and hw (bridge client references)
+
 	c      *plugin.Client
 	peg    winpeg.ProcessExitGroup
 	hw     hwsensorsservice.HardwareService
@@ -34,7 +37,7 @@ type Plugin struct {
 	graphs map[string]*graph.Graph
 
 	// Cached assets and state for performance
-	placeholderImage []byte            // cached startup chip placeholder image
+	placeholderImage []byte            // cached startup chip placeholder image (set once at init, read-only after)
 	cachedPollTime   uint64            // cached PollTime value
 	cachedPollTimeAt time.Time         // when cachedPollTime was fetched
 	lastPollTime     map[string]uint64 // last processed PollTime per context
@@ -80,30 +83,45 @@ func pollTimeCacheTTLForInterval(interval time.Duration) time.Duration {
 }
 
 func (p *Plugin) sensorsWithTimeout(d time.Duration) ([]hwsensorsservice.Sensor, error) {
-	if p.hw == nil {
+	p.hwMu.RLock()
+	hw := p.hw
+	p.hwMu.RUnlock()
+	if hw == nil {
 		return nil, fmt.Errorf("LHM bridge not ready")
 	}
 	ch := make(chan sensorResult, 1)
 	go func() {
-		s, err := p.hw.Sensors()
+		s, err := hw.Sensors()
 		ch <- sensorResult{sensors: s, err: err}
 	}()
+	timer := time.NewTimer(d)
+	defer timer.Stop()
 	select {
 	case res := <-ch:
 		return res.sensors, res.err
-	case <-time.After(d):
+	case <-timer.C:
 		return nil, fmt.Errorf("sensors timeout")
 	}
 }
 
 func (p *Plugin) restartBridge() {
+	p.hwMu.Lock()
+	defer p.hwMu.Unlock()
 	if p.c != nil {
 		p.c.Kill()
 	}
-	_ = p.startClient()
+	_ = p.startClientLocked()
 }
 
+// startClient acquires hwMu and starts the bridge client.
 func (p *Plugin) startClient() error {
+	p.hwMu.Lock()
+	defer p.hwMu.Unlock()
+	return p.startClientLocked()
+}
+
+// startClientLocked starts the bridge client. Caller must hold hwMu write lock.
+func (p *Plugin) startClientLocked() error {
 	cmd := exec.Command("./lhm-bridge.exe")
 
 	// We're a host. Start by launching the plugin process.
@@ -185,11 +203,16 @@ func (p *Plugin) RunForever() error {
 
 	go func() {
 		for {
-			if p.c == nil {
+			p.hwMu.RLock()
+			needsStart := p.c == nil
+			needsRestart := !needsStart && p.c.Exited()
+			p.hwMu.RUnlock()
+
+			if needsStart {
 				if err := p.startClient(); err != nil {
 					log.Printf("startClient failed: %v\n", err)
 				}
-			} else if p.c.Exited() {
+			} else if needsRestart {
 				if err := p.startClient(); err != nil {
 					log.Printf("restartClient failed: %v\n", err)
 				}
@@ -208,10 +231,13 @@ func (p *Plugin) RunForever() error {
 }
 
 func (p *Plugin) getReading(suid string, rid int32) (hwsensorsservice.Reading, []hwsensorsservice.Reading, error) {
-	if p.hw == nil {
+	p.hwMu.RLock()
+	hw := p.hw
+	p.hwMu.RUnlock()
+	if hw == nil {
 		return nil, nil, fmt.Errorf("LHM bridge not ready")
 	}
-	rbs, err := p.hw.ReadingsForSensorID(suid)
+	rbs, err := hw.ReadingsForSensorID(suid)
 	if err != nil {
 		return nil, nil, fmt.Errorf("getReading ReadingsBySensor failed: %v", err)
 	}
@@ -291,26 +317,38 @@ func (p *Plugin) normalizeForGraph(value float64, sourceUnit string, targetUnit 
 }
 
 func (p *Plugin) getCachedPollTime() (uint64, error) {
-	if p.hw == nil {
+	p.hwMu.RLock()
+	hw := p.hw
+	p.hwMu.RUnlock()
+	if hw == nil {
 		return 0, fmt.Errorf("LHM bridge not ready")
 	}
+
+	p.mu.RLock()
 	cacheTTL := p.pollTimeCacheTTL
 	if cacheTTL == 0 {
 		cacheTTL = defaultPollInterval
 	}
 	if !p.cachedPollTimeAt.IsZero() && time.Since(p.cachedPollTimeAt) < cacheTTL {
-		return p.cachedPollTime, nil
+		pt := p.cachedPollTime
+		p.mu.RUnlock()
+		return pt, nil
 	}
+	p.mu.RUnlock()
 
-	pollTime, err := p.hw.PollTime()
+	pollTime, err := hw.PollTime()
+
+	p.mu.Lock()
 	if err != nil {
 		p.cachedPollTime = 0
 		p.cachedPollTimeAt = time.Now()
+		p.mu.Unlock()
 		return 0, err
 	}
-
 	p.cachedPollTime = pollTime
 	p.cachedPollTimeAt = time.Now()
+	p.mu.Unlock()
+
 	return pollTime, nil
 }
 
@@ -318,14 +356,20 @@ func (p *Plugin) getCachedDivisor(context, raw string) (float64, error) {
 	if raw == "" {
 		return 1, nil
 	}
+	p.mu.RLock()
 	if entry, ok := p.divisorCache[context]; ok && entry.raw == raw {
+		p.mu.RUnlock()
 		return entry.value, nil
 	}
+	p.mu.RUnlock()
+
 	fdiv, err := strconv.ParseFloat(raw, 64)
 	if err != nil {
 		return 0, err
 	}
+	p.mu.Lock()
 	p.divisorCache[context] = divisorCacheEntry{raw: raw, value: fdiv}
+	p.mu.Unlock()
 	return fdiv, nil
 }
 
@@ -335,7 +379,9 @@ func (p *Plugin) updateTiles(data *actionData) {
 		return
 	}
 
+	p.mu.RLock()
 	g, ok := p.graphs[data.context]
+	p.mu.RUnlock()
 	if !ok {
 		log.Printf("Graph not found for context: %s\n", data.context)
 		return
@@ -359,7 +405,9 @@ func (p *Plugin) updateTiles(data *actionData) {
 			}
 		}
 		// Clear lastPollTime so we re-render when LHM comes back
+		p.mu.Lock()
 		delete(p.lastPollTime, data.context)
+		p.mu.Unlock()
 	}
 
 	// show ui on property inspector if in error state
@@ -388,7 +436,10 @@ func (p *Plugin) updateTiles(data *actionData) {
 	}
 
 	if !forceUpdate {
-		if last, ok := p.lastPollTime[data.context]; ok && last == pollTime {
+		p.mu.RLock()
+		last, ok := p.lastPollTime[data.context]
+		p.mu.RUnlock()
+		if ok && last == pollTime {
 			return
 		}
 	}
@@ -469,7 +520,13 @@ func (p *Plugin) updateTiles(data *actionData) {
 	valueTextNoUnit := ""
 	displayText := ""
 	if f := s.Format; f != "" {
-		valueTextNoUnit = fmt.Sprintf(f, displayValue)
+		result := fmt.Sprintf(f, displayValue)
+		if strings.Contains(result, "%!") {
+			// Invalid format string — fall back to default
+			valueTextNoUnit = p.applyDefaultFormatValueOnly(displayValue, hwsensorsservice.ReadingType(r.TypeI()))
+		} else {
+			valueTextNoUnit = result
+		}
 		displayText = valueTextNoUnit
 	} else {
 		valueTextNoUnit = p.applyDefaultFormatValueOnly(displayValue, hwsensorsservice.ReadingType(r.TypeI()))
@@ -504,7 +561,9 @@ func (p *Plugin) updateTiles(data *actionData) {
 		return
 	}
 
+	p.mu.Lock()
 	p.lastPollTime[data.context] = pollTime
+	p.mu.Unlock()
 }
 
 func (p *Plugin) applyThresholdText(template, valueTextNoUnit, unit string) string {
@@ -531,11 +590,17 @@ func (p *Plugin) evaluateThresholds(value float64, thresholds []Threshold) *Thre
 
 // updateSettingsTile updates the settings tile with current interval and appearance
 func (p *Plugin) updateSettingsTile(context string) {
+	p.mu.RLock()
 	intervalMs := p.globalSettings.PollInterval
+	var tileSettings *settingsTileSettings
+	if ts := p.settingsContexts[context]; ts != nil {
+		cp := *ts
+		tileSettings = &cp
+	}
+	p.mu.RUnlock()
 	if intervalMs <= 0 {
 		intervalMs = int(p.am.GetInterval().Milliseconds())
 	}
-	tileSettings := p.settingsContexts[context]
 	if tileSettings == nil {
 		tileSettings = &settingsTileSettings{
 			TileBackground:   "#000000",
@@ -635,27 +700,15 @@ func (p *Plugin) renderSettingsPlaceholderTile(intervalMs int, title string, dra
 	canvas := image.NewRGBA(image.Rect(0, 0, tileWidth, tileHeight))
 	draw.Draw(canvas, canvas.Bounds(), base, image.Point{}, draw.Src)
 
-	fontBytes, err := os.ReadFile("DejaVuSans-Bold.ttf")
+	ffm := graph.GetSharedFontFaceManager()
+	faceValue, err := ffm.GetFaceOfSize(10.5)
 	if err != nil {
-		return nil, fmt.Errorf("read font: %w", err)
+		return nil, fmt.Errorf("font value: %w", err)
 	}
-	tt, err := truetype.Parse(fontBytes)
+	faceTitle, err := ffm.GetFaceOfSize(settingsTitleFontSize)
 	if err != nil {
-		return nil, fmt.Errorf("parse font: %w", err)
+		return nil, fmt.Errorf("font title: %w", err)
 	}
-
-	faceValue := truetype.NewFace(tt, &truetype.Options{Size: 10.5, DPI: 72})
-	defer func() {
-		if c, ok := faceValue.(interface{ Close() error }); ok {
-			_ = c.Close()
-		}
-	}()
-	faceTitle := truetype.NewFace(tt, &truetype.Options{Size: settingsTitleFontSize, DPI: 72})
-	defer func() {
-		if c, ok := faceTitle.(interface{ Close() error }); ok {
-			_ = c.Close()
-		}
-	}()
 
 	if drawTitle {
 		drawCenteredText(canvas, faceTitle, titleColor, title, 19)
@@ -686,8 +739,14 @@ func drawCenteredText(dst *image.RGBA, face font.Face, clr *color.RGBA, text str
 
 // updateAllSettingsTiles updates all settings tiles
 func (p *Plugin) updateAllSettingsTiles() {
-	for context := range p.settingsContexts {
-		p.updateSettingsTile(context)
+	p.mu.RLock()
+	contexts := make([]string, 0, len(p.settingsContexts))
+	for ctx := range p.settingsContexts {
+		contexts = append(contexts, ctx)
+	}
+	p.mu.RUnlock()
+	for _, ctx := range contexts {
+		p.updateSettingsTile(ctx)
 	}
 }
 
@@ -705,17 +764,18 @@ func (p *Plugin) setPollInterval(intervalMs int) {
 	// Update action manager ticker
 	p.am.SetInterval(interval)
 
-	// Update cache TTL
+	// Update cache TTL and global settings under lock
+	p.mu.Lock()
 	p.pollTimeCacheTTL = pollTimeCacheTTLForInterval(interval)
-
-	// Save to global settings first so UI/tile render use the latest value immediately.
 	p.globalSettings.PollInterval = intervalMs
+	gs := p.globalSettings
+	p.mu.Unlock()
 
-	// Update all settings tiles
+	// Update all settings tiles (reads globalSettings under its own lock)
 	p.updateAllSettingsTiles()
 
-	// Persist global settings
-	if err := p.sd.SetGlobalSettings(p.globalSettings); err != nil {
+	// Persist global settings (no lock needed — gs is a local copy)
+	if err := p.sd.SetGlobalSettings(gs); err != nil {
 		log.Printf("SetGlobalSettings failed: %v\n", err)
 	}
 

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -44,6 +45,7 @@ type StreamDeck struct {
 	Info          string
 	delegate      EventDelegate
 	conn          *websocket.Conn
+	writeMu       sync.Mutex // serializes WebSocket writes (gorilla/websocket requires single concurrent writer)
 	done          chan struct{}
 }
 
@@ -70,7 +72,9 @@ func (sd *StreamDeck) register() error {
 	if err != nil {
 		return err
 	}
+	sd.writeMu.Lock()
 	err = sd.conn.WriteMessage(websocket.TextMessage, data)
+	sd.writeMu.Unlock()
 	if err != nil {
 		return err
 	}
@@ -153,74 +157,80 @@ func (sd *StreamDeck) spawnMessageReader() {
 		var objmap map[string]*json.RawMessage
 		err = json.Unmarshal(message, &objmap)
 		if err != nil {
-			log.Fatal("message unmarshal", err)
+			log.Printf("message unmarshal: %v", err)
+			continue
+		}
+		raw, ok := objmap["event"]
+		if !ok || raw == nil {
+			log.Printf("message missing event field")
+			continue
 		}
 		var event string
-		err = json.Unmarshal(*objmap["event"], &event)
+		err = json.Unmarshal(*raw, &event)
 		if err != nil {
-			log.Fatal("event unmarshal", err)
+			log.Printf("event unmarshal: %v", err)
+			continue
 		}
 		switch event {
 		case "willAppear":
 			var ev EvWillAppear
-			err := json.Unmarshal(message, &ev)
-			if err != nil {
-				log.Fatal("willAppear unmarshal", err)
+			if err := json.Unmarshal(message, &ev); err != nil {
+				log.Printf("willAppear unmarshal: %v", err)
+				continue
 			}
 			if sd.delegate != nil {
 				sd.delegate.OnWillAppear(&ev)
 			}
 		case "willDisappear":
 			var ev EvWillDisappear
-			err := json.Unmarshal(message, &ev)
-			if err != nil {
-				log.Fatal("willDisappear unmarshal", err)
+			if err := json.Unmarshal(message, &ev); err != nil {
+				log.Printf("willDisappear unmarshal: %v", err)
+				continue
 			}
 			if sd.delegate != nil {
 				sd.delegate.OnWillDisappear(&ev)
 			}
 		case "didReceiveSettings":
 			var ev EvDidReceiveSettings
-			err := json.Unmarshal(message, &ev)
-			if err != nil {
-				log.Fatal("didReceiveSettings unmarshal", err)
+			if err := json.Unmarshal(message, &ev); err != nil {
+				log.Printf("didReceiveSettings unmarshal: %v", err)
+				continue
 			}
 			if sd.delegate != nil {
 				sd.delegate.OnDidReceiveSettings(&ev)
 			}
 		case "didReceiveGlobalSettings":
 			var ev EvDidReceiveGlobalSettings
-			err := json.Unmarshal(message, &ev)
-			if err != nil {
-				log.Fatal("didReceiveGlobalSettings unmarshal", err)
+			if err := json.Unmarshal(message, &ev); err != nil {
+				log.Printf("didReceiveGlobalSettings unmarshal: %v", err)
+				continue
 			}
 			if sd.delegate != nil {
 				sd.delegate.OnDidReceiveGlobalSettings(&ev)
 			}
 		case "titleParametersDidChange":
 			var ev EvTitleParametersDidChange
-			err := json.Unmarshal(message, &ev)
-			if err != nil {
-				log.Fatal("titleParametersDidChange unmarshal", err)
+			if err := json.Unmarshal(message, &ev); err != nil {
+				log.Printf("titleParametersDidChange unmarshal: %v", err)
+				continue
 			}
 			if sd.delegate != nil {
 				sd.delegate.OnTitleParametersDidChange(&ev)
 			}
 		case "sendToPlugin":
 			var ev EvSendToPlugin
-			err := json.Unmarshal(message, &ev)
-			if err != nil {
-				log.Fatal("onSendToPlugin event unmarshal", err)
+			if err := json.Unmarshal(message, &ev); err != nil {
+				log.Printf("sendToPlugin unmarshal: %v", err)
+				continue
 			}
-			err = sd.onSendToPlugin(&ev)
-			if err != nil {
-				log.Fatal("onSendToPlugin", err)
+			if err := sd.onSendToPlugin(&ev); err != nil {
+				log.Printf("onSendToPlugin: %v", err)
 			}
 		case "propertyInspectorDidAppear":
 			var ev EvSendToPlugin
-			err := json.Unmarshal(message, &ev)
-			if err != nil {
-				log.Fatal("propertyInspectorDidAppear unmarshal", err)
+			if err := json.Unmarshal(message, &ev); err != nil {
+				log.Printf("propertyInspectorDidAppear unmarshal: %v", err)
+				continue
 			}
 			debugLog("propertyInspectorDidAppear dispatch")
 			if sd.delegate != nil {
@@ -228,18 +238,18 @@ func (sd *StreamDeck) spawnMessageReader() {
 			}
 		case "applicationDidLaunch":
 			var ev EvApplication
-			err := json.Unmarshal(message, &ev)
-			if err != nil {
-				log.Fatal("applicationDidLaunch unmarshal", err)
+			if err := json.Unmarshal(message, &ev); err != nil {
+				log.Printf("applicationDidLaunch unmarshal: %v", err)
+				continue
 			}
 			if sd.delegate != nil {
 				sd.delegate.OnApplicationDidLaunch(&ev)
 			}
 		case "applicationDidTerminate":
 			var ev EvApplication
-			err := json.Unmarshal(message, &ev)
-			if err != nil {
-				log.Fatal("applicationDidTerminate unmarshal", err)
+			if err := json.Unmarshal(message, &ev); err != nil {
+				log.Printf("applicationDidTerminate unmarshal: %v", err)
+				continue
 			}
 			if sd.delegate != nil {
 				sd.delegate.OnApplicationDidTerminate(&ev)
@@ -270,7 +280,9 @@ func (sd *StreamDeck) ListenAndWait() {
 
 			// Cleanly close the connection by sending a close message and then
 			// waiting (with timeout) for the server to close the connection.
+			sd.writeMu.Lock()
 			err := sd.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			sd.writeMu.Unlock()
 			if err != nil {
 				log.Println("write close:", err)
 				return
@@ -291,9 +303,11 @@ func (sd *StreamDeck) SendToPropertyInspector(action, context string, payload in
 	if err != nil {
 		return fmt.Errorf("sendToPropertyInspector: %v", err)
 	}
+	sd.writeMu.Lock()
 	err = sd.conn.WriteMessage(websocket.TextMessage, data)
+	sd.writeMu.Unlock()
 	if err != nil {
-		return fmt.Errorf("setTitle write: %v", err)
+		return fmt.Errorf("sendToPropertyInspector write: %v", err)
 	}
 	return nil
 }
@@ -308,7 +322,9 @@ func (sd *StreamDeck) SetTitle(context, title string) error {
 	if err != nil {
 		return fmt.Errorf("setTitle: %v", err)
 	}
+	sd.writeMu.Lock()
 	err = sd.conn.WriteMessage(websocket.TextMessage, data)
+	sd.writeMu.Unlock()
 	if err != nil {
 		return fmt.Errorf("setTitle write: %v", err)
 	}
@@ -322,7 +338,9 @@ func (sd *StreamDeck) SetSettings(context string, payload interface{}) error {
 	if err != nil {
 		return fmt.Errorf("setSettings: %v", err)
 	}
+	sd.writeMu.Lock()
 	err = sd.conn.WriteMessage(websocket.TextMessage, data)
+	sd.writeMu.Unlock()
 	if err != nil {
 		return fmt.Errorf("setSettings write: %v", err)
 	}
@@ -340,7 +358,9 @@ func (sd *StreamDeck) SetImage(context string, bts []byte) error {
 	if err != nil {
 		return fmt.Errorf("setImage: %v", err)
 	}
+	sd.writeMu.Lock()
 	err = sd.conn.WriteMessage(websocket.TextMessage, data)
+	sd.writeMu.Unlock()
 	if err != nil {
 		return fmt.Errorf("setImage write: %v", err)
 	}
@@ -360,7 +380,9 @@ func (sd *StreamDeck) GetGlobalSettings() error {
 	if err != nil {
 		return fmt.Errorf("getGlobalSettings: %v", err)
 	}
+	sd.writeMu.Lock()
 	err = sd.conn.WriteMessage(websocket.TextMessage, data)
+	sd.writeMu.Unlock()
 	if err != nil {
 		return fmt.Errorf("getGlobalSettings write: %v", err)
 	}
@@ -382,7 +404,9 @@ func (sd *StreamDeck) SetGlobalSettings(payload interface{}) error {
 	if err != nil {
 		return fmt.Errorf("setGlobalSettings: %v", err)
 	}
+	sd.writeMu.Lock()
 	err = sd.conn.WriteMessage(websocket.TextMessage, data)
+	sd.writeMu.Unlock()
 	if err != nil {
 		return fmt.Errorf("setGlobalSettings write: %v", err)
 	}

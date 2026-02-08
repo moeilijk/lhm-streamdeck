@@ -3,9 +3,9 @@ package graph
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math"
+	"os"
 	"regexp"
 
 	"github.com/golang/freetype/truetype"
@@ -58,32 +58,35 @@ func NewFontFaceManager() *FontFaceManager {
 	return &FontFaceManager{fontCache: make(map[float64]font.Face)}
 }
 
-func (f *FontFaceManager) newFace(size float64) font.Face {
-	b, err := ioutil.ReadFile("DejaVuSans-Bold.ttf")
+func (f *FontFaceManager) newFace(size float64) (font.Face, error) {
+	b, err := os.ReadFile("DejaVuSans-Bold.ttf")
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("read font: %w", err)
 	}
 	tt, err := truetype.Parse(b)
 	if err != nil {
-		log.Fatal("failed to parse font")
+		return nil, fmt.Errorf("parse font: %w", err)
 	}
-	face := truetype.NewFace(tt, &truetype.Options{Size: size, DPI: 72})
-	return face
+	return truetype.NewFace(tt, &truetype.Options{Size: size, DPI: 72}), nil
 }
 
 // GetFaceOfSize returns font face for given size
-func (f *FontFaceManager) GetFaceOfSize(size float64) font.Face {
+func (f *FontFaceManager) GetFaceOfSize(size float64) (font.Face, error) {
 	f.mux.Lock()
 	defer f.mux.Unlock()
-	if f, ok := f.fontCache[size]; ok {
-		return f
+	if face, ok := f.fontCache[size]; ok {
+		return face, nil
 	}
-	nf := f.newFace(size)
-	f.fontCache[size] = nf
-	return nf
+	face, err := f.newFace(size)
+	if err != nil {
+		return nil, err
+	}
+	f.fontCache[size] = face
+	return face, nil
 }
 
 type singleshared struct {
+	mu              sync.Mutex // serializes EncodePNG calls that share pngBuf/pngEnc
 	fontFaceManager *FontFaceManager
 	pngEnc          *png.Encoder
 	pngBuf          *bytes.Buffer
@@ -103,6 +106,11 @@ func shared() *singleshared {
 		sharedinstance.fontFaceManager = NewFontFaceManager()
 	})
 	return sharedinstance
+}
+
+// GetSharedFontFaceManager returns the shared FontFaceManager singleton.
+func GetSharedFontFaceManager() *FontFaceManager {
+	return shared().fontFaceManager
 }
 
 // NewGraph initializes a new Graph for rendering
@@ -265,14 +273,19 @@ func (g *Graph) EncodePNG() ([]byte, error) {
 	for _, l := range g.labels {
 		g.drawLabel(l)
 	}
-	shared := shared()
-	err := shared.pngEnc.Encode(shared.pngBuf, g.img)
+	s := shared()
+	s.mu.Lock()
+	err := s.pngEnc.Encode(s.pngBuf, g.img)
 	if err != nil {
+		s.pngBuf.Reset()
+		s.mu.Unlock()
+		g.img.Pix = bak
 		return nil, err
 	}
+	bts := append([]byte(nil), s.pngBuf.Bytes()...)
+	s.pngBuf.Reset()
+	s.mu.Unlock()
 	g.img.Pix = bak
-	bts := shared.pngBuf.Bytes()
-	shared.pngBuf.Reset()
 	return bts, nil
 }
 
@@ -301,7 +314,11 @@ var newlineRegex = regexp.MustCompile("(\n|\\\\n)+")
 func (g *Graph) drawLabel(l *Label) {
 	shared := shared()
 	lines := newlineRegex.Split(l.text, -1)
-	face := shared.fontFaceManager.GetFaceOfSize(l.fontSize)
+	face, err := shared.fontFaceManager.GetFaceOfSize(l.fontSize)
+	if err != nil {
+		log.Printf("drawLabel font: %v", err)
+		return
+	}
 	curY := l.y - uint(10.5-float64(face.Metrics().Height.Round()))
 
 	for _, line := range lines {

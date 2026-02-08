@@ -139,7 +139,7 @@ func (r reading) Value() float64 {
 }
 
 func (r reading) ValueNormalized() float64 {
-	return normalizeToBytes(r.Reading.GetValue(), r.Reading.GetUnit())
+	return NormalizeToBytes(r.Reading.GetValue(), r.Reading.GetUnit())
 }
 
 func (r reading) ValueMin() float64 {
@@ -154,9 +154,9 @@ func (r reading) ValueAvg() float64 {
 	return r.Reading.GetValueAvg()
 }
 
-// normalizeToBytes converts a value with a data size unit (KB, MB, GB, TB) to bytes.
+// NormalizeToBytes converts a value with a data size unit (KB, MB, GB, TB) to bytes.
 // This ensures consistent graph scaling when units change dynamically.
-func normalizeToBytes(value float64, unit string) float64 {
+func NormalizeToBytes(value float64, unit string) float64 {
 	unitLower := strings.ToLower(unit)
 
 	switch {
