@@ -36,7 +36,13 @@ debug:
 	-@install-plugin.bat
 # @xcopy com.moeilijk.lhm.sdPlugin $(APPDATA)\\Elgato\\StreamDeck\\Plugins\\com.moeilijk.lhm.sdPlugin\\ /E /Q /Y
 
-release: bump-version
+verify:
+	$(GOTARGETENV) $(GOCMD) build ./...
+	$(GOCMD) test ./...
+	bash scripts/verify-settings-pi.sh
+	streamdeck validate $(SDPLUGINDIR)
+
+release: verify bump-version
 	-@rm build/com.moeilijk.lhm.streamDeckPlugin
 	streamdeck pack com.moeilijk.lhm.sdPlugin --output build --force
 
