@@ -19,23 +19,12 @@
     <div class="sdpi-item">
       <div class="sdpi-item-label">Interval</div>
       <select class="sdpi-item-value select" id="pollInterval">
-        <option value="100">100ms</option>
         <option value="250">250ms</option>
         <option value="500">500ms</option>
-        <option value="750">750ms</option>
-        <option value="1000" selected>1000ms (Default)</option>
-        <option value="1250">1250ms</option>
-        <option value="1500">1500ms</option>
-        <option value="1750">1750ms</option>
-        <option value="2000">2000ms</option>
-        <option value="3000">3000ms</option>
-        <option value="4000">4000ms</option>
-        <option value="5000">5000ms</option>
-        <option value="7000">7000ms</option>
-        <option value="10000">10000ms</option>
-        <option value="15000">15000ms</option>
-        <option value="20000">20000ms</option>
-        <option value="30000">30000ms</option>
+        <option value="1000" selected>1s (Default)</option>
+        <option value="2000">2s</option>
+        <option value="5000">5s</option>
+        <option value="10000">10s</option>
       </select>
     </div>
 
@@ -43,7 +32,8 @@
       <details class="message info">
         <summary>Info</summary>
         <p>Lower values = faster updates but higher CPU usage.</p>
-        <p><strong>Warning:</strong> 100ms can noticeably increase CPU and traffic load.</p>
+        <p>Match this with <strong>LHM -&gt; Options -&gt; Update Interval</strong> for smooth graphs.</p>
+        <p>The plugin does not change the LHM update interval automatically.</p>
         <p>Changes apply immediately to all sensor tiles.</p>
       </details>
     </div>

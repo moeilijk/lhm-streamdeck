@@ -16,11 +16,11 @@ type actionManager struct {
 }
 
 func newActionManager(interval time.Duration) *actionManager {
-	if interval < 100*time.Millisecond {
-		interval = 100 * time.Millisecond
+	if interval < 250*time.Millisecond {
+		interval = 250 * time.Millisecond
 	}
-	if interval > 30*time.Second {
-		interval = 30 * time.Second
+	if interval > 10*time.Second {
+		interval = 10 * time.Second
 	}
 	return &actionManager{
 		actions:        make(map[string]*actionData),
@@ -97,11 +97,11 @@ func (tm *actionManager) getSettings(context string) (actionSettings, error) {
 
 // SetInterval dynamically updates the polling interval
 func (tm *actionManager) SetInterval(d time.Duration) {
-	if d < 100*time.Millisecond {
-		d = 100 * time.Millisecond
+	if d < 250*time.Millisecond {
+		d = 250 * time.Millisecond
 	}
-	if d > 30*time.Second {
-		d = 30 * time.Second
+	if d > 10*time.Second {
+		d = 10 * time.Second
 	}
 
 	// Update the cached interval immediately so GetInterval reflects the latest value.

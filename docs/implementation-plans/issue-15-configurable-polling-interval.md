@@ -27,7 +27,8 @@ Note: the bridge now runs in an on-demand fetch model with the plugin ticker as 
 - `showLabel=false` uses solid configured background.
 - Fallback render path keeps the interval text visible.
 - Title handling on settings tile is now image-rendered (custom title or `Refresh Rate` fallback), with native Stream Deck title disabled for this action.
-- Refresh-rate range now supports 100ms up to 30000ms (30s), with additional options after 2000ms.
+- Refresh-rate options now match LHM Update Interval: 250ms, 500ms, 1s, 2s, 5s, 10s.
+- Changing the plugin refresh rate does not automatically change LHM; users must set LHM's update interval to match.
 
 ---
 
@@ -487,7 +488,7 @@ Design: A gear/cog icon with "LHM" text or the LHM logo
 
 1. Test `StartService()` with various `LHM_POLL_INTERVAL` values:
    - Valid: "250ms", "500ms", "1000ms", "1s"
-   - Invalid: "100ms" (below min), "5s" (above max), "invalid"
+   - Invalid: "100ms" (below min), "15s" (above max), "invalid"
    - Missing: defaults to 1000ms
 
 2. Test `newActionManager()` with configurable intervals

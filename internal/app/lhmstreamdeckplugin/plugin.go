@@ -693,11 +693,11 @@ func (p *Plugin) updateAllSettingsTiles() {
 
 // setPollInterval changes the polling interval dynamically
 func (p *Plugin) setPollInterval(intervalMs int) {
-	if intervalMs < 100 {
-		intervalMs = 100
+	if intervalMs < 250 {
+		intervalMs = 250
 	}
-	if intervalMs > 30000 {
-		intervalMs = 30000
+	if intervalMs > 10000 {
+		intervalMs = 10000
 	}
 
 	interval := time.Duration(intervalMs) * time.Millisecond
