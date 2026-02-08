@@ -44,3 +44,6 @@ build/*.sdPlugin
 
 # Node dependencies
 node_modules/
+
+# Local AI handoff docs (keep local, never push)
+docs/
