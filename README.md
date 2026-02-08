@@ -37,6 +37,7 @@ I wanted a local, open replacement for Stream Deck hardware monitoring without l
 
 7. Keep **LHM -> Options -> Update Interval** in sync with the plugin settings tile.
    The plugin does not change LHM's update interval automatically.
+   Default in both places is **1s**.
 
     ![alt text](images/updateinterval.png "LHM Update Interval")
 

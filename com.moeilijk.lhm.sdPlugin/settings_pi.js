@@ -7,6 +7,7 @@ var websocket = null,
   context = null,
   appearanceSignature = null,
   appearancePollTimer = null,
+  statusPollTimer = null,
   uiBound = false;
 var allowedIntervals = [250, 500, 1000, 2000, 5000, 10000];
 
@@ -124,6 +125,21 @@ function sendJson(payload) {
   return true;
 }
 
+function requestSettingsStatus() {
+  var ctx = sdkContext();
+  if (!ctx) {
+    return;
+  }
+  sendJson({
+    action: action,
+    event: "sendToPlugin",
+    context: ctx,
+    payload: {
+      settingsConnected: true
+    }
+  });
+}
+
 function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
   uuid = inUUID;
   actionInfo = parseJSONOrEmpty(inActionInfo);
@@ -177,16 +193,11 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
     }
 
     // Notify plugin that settings PI is connected
-    if (ctx) {
-      sendJson({
-        action: action,
-        event: "sendToPlugin",
-        context: ctx,
-        payload: {
-          settingsConnected: true
-        },
-      });
+    requestSettingsStatus();
+    if (statusPollTimer !== null) {
+      window.clearInterval(statusPollTimer);
     }
+    statusPollTimer = window.setInterval(requestSettingsStatus, 1000);
 
     // Keep saving resilient even if some WebView color events are missed.
     if (appearancePollTimer !== null) {
@@ -253,6 +264,10 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
     if (appearancePollTimer !== null) {
       window.clearInterval(appearancePollTimer);
       appearancePollTimer = null;
+    }
+    if (statusPollTimer !== null) {
+      window.clearInterval(statusPollTimer);
+      statusPollTimer = null;
     }
   };
 }
