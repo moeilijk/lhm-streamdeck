@@ -726,11 +726,11 @@ func (p *Plugin) OnDidReceiveGlobalSettings(event *streamdeck.EvDidReceiveGlobal
 		return
 	}
 
-	if gs.PollInterval < 250 {
-		gs.PollInterval = 250
+	if gs.PollInterval < 100 {
+		gs.PollInterval = 100
 	}
-	if gs.PollInterval > 2000 {
-		gs.PollInterval = 2000
+	if gs.PollInterval > 30000 {
+		gs.PollInterval = 30000
 	}
 
 	// Keep the cached global settings in sync even when value did not change.

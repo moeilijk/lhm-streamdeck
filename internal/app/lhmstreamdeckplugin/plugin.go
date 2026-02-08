@@ -57,6 +57,7 @@ type divisorCacheEntry struct {
 }
 
 const defaultPollInterval = time.Second
+const settingsTitleFontSize = 9.0
 
 func pollTimeCacheTTLForInterval(interval time.Duration) time.Duration {
 	if interval <= 0 {
@@ -604,7 +605,7 @@ func (p *Plugin) updateSettingsTile(context string) {
 		titleText = renderedTitle
 	}
 	g.SetLabel(0, titleText, 19, titleColor)
-	g.SetLabelFontSize(0, 10.5)
+	g.SetLabelFontSize(0, settingsTitleFontSize)
 	g.SetLabel(1, fmt.Sprintf("%dms", intervalMs), 44, textColor)
 	g.SetLabelFontSize(1, 10.5)
 
@@ -649,7 +650,7 @@ func (p *Plugin) renderSettingsPlaceholderTile(intervalMs int, title string, dra
 			_ = c.Close()
 		}
 	}()
-	faceTitle := truetype.NewFace(tt, &truetype.Options{Size: 10.5, DPI: 72})
+	faceTitle := truetype.NewFace(tt, &truetype.Options{Size: settingsTitleFontSize, DPI: 72})
 	defer func() {
 		if c, ok := faceTitle.(interface{ Close() error }); ok {
 			_ = c.Close()
@@ -692,11 +693,11 @@ func (p *Plugin) updateAllSettingsTiles() {
 
 // setPollInterval changes the polling interval dynamically
 func (p *Plugin) setPollInterval(intervalMs int) {
-	if intervalMs < 250 {
-		intervalMs = 250
+	if intervalMs < 100 {
+		intervalMs = 100
 	}
-	if intervalMs > 2000 {
-		intervalMs = 2000
+	if intervalMs > 30000 {
+		intervalMs = 30000
 	}
 
 	interval := time.Duration(intervalMs) * time.Millisecond
