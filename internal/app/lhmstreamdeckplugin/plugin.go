@@ -1,7 +1,12 @@
 package lhmstreamdeckplugin
 
 import (
+	"bytes"
 	"fmt"
+	"image"
+	"image/color"
+	"image/draw"
+	"image/png"
 	"log"
 	"os"
 	"os/exec"
@@ -9,11 +14,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/freetype/truetype"
 	"github.com/hashicorp/go-plugin"
 	"github.com/shayne/go-winpeg"
 	"github.com/shayne/lhm-streamdeck/pkg/graph"
 	hwsensorsservice "github.com/shayne/lhm-streamdeck/pkg/service"
 	"github.com/shayne/lhm-streamdeck/pkg/streamdeck"
+	"golang.org/x/image/font"
+	"golang.org/x/image/math/fixed"
 )
 
 // Plugin handles information between Libre Hardware Monitor and Stream Deck
@@ -26,16 +34,16 @@ type Plugin struct {
 	graphs map[string]*graph.Graph
 
 	// Cached assets and state for performance
-	launchLHMImage   []byte            // cached launch-lhm.png
+	placeholderImage []byte            // cached startup chip placeholder image
 	cachedPollTime   uint64            // cached PollTime value
 	cachedPollTimeAt time.Time         // when cachedPollTime was fetched
 	lastPollTime     map[string]uint64 // last processed PollTime per context
 	divisorCache     map[string]divisorCacheEntry
 
 	// Global settings
-	globalSettings   globalSettings    // plugin-wide settings (poll interval)
-	pollTimeCacheTTL time.Duration     // cache TTL (matches poll interval)
-	settingsContexts map[string]bool   // tracks settings action contexts
+	globalSettings   globalSettings                   // plugin-wide settings (poll interval)
+	pollTimeCacheTTL time.Duration                    // cache TTL (matches poll interval)
+	settingsContexts map[string]*settingsTileSettings // tracks settings action contexts with appearance
 }
 
 type sensorResult struct {
@@ -49,6 +57,26 @@ type divisorCacheEntry struct {
 }
 
 const defaultPollInterval = time.Second
+
+func pollTimeCacheTTLForInterval(interval time.Duration) time.Duration {
+	if interval <= 0 {
+		interval = defaultPollInterval
+	}
+
+	// Keep cache short enough so each ticker cycle fetches fresh PollTime,
+	// while still allowing one shared value across actions in the same tick.
+	ttl := interval / 2
+	if ttl < 100*time.Millisecond {
+		ttl = 100 * time.Millisecond
+	}
+	if ttl >= interval {
+		ttl = interval - (25 * time.Millisecond)
+		if ttl < 25*time.Millisecond {
+			ttl = 25 * time.Millisecond
+		}
+	}
+	return ttl
+}
 
 func (p *Plugin) sensorsWithTimeout(d time.Duration) ([]hwsensorsservice.Sensor, error) {
 	if p.hw == nil {
@@ -118,15 +146,21 @@ func NewPlugin(port, uuid, event, info string) (*Plugin, error) {
 		graphs:           make(map[string]*graph.Graph),
 		lastPollTime:     make(map[string]uint64),
 		divisorCache:     make(map[string]divisorCacheEntry),
-		pollTimeCacheTTL: defaultPollInterval,
-		settingsContexts: make(map[string]bool),
+		pollTimeCacheTTL: pollTimeCacheTTLForInterval(defaultPollInterval),
+		settingsContexts: make(map[string]*settingsTileSettings),
 	}
 
-	// Cache launch-lhm.png at startup (optimization #2)
-	if bts, err := os.ReadFile("./launch-lhm.png"); err == nil {
-		p.launchLHMImage = bts
-	} else {
-		log.Printf("Warning: could not cache launch-lhm.png: %v\n", err)
+	// Cache placeholder image at startup.
+	// Preferred source is settings/default tile art (startup chip).
+	for _, candidate := range []string{"./settingsImage.png", "./defaultImage.png", "./launch-lhm.png"} {
+		if bts, err := os.ReadFile(candidate); err == nil {
+			p.placeholderImage = bts
+			log.Printf("Cached settings placeholder image from %s\n", candidate)
+			break
+		}
+	}
+	if len(p.placeholderImage) == 0 {
+		log.Printf("Warning: could not cache placeholder image\n")
 	}
 
 	p.startClient()
@@ -317,8 +351,8 @@ func (p *Plugin) updateTiles(data *actionData) {
 			p.sd.SetSettings(data.context, &data.settings)
 
 			// Only set image on state transition (optimization #2)
-			if len(p.launchLHMImage) > 0 {
-				if err := p.sd.SetImage(data.context, p.launchLHMImage); err != nil {
+			if len(p.placeholderImage) > 0 {
+				if err := p.sd.SetImage(data.context, p.placeholderImage); err != nil {
 					log.Printf("Failed to setImage: %v\n", err)
 				}
 			}
@@ -494,13 +528,159 @@ func (p *Plugin) evaluateThresholds(value float64, thresholds []Threshold) *Thre
 	return active
 }
 
-// updateSettingsTile updates the settings tile with current interval
+// updateSettingsTile updates the settings tile with current interval and appearance
 func (p *Plugin) updateSettingsTile(context string) {
-	interval := p.am.GetInterval()
-	title := fmt.Sprintf("%dms", interval.Milliseconds())
-	if err := p.sd.SetTitle(context, title); err != nil {
+	intervalMs := p.globalSettings.PollInterval
+	if intervalMs <= 0 {
+		intervalMs = int(p.am.GetInterval().Milliseconds())
+	}
+	tileSettings := p.settingsContexts[context]
+	if tileSettings == nil {
+		tileSettings = &settingsTileSettings{
+			TileBackground:   "#000000",
+			TileTextColor:    "#ffffff",
+			ShowLabel:        true,
+			Title:            "",
+			TitleColor:       "#b7b7b7",
+			ShowTitleInGraph: boolPtr(true),
+		}
+	}
+	log.Printf(
+		"updateSettingsTile context=%s rate=%d bg=%s text=%s showLabel=%t\n",
+		context,
+		intervalMs,
+		tileSettings.TileBackground,
+		tileSettings.TileTextColor,
+		tileSettings.ShowLabel,
+	)
+
+	// Parse colors
+	bgColor := hexToRGBA(tileSettings.TileBackground)
+	if bgColor == nil {
+		bgColor = &color.RGBA{0, 0, 0, 255}
+	}
+	textColor := hexToRGBA(tileSettings.TileTextColor)
+	if textColor == nil {
+		textColor = &color.RGBA{255, 255, 255, 255}
+	}
+	titleColor := hexToRGBA(tileSettings.TitleColor)
+	if titleColor == nil {
+		titleColor = &color.RGBA{183, 183, 183, 255}
+	}
+	drawTitle := true
+	if tileSettings.ShowTitleInGraph != nil {
+		drawTitle = *tileSettings.ShowTitleInGraph
+	}
+	renderedTitle := strings.TrimSpace(tileSettings.Title)
+	if renderedTitle == "" {
+		renderedTitle = "Refresh Rate"
+	}
+
+	// The settings tile uses in-image text for title/value.
+	// Keep native title empty to avoid duplicate/misaligned text.
+	if err := p.sd.SetTitle(context, ""); err != nil {
 		log.Printf("updateSettingsTile SetTitle failed: %v\n", err)
 	}
+
+	// For settings tile, ShowLabel toggles placeholder background on/off.
+	// true  -> startup placeholder background + current interval
+	// false -> user-selected solid background + current interval
+	if tileSettings.ShowLabel {
+		if img, err := p.renderSettingsPlaceholderTile(intervalMs, renderedTitle, drawTitle, titleColor, textColor); err == nil {
+			if err := p.sd.SetImage(context, img); err != nil {
+				log.Printf("updateSettingsTile SetImage failed: %v\n", err)
+			}
+			return
+		}
+		log.Printf("updateSettingsTile placeholder render failed, falling back to solid background\n")
+	}
+
+	// Create a graph just for rendering the tile
+	g := graph.NewGraph(tileWidth, tileHeight, 0, 100, bgColor, bgColor, bgColor)
+
+	// Render title + value in the image, aligned like graph tiles.
+	titleText := ""
+	if drawTitle {
+		titleText = renderedTitle
+	}
+	g.SetLabel(0, titleText, 19, titleColor)
+	g.SetLabelFontSize(0, 10.5)
+	g.SetLabel(1, fmt.Sprintf("%dms", intervalMs), 44, textColor)
+	g.SetLabelFontSize(1, 10.5)
+
+	// Render and set image
+	g.Update(0) // Initialize the graph
+	b, err := g.EncodePNG()
+	if err != nil {
+		log.Printf("updateSettingsTile EncodePNG failed: %v\n", err)
+		return
+	}
+	if err := p.sd.SetImage(context, b); err != nil {
+		log.Printf("updateSettingsTile SetImage failed: %v\n", err)
+	}
+
+}
+
+func (p *Plugin) renderSettingsPlaceholderTile(intervalMs int, title string, drawTitle bool, titleColor, textColor *color.RGBA) ([]byte, error) {
+	if len(p.placeholderImage) == 0 {
+		return nil, fmt.Errorf("placeholder image not cached")
+	}
+
+	base, err := png.Decode(bytes.NewReader(p.placeholderImage))
+	if err != nil {
+		return nil, fmt.Errorf("decode placeholder image: %w", err)
+	}
+
+	canvas := image.NewRGBA(image.Rect(0, 0, tileWidth, tileHeight))
+	draw.Draw(canvas, canvas.Bounds(), base, image.Point{}, draw.Src)
+
+	fontBytes, err := os.ReadFile("DejaVuSans-Bold.ttf")
+	if err != nil {
+		return nil, fmt.Errorf("read font: %w", err)
+	}
+	tt, err := truetype.Parse(fontBytes)
+	if err != nil {
+		return nil, fmt.Errorf("parse font: %w", err)
+	}
+
+	faceValue := truetype.NewFace(tt, &truetype.Options{Size: 10.5, DPI: 72})
+	defer func() {
+		if c, ok := faceValue.(interface{ Close() error }); ok {
+			_ = c.Close()
+		}
+	}()
+	faceTitle := truetype.NewFace(tt, &truetype.Options{Size: 10.5, DPI: 72})
+	defer func() {
+		if c, ok := faceTitle.(interface{ Close() error }); ok {
+			_ = c.Close()
+		}
+	}()
+
+	if drawTitle {
+		drawCenteredText(canvas, faceTitle, titleColor, title, 19)
+	}
+	drawCenteredText(canvas, faceValue, textColor, fmt.Sprintf("%dms", intervalMs), 44)
+
+	var out bytes.Buffer
+	if err := png.Encode(&out, canvas); err != nil {
+		return nil, fmt.Errorf("encode placeholder tile: %w", err)
+	}
+	return out.Bytes(), nil
+}
+
+func drawCenteredText(dst *image.RGBA, face font.Face, clr *color.RGBA, text string, baselineY int) {
+	d := &font.Drawer{
+		Dst:  dst,
+		Src:  image.NewUniform(clr),
+		Face: face,
+	}
+	textWidth := d.MeasureString(text).Round()
+	x := (dst.Bounds().Dx() - textWidth) / 2
+	if x < 0 {
+		x = 0
+	}
+	d.Dot = fixed.P(x, baselineY)
+	d.DrawString(text)
 }
 
 // updateAllSettingsTiles updates all settings tiles
@@ -525,31 +705,18 @@ func (p *Plugin) setPollInterval(intervalMs int) {
 	p.am.SetInterval(interval)
 
 	// Update cache TTL
-	p.pollTimeCacheTTL = interval
+	p.pollTimeCacheTTL = pollTimeCacheTTLForInterval(interval)
 
-	// Restart bridge with new interval
-	p.restartBridgeWithInterval(interval)
+	// Save to global settings first so UI/tile render use the latest value immediately.
+	p.globalSettings.PollInterval = intervalMs
 
 	// Update all settings tiles
 	p.updateAllSettingsTiles()
 
-	// Save to global settings
-	p.globalSettings.PollInterval = intervalMs
+	// Persist global settings
 	if err := p.sd.SetGlobalSettings(p.globalSettings); err != nil {
 		log.Printf("SetGlobalSettings failed: %v\n", err)
 	}
 
 	log.Printf("Poll interval changed to %v\n", interval)
-}
-
-// restartBridgeWithInterval restarts the bridge with a new poll interval
-func (p *Plugin) restartBridgeWithInterval(interval time.Duration) {
-	if p.c != nil {
-		p.c.Kill()
-	}
-	// Set env var for new bridge process
-	os.Setenv("LHM_POLL_INTERVAL", interval.String())
-	if err := p.startClient(); err != nil {
-		log.Printf("restartBridgeWithInterval failed: %v\n", err)
-	}
 }

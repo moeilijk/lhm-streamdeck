@@ -14,14 +14,19 @@
 
 <body>
   <div class="sdpi-wrapper localbody">
-    <div class="sdpi-heading">Performance</div>
+    <div class="sdpi-heading">Refresh Rate</div>
 
     <div class="sdpi-item">
-      <div class="sdpi-item-label">Refresh Rate</div>
+      <div class="sdpi-item-label">Interval</div>
       <select class="sdpi-item-value select" id="pollInterval">
-        <option value="250">250ms (Fast)</option>
-        <option value="500">500ms (Balanced)</option>
+        <option value="250">250ms</option>
+        <option value="500">500ms</option>
+        <option value="750">750ms</option>
         <option value="1000" selected>1000ms (Default)</option>
+        <option value="1250">1250ms</option>
+        <option value="1500">1500ms</option>
+        <option value="1750">1750ms</option>
+        <option value="2000">2000ms</option>
       </select>
     </div>
 
@@ -31,6 +36,24 @@
         <p>Lower values = faster updates but higher CPU usage.</p>
         <p>Changes apply immediately to all sensor tiles.</p>
       </details>
+    </div>
+
+    <div class="sdpi-heading">Tile Appearance</div>
+
+    <div type="color" class="sdpi-item">
+      <div class="sdpi-item-label">Background</div>
+      <input type="color" class="sdpi-item-value" id="tileBackground" value="#000000"
+        oninput="scheduleTileSettingsSave()" onchange="scheduleTileSettingsSave()" />
+      <div class="sdpi-item-label">Text</div>
+      <input type="color" class="sdpi-item-value" id="tileTextColor" value="#ffffff"
+        oninput="scheduleTileSettingsSave()" onchange="scheduleTileSettingsSave()" />
+    </div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Show Label</div>
+      <input type="checkbox" class="sdpi-item-value" id="showLabel" checked
+        onchange="scheduleTileSettingsSave()" oninput="scheduleTileSettingsSave()"
+        onclick="scheduleTileSettingsSave()" />
     </div>
 
     <div class="sdpi-heading">Status</div>

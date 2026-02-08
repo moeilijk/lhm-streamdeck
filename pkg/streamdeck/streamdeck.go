@@ -27,6 +27,7 @@ type EventDelegate interface {
 	OnConnected(*websocket.Conn)
 	OnWillAppear(*EvWillAppear)
 	OnWillDisappear(*EvWillDisappear)
+	OnDidReceiveSettings(*EvDidReceiveSettings)
 	OnTitleParametersDidChange(*EvTitleParametersDidChange)
 	OnPropertyInspectorConnected(*EvSendToPlugin)
 	OnSendToPlugin(*EvSendToPlugin)
@@ -159,8 +160,8 @@ func (sd *StreamDeck) spawnMessageReader() {
 		if err != nil {
 			log.Fatal("event unmarshal", err)
 		}
-	switch event {
-	case "willAppear":
+		switch event {
+		case "willAppear":
 			var ev EvWillAppear
 			err := json.Unmarshal(message, &ev)
 			if err != nil {
@@ -177,6 +178,15 @@ func (sd *StreamDeck) spawnMessageReader() {
 			}
 			if sd.delegate != nil {
 				sd.delegate.OnWillDisappear(&ev)
+			}
+		case "didReceiveSettings":
+			var ev EvDidReceiveSettings
+			err := json.Unmarshal(message, &ev)
+			if err != nil {
+				log.Fatal("didReceiveSettings unmarshal", err)
+			}
+			if sd.delegate != nil {
+				sd.delegate.OnDidReceiveSettings(&ev)
 			}
 		case "didReceiveGlobalSettings":
 			var ev EvDidReceiveGlobalSettings
@@ -225,22 +235,22 @@ func (sd *StreamDeck) spawnMessageReader() {
 			if sd.delegate != nil {
 				sd.delegate.OnApplicationDidLaunch(&ev)
 			}
-	case "applicationDidTerminate":
-		var ev EvApplication
-		err := json.Unmarshal(message, &ev)
-		if err != nil {
-			log.Fatal("applicationDidTerminate unmarshal", err)
+		case "applicationDidTerminate":
+			var ev EvApplication
+			err := json.Unmarshal(message, &ev)
+			if err != nil {
+				log.Fatal("applicationDidTerminate unmarshal", err)
+			}
+			if sd.delegate != nil {
+				sd.delegate.OnApplicationDidTerminate(&ev)
+			}
+		case "deviceDidConnect":
+			// No-op: Stream Deck device connect event (not needed by this plugin).
+		case "deviceDidDisconnect":
+			// No-op: Stream Deck device disconnect event (not needed by this plugin).
+		default:
+			debugLog("Unknown event: %s\n", event)
 		}
-		if sd.delegate != nil {
-			sd.delegate.OnApplicationDidTerminate(&ev)
-		}
-	case "deviceDidConnect":
-		// No-op: Stream Deck device connect event (not needed by this plugin).
-	case "deviceDidDisconnect":
-		// No-op: Stream Deck device disconnect event (not needed by this plugin).
-	default:
-		debugLog("Unknown event: %s\n", event)
-	}
 	}
 }
 

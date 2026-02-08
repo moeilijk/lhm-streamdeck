@@ -1,89 +1,342 @@
 // Settings Property Inspector for LHM Settings tile
 var websocket = null,
   uuid = null,
+  action = "com.moeilijk.lhm.settings",
   actionInfo = {},
-  inInfo = {};
+  inInfo = {},
+  context = null,
+  appearanceSignature = null,
+  appearancePollTimer = null,
+  uiBound = false;
+
+function parseJSONOrEmpty(raw) {
+  if (!raw || typeof raw !== "string") {
+    return {};
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (_err) {
+    return {};
+  }
+}
+
+function byId(id) {
+  return document.getElementById(id);
+}
+
+function sdkContext() {
+  // Property Inspector must use its own registration UUID as context.
+  // Using the action context causes Stream Deck to reject messages as "wrong context".
+  return uuid || context;
+}
+
+function normalizeHex(value, fallback) {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+  var v = value.trim().toLowerCase();
+  if (!/^#[0-9a-f]{6}$/.test(v)) {
+    return fallback;
+  }
+  return v;
+}
+
+function readTileSettingsFromUI() {
+  var bg = byId("tileBackground");
+  var text = byId("tileTextColor");
+  var label = byId("showLabel");
+  if (!bg || !text || !label) {
+    return {
+      tileBackground: "#000000",
+      tileTextColor: "#ffffff",
+      showLabel: true
+    };
+  }
+  return {
+    tileBackground: normalizeHex(bg.value, "#000000"),
+    tileTextColor: normalizeHex(text.value, "#ffffff"),
+    showLabel: label.checked === true
+  };
+}
+
+function tileSettingsSignature(settings) {
+  return [
+    settings.tileBackground,
+    settings.tileTextColor,
+    settings.showLabel ? "1" : "0"
+  ].join("|");
+}
+
+function applyTileSettingsToUI(settings) {
+  var bgEl = byId("tileBackground");
+  var textEl = byId("tileTextColor");
+  var showEl = byId("showLabel");
+  if (!bgEl || !textEl || !showEl) {
+    return;
+  }
+
+  var bg = normalizeHex(settings.tileBackground, "#000000");
+  var text = normalizeHex(settings.tileTextColor, "#ffffff");
+  var show = settings.showLabel !== undefined ? settings.showLabel === true : true;
+
+  if (bgEl.value !== bg) {
+    bgEl.value = bg;
+  }
+  if (textEl.value !== text) {
+    textEl.value = text;
+  }
+  if (showEl.checked !== show) {
+    showEl.checked = show;
+  }
+
+  appearanceSignature = tileSettingsSignature(readTileSettingsFromUI());
+}
+
+function sendJson(payload) {
+  if (!websocket || websocket.readyState !== 1) {
+    return false;
+  }
+  websocket.send(JSON.stringify(payload));
+  return true;
+}
 
 function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
   uuid = inUUID;
-  actionInfo = JSON.parse(inActionInfo);
-  inInfo = JSON.parse(inInfo);
+  actionInfo = parseJSONOrEmpty(inActionInfo);
+  if (actionInfo["action"]) {
+    action = actionInfo["action"];
+  }
+  context = actionInfo["context"];
+  if (!context && actionInfo["payload"]) {
+    context = actionInfo["payload"]["context"];
+  }
+
+  // Fallback to query string values if PI host uses URL params.
+  try {
+    var qs = new URLSearchParams(window.location.search);
+    if (!context) {
+      context = qs.get("context");
+    }
+    if (!action) {
+      action = qs.get("action") || "com.moeilijk.lhm.settings";
+    }
+  } catch (_err) {
+    // Ignore URL parsing errors in constrained PI runtimes.
+  }
+  if (!context) {
+    context = uuid;
+  }
+  inInfo = parseJSONOrEmpty(inInfo);
+  bindUIHandlers();
   websocket = new WebSocket("ws://localhost:" + inPort);
 
   websocket.onopen = function () {
     // Register with Stream Deck
-    websocket.send(JSON.stringify({
+    sendJson({
       event: inRegisterEvent,
       uuid: inUUID,
-    }));
+    });
 
     // Request global settings
-    websocket.send(JSON.stringify({
+    sendJson({
       event: "getGlobalSettings",
       context: inUUID,
-    }));
+    });
+
+    // Request action settings (for tile appearance).
+    var ctx = sdkContext();
+    if (ctx) {
+      sendJson({
+        event: "getSettings",
+        context: ctx,
+      });
+    }
 
     // Notify plugin that settings PI is connected
-    websocket.send(JSON.stringify({
-      action: actionInfo["action"],
-      event: "sendToPlugin",
-      context: uuid,
-      payload: {
-        settingsConnected: true
-      },
-    }));
+    if (ctx) {
+      sendJson({
+        action: action,
+        event: "sendToPlugin",
+        context: ctx,
+        payload: {
+          settingsConnected: true
+        },
+      });
+    }
+
+    // Keep saving resilient even if some WebView color events are missed.
+    if (appearancePollTimer !== null) {
+      window.clearInterval(appearancePollTimer);
+    }
+    appearancePollTimer = window.setInterval(function() {
+      var current = readTileSettingsFromUI();
+      if (tileSettingsSignature(current) !== appearanceSignature) {
+        saveTileSettings("poll");
+      }
+    }, 300);
   };
 
   websocket.onmessage = function (evt) {
-    var jsonObj = JSON.parse(evt.data);
+    var jsonObj = parseJSONOrEmpty(evt.data);
     var event = jsonObj["event"];
 
-    // Handle global settings received
+    // Handle global settings received (poll interval)
     if (event === "didReceiveGlobalSettings") {
-      var settings = jsonObj.payload?.settings || {};
+      var settings = {};
+      if (jsonObj.payload && jsonObj.payload.settings) {
+        settings = jsonObj.payload.settings;
+      }
       var interval = settings.pollInterval || 1000;
-      document.getElementById("pollInterval").value = interval;
-      document.getElementById("currentRate").textContent = interval + "ms";
+      var pollEl = byId("pollInterval");
+      var rateEl = byId("currentRate");
+      if (pollEl) {
+        pollEl.value = interval;
+      }
+      if (rateEl) {
+        rateEl.textContent = interval + "ms";
+      }
+    }
+
+    // Handle action settings received (tile appearance)
+    if (event === "didReceiveSettings") {
+      var settings = {};
+      if (jsonObj.payload && jsonObj.payload.settings) {
+        settings = jsonObj.payload.settings;
+      }
+      applyTileSettingsToUI(settings);
     }
 
     // Handle status updates from plugin
     if (event === "sendToPropertyInspector") {
       var payload = jsonObj.payload || {};
       if (payload.connectionStatus !== undefined) {
-        var statusEl = document.getElementById("connectionStatus");
-        statusEl.textContent = payload.connectionStatus;
-        statusEl.style.color = payload.connectionStatus === "Connected" ? "#4a4" : "#a44";
+        var statusEl = byId("connectionStatus");
+        if (statusEl) {
+          statusEl.textContent = payload.connectionStatus;
+          statusEl.style.color = payload.connectionStatus === "Connected" ? "#4a4" : "#a44";
+        }
       }
       if (payload.currentRate !== undefined) {
-        document.getElementById("currentRate").textContent = payload.currentRate + "ms";
+        var currentRateEl = byId("currentRate");
+        if (currentRateEl) {
+          currentRateEl.textContent = payload.currentRate + "ms";
+        }
       }
+    }
+  };
+
+  websocket.onclose = function () {
+    if (appearancePollTimer !== null) {
+      window.clearInterval(appearancePollTimer);
+      appearancePollTimer = null;
     }
   };
 }
 
-// Handle poll interval change
-document.getElementById("pollInterval").addEventListener("change", function(e) {
-  var interval = parseInt(e.target.value);
+// Save tile appearance settings
+function saveTileSettings(reason) {
+  if (!websocket || websocket.readyState !== 1) {
+    return;
+  }
+  var ctx = sdkContext();
+  if (!ctx) {
+    return;
+  }
 
-  // Save to global settings (persisted by Stream Deck)
-  websocket.send(JSON.stringify({
-    event: "setGlobalSettings",
-    context: uuid,
-    payload: {
-      pollInterval: interval
-    }
-  }));
+  var settings = readTileSettingsFromUI();
+  var sig = tileSettingsSignature(settings);
+  if (reason !== "force" && sig === appearanceSignature) {
+    return;
+  }
+  appearanceSignature = sig;
 
-  // Notify plugin to apply immediately
-  websocket.send(JSON.stringify({
-    action: actionInfo["action"],
+  // Persist action settings.
+  sendJson({
+    event: "setSettings",
+    context: ctx,
+    payload: settings
+  });
+
+  // Trigger immediate redraw path.
+  sendJson({
+    action: action,
     event: "sendToPlugin",
-    context: uuid,
+    context: ctx,
     payload: {
-      setPollInterval: interval
+      updateTileAppearance: settings
     }
-  }));
+  });
+}
 
-  // Update display immediately
-  document.getElementById("currentRate").textContent = interval + "ms";
-});
+function scheduleTileSettingsSave() {
+  window.setTimeout(function() {
+    saveTileSettings("ui");
+  }, 0);
+}
+
+// Expose handlers for inline PI control attributes.
+window.saveTileSettings = saveTileSettings;
+window.scheduleTileSettingsSave = scheduleTileSettingsSave;
+
+function bindUIHandlers() {
+  if (uiBound) {
+    return;
+  }
+
+  var pollEl = byId("pollInterval");
+  var bgEl = byId("tileBackground");
+  var textEl = byId("tileTextColor");
+  var showEl = byId("showLabel");
+  if (!pollEl || !bgEl || !textEl || !showEl) {
+    return;
+  }
+
+  pollEl.addEventListener("change", function(e) {
+    if (!websocket || websocket.readyState !== 1) {
+      return;
+    }
+    var interval = parseInt(e.target.value);
+    if (isNaN(interval) || interval <= 0) {
+      interval = 1000;
+    }
+
+    sendJson({
+      event: "setGlobalSettings",
+      context: uuid,
+      payload: {
+        pollInterval: interval
+      }
+    });
+
+    var rateEl = byId("currentRate");
+    if (rateEl) {
+      rateEl.textContent = interval + "ms";
+    }
+
+    sendJson({
+      action: action,
+      event: "sendToPlugin",
+      context: sdkContext(),
+      payload: {
+        setPollInterval: interval
+      }
+    });
+  });
+
+  bgEl.addEventListener("change", scheduleTileSettingsSave);
+  bgEl.addEventListener("input", scheduleTileSettingsSave);
+  textEl.addEventListener("change", scheduleTileSettingsSave);
+  textEl.addEventListener("input", scheduleTileSettingsSave);
+  showEl.addEventListener("change", scheduleTileSettingsSave);
+  showEl.addEventListener("input", scheduleTileSettingsSave);
+  showEl.addEventListener("click", scheduleTileSettingsSave);
+
+  appearanceSignature = tileSettingsSignature(readTileSettingsFromUI());
+  uiBound = true;
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", bindUIHandlers);
+} else {
+  bindUIHandlers();
+}

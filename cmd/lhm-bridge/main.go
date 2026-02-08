@@ -1,8 +1,6 @@
 package main
 
 import (
-	"log"
-
 	"github.com/hashicorp/go-plugin"
 	lhmplugin "github.com/shayne/lhm-streamdeck/internal/lhm/plugin"
 	hwsensorsservice "github.com/shayne/lhm-streamdeck/pkg/service"
@@ -10,14 +8,6 @@ import (
 
 func main() {
 	service := lhmplugin.StartService()
-	go func() {
-		for {
-			err := service.Recv()
-			if err != nil {
-				log.Printf("service recv failed: %v\n", err)
-			}
-		}
-	}()
 
 	plugin.Serve(&plugin.ServeConfig{
 		HandshakeConfig: hwsensorsservice.Handshake,

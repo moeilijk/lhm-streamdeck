@@ -5,6 +5,16 @@ type globalSettings struct {
 	PollInterval int `json:"pollInterval"` // milliseconds: 250, 500, 1000
 }
 
+// settingsTileSettings stores per-tile appearance settings for the settings action
+type settingsTileSettings struct {
+	TileBackground   string `json:"tileBackground"`   // hex color for tile background
+	TileTextColor    string `json:"tileTextColor"`    // hex color for tile value text
+	ShowLabel        bool   `json:"showLabel"`        // toggles startup placeholder background
+	Title            string `json:"title"`            // title text, like graph tiles
+	TitleColor       string `json:"titleColor"`       // title color, like graph tiles
+	ShowTitleInGraph *bool  `json:"showTitleInGraph"` // mirrors graph tile title behavior
+}
+
 // Threshold represents a single configurable threshold level
 type Threshold struct {
 	ID              string  `json:"id"`              // Unique identifier

@@ -15,10 +15,7 @@ import (
 )
 
 const (
-	defaultEndpoint   = "http://127.0.0.1:8085/data.json"
-	defaultPollPeriod = time.Second
-	minPollPeriod     = 250 * time.Millisecond
-	maxPollPeriod     = 2 * time.Second
+	defaultEndpoint = "http://127.0.0.1:8085/data.json"
 )
 
 // node mirrors the structure returned by LHM's data.json endpoint.
@@ -47,16 +44,16 @@ type reading struct {
 	average         float64
 }
 
-func (r *reading) ID() int32                  { return r.id }
-func (r *reading) TypeI() int32               { return int32(r.typeI) }
-func (r *reading) Type() string               { return r.typ }
-func (r *reading) Label() string              { return r.label }
-func (r *reading) Unit() string               { return r.unit }
-func (r *reading) Value() float64             { return r.value }
-func (r *reading) ValueNormalized() float64   { return r.normalizedValue }
-func (r *reading) ValueMin() float64          { return r.min }
-func (r *reading) ValueMax() float64          { return r.max }
-func (r *reading) ValueAvg() float64          { return r.average }
+func (r *reading) ID() int32                { return r.id }
+func (r *reading) TypeI() int32             { return int32(r.typeI) }
+func (r *reading) Type() string             { return r.typ }
+func (r *reading) Label() string            { return r.label }
+func (r *reading) Unit() string             { return r.unit }
+func (r *reading) Value() float64           { return r.value }
+func (r *reading) ValueNormalized() float64 { return r.normalizedValue }
+func (r *reading) ValueMin() float64        { return r.min }
+func (r *reading) ValueMax() float64        { return r.max }
+func (r *reading) ValueAvg() float64        { return r.average }
 
 type sensor struct {
 	id   string
@@ -68,11 +65,11 @@ func (s *sensor) Name() string { return s.name }
 
 // Service polls Libre Hardware Monitor and provides cached sensor data.
 type Service struct {
-	url          string
-	client       *http.Client
-	pollInterval time.Duration
+	url    string
+	client *http.Client
 
 	mu          sync.RWMutex
+	fetchMu     sync.Mutex
 	pollTime    uint64
 	sensors     map[string]*sensor
 	sensorOrder []string
@@ -87,26 +84,14 @@ func StartService() *Service {
 		url = defaultEndpoint
 	}
 
-	pollInterval := defaultPollPeriod
-	if envInterval := os.Getenv("LHM_POLL_INTERVAL"); envInterval != "" {
-		if parsed, err := time.ParseDuration(envInterval); err == nil {
-			if parsed >= minPollPeriod && parsed <= maxPollPeriod {
-				pollInterval = parsed
-			}
-		}
-	}
-
 	return &Service{
-		url:          url,
-		client:       &http.Client{Timeout: 2 * time.Second},
-		pollInterval: pollInterval,
+		url:    url,
+		client: &http.Client{Timeout: 2 * time.Second},
 	}
 }
 
 // Recv pulls the latest snapshot from Libre Hardware Monitor.
 func (s *Service) Recv() error {
-	defer time.Sleep(s.pollInterval)
-
 	resp, err := s.client.Get(s.url)
 	if err != nil {
 		return fmt.Errorf("request LHM data: %w", err)
@@ -135,8 +120,31 @@ func (s *Service) Recv() error {
 	return nil
 }
 
+// refresh serializes snapshot fetches so concurrent RPC calls do not all hit LHM.
+func (s *Service) refresh() error {
+	s.fetchMu.Lock()
+	defer s.fetchMu.Unlock()
+	return s.Recv()
+}
+
+// ensureReady loads an initial snapshot when no cache exists yet.
+func (s *Service) ensureReady() error {
+	s.mu.RLock()
+	ready := s.ready
+	s.mu.RUnlock()
+	if ready {
+		return nil
+	}
+	return s.refresh()
+}
+
 // PollTime returns the last time we updated the cache.
 func (s *Service) PollTime() (uint64, error) {
+	// PollTime is called by the plugin ticker and acts as the single poll trigger.
+	if err := s.refresh(); err != nil {
+		return 0, err
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if !s.ready {
@@ -147,6 +155,10 @@ func (s *Service) PollTime() (uint64, error) {
 
 // SensorsSnapshot returns the currently cached sensors.
 func (s *Service) SensorsSnapshot() ([]*sensor, error) {
+	if err := s.ensureReady(); err != nil {
+		return nil, err
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if !s.ready || len(s.sensorOrder) == 0 {
@@ -164,6 +176,10 @@ func (s *Service) SensorsSnapshot() ([]*sensor, error) {
 
 // ReadingsBySensorID returns readings associated with the provided sensor id.
 func (s *Service) ReadingsBySensorID(id string) ([]*reading, error) {
+	if err := s.ensureReady(); err != nil {
+		return nil, err
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if !s.ready {
