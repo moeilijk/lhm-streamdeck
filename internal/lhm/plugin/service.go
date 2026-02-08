@@ -281,7 +281,7 @@ func newReading(sensorID string, n *node) *reading {
 	max, _ := parseValue(n.Max)
 
 	rt := mapReadingType(n.Type)
-	normalizedVal := normalizeToBytes(val, unit)
+	normalizedVal := hwsensorsservice.NormalizeToBytes(val, unit)
 
 	return &reading{
 		id:              makeReadingID(sensorID, n.SensorID),
@@ -314,31 +314,6 @@ func parseValue(v string) (float64, string) {
 	}
 	unit := strings.TrimSpace(strings.TrimPrefix(v, fields[0]))
 	return f, unit
-}
-
-// normalizeToBytes converts a value with a data size unit (KB, MB, GB, TB) to bytes.
-// This ensures consistent graph scaling when units change dynamically.
-// For non-data units, returns the original value unchanged.
-func normalizeToBytes(value float64, unit string) float64 {
-	unitLower := strings.ToLower(unit)
-
-	// Check for data size prefixes (binary: KiB, MiB, GiB, TiB or decimal: KB, MB, GB, TB)
-	// Also handle per-second variants like KB/s, MB/s, etc.
-	switch {
-	case strings.HasPrefix(unitLower, "tb") || strings.HasPrefix(unitLower, "tib"):
-		return value * 1024 * 1024 * 1024 * 1024
-	case strings.HasPrefix(unitLower, "gb") || strings.HasPrefix(unitLower, "gib"):
-		return value * 1024 * 1024 * 1024
-	case strings.HasPrefix(unitLower, "mb") || strings.HasPrefix(unitLower, "mib"):
-		return value * 1024 * 1024
-	case strings.HasPrefix(unitLower, "kb") || strings.HasPrefix(unitLower, "kib"):
-		return value * 1024
-	case strings.HasPrefix(unitLower, "b/") || unitLower == "b":
-		return value
-	default:
-		// Not a data size unit, return original value
-		return value
-	}
 }
 
 func makeReadingID(sensorID, readingID string) int32 {

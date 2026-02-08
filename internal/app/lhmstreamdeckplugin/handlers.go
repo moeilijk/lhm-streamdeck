@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/shayne/lhm-streamdeck/pkg/graph"
@@ -12,11 +13,14 @@ import (
 )
 
 func (p *Plugin) handleSensorSelect(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection) error {
-	if p.hw == nil {
+	p.hwMu.RLock()
+	hw := p.hw
+	p.hwMu.RUnlock()
+	if hw == nil {
 		return fmt.Errorf("LHM bridge not ready")
 	}
 	sensorid := sdpi.Value
-	readings, err := p.hw.ReadingsForSensorID(sensorid)
+	readings, err := hw.ReadingsForSensorID(sensorid)
 	if err != nil {
 		return fmt.Errorf("handleSensorSelect ReadingsBySensor failed: %v", err)
 	}
@@ -92,7 +96,9 @@ func (p *Plugin) handleReadingSelect(event *streamdeck.EvSendToPlugin, sdpi *evS
 	}
 	settings.ReadingLabel = r.Label()
 
+	p.mu.RLock()
 	g, ok := p.graphs[event.Context]
+	p.mu.RUnlock()
 	if !ok {
 		return fmt.Errorf("handleReadingSelect no graph for context: %s", event.Context)
 	}
@@ -116,7 +122,9 @@ func (p *Plugin) handleSetMin(event *streamdeck.EvSendToPlugin, sdpi *evSdpiColl
 	if err != nil {
 		return fmt.Errorf("handleSetMin strconv: %v", err)
 	}
+	p.mu.RLock()
 	g, ok := p.graphs[event.Context]
+	p.mu.RUnlock()
 	if !ok {
 		return fmt.Errorf("handleSetMax no graph for context: %s", event.Context)
 	}
@@ -139,7 +147,9 @@ func (p *Plugin) handleSetMax(event *streamdeck.EvSendToPlugin, sdpi *evSdpiColl
 	if err != nil {
 		return fmt.Errorf("handleSetMax strconv: %v", err)
 	}
+	p.mu.RLock()
 	g, ok := p.graphs[event.Context]
+	p.mu.RUnlock()
 	if !ok {
 		return fmt.Errorf("handleSetMax no graph for context: %s", event.Context)
 	}
@@ -209,12 +219,18 @@ const (
 )
 
 // colorCache stores parsed colors to avoid repeated parsing
-var colorCache = make(map[string]*color.RGBA)
+var (
+	colorCacheMu sync.RWMutex
+	colorCache   = make(map[string]*color.RGBA)
+)
 
 func hexToRGBA(hex string) *color.RGBA {
+	colorCacheMu.RLock()
 	if c, ok := colorCache[hex]; ok {
+		colorCacheMu.RUnlock()
 		return c
 	}
+	colorCacheMu.RUnlock()
 
 	var r, g, b uint8
 	if len(hex) == 4 {
@@ -227,7 +243,9 @@ func hexToRGBA(hex string) *color.RGBA {
 	}
 
 	c := &color.RGBA{R: r, G: g, B: b, A: 255}
+	colorCacheMu.Lock()
 	colorCache[hex] = c
+	colorCacheMu.Unlock()
 	return c
 }
 
@@ -237,9 +255,11 @@ func (p *Plugin) handleColorChange(event *streamdeck.EvSendToPlugin, key string,
 	if err != nil {
 		return fmt.Errorf("handleDivisor getSettings: %v", err)
 	}
+	p.mu.RLock()
 	g, ok := p.graphs[event.Context]
+	p.mu.RUnlock()
 	if !ok {
-		return fmt.Errorf("handleSetMax no graph for context: %s", event.Context)
+		return fmt.Errorf("handleColorChange no graph for context: %s", event.Context)
 	}
 	clr := hexToRGBA(hex)
 	switch key {
@@ -292,7 +312,9 @@ func (p *Plugin) handleSetFontSize(event *streamdeck.EvSendToPlugin, key string,
 		return fmt.Errorf("getSettings failed: %w", err)
 	}
 
+	p.mu.RLock()
 	g, ok := p.graphs[event.Context]
+	p.mu.RUnlock()
 	if !ok {
 		return fmt.Errorf("no graph for context: %s", event.Context)
 	}
@@ -331,7 +353,10 @@ func (p *Plugin) handleWarningEnabled(event *streamdeck.EvSendToPlugin, sdpi *ev
 	// Reset alert state when disabled and not in critical
 	if !enabled && settings.CurrentAlertState == "warning" {
 		settings.CurrentAlertState = "none"
-		if g, ok := p.graphs[event.Context]; ok {
+		p.mu.RLock()
+		g, ok := p.graphs[event.Context]
+		p.mu.RUnlock()
+		if ok {
 			p.applyNormalColors(g, &settings)
 		}
 	}
@@ -357,7 +382,10 @@ func (p *Plugin) handleCriticalEnabled(event *streamdeck.EvSendToPlugin, sdpi *e
 	// Reset alert state when disabled
 	if !enabled && settings.CurrentAlertState == "critical" {
 		settings.CurrentAlertState = "none"
-		if g, ok := p.graphs[event.Context]; ok {
+		p.mu.RLock()
+		g, ok := p.graphs[event.Context]
+		p.mu.RUnlock()
+		if ok {
 			p.applyNormalColors(g, &settings)
 		}
 	}
@@ -576,7 +604,10 @@ func (p *Plugin) handleRemoveThreshold(event *streamdeck.EvSendToPlugin, sdpi *e
 	// Clear current threshold if it was the removed one
 	if settings.CurrentThresholdID == thresholdID {
 		settings.CurrentThresholdID = ""
-		if g, ok := p.graphs[event.Context]; ok {
+		p.mu.RLock()
+		g, ok := p.graphs[event.Context]
+		p.mu.RUnlock()
+		if ok {
 			p.applyNormalColors(g, &settings)
 		}
 	}
@@ -697,7 +728,10 @@ func (p *Plugin) handleThresholdUpdate(event *streamdeck.EvSendToPlugin, sdpi *e
 
 	// If this threshold is currently active and its colors changed, apply immediately
 	if needsColorUpdate {
-		if g, ok := p.graphs[event.Context]; ok {
+		p.mu.RLock()
+		g, ok := p.graphs[event.Context]
+		p.mu.RUnlock()
+		if ok {
 			p.applyThresholdColors(g, threshold)
 		}
 	}

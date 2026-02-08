@@ -27,11 +27,15 @@ func (p *Plugin) isSettingsAction(action, context string) bool {
 	if action == "com.moeilijk.lhm.settings" {
 		return true
 	}
+	p.mu.RLock()
 	_, ok := p.settingsContexts[context]
+	p.mu.RUnlock()
 	return ok
 }
 
 func (p *Plugin) resolveSettingsContext(context string) string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 	if _, ok := p.settingsContexts[context]; ok {
 		return context
 	}
@@ -66,12 +70,12 @@ func isSettingsPayload(m map[string]*json.RawMessage) bool {
 
 func (p *Plugin) sendSettingsStatus(action, context string) {
 	status := "Disconnected"
-	if p.hw != nil {
-		if _, err := p.hw.PollTime(); err == nil {
-			status = "Connected"
-		}
+	if _, err := p.getCachedPollTime(); err == nil {
+		status = "Connected"
 	}
+	p.mu.RLock()
 	currentRate := p.globalSettings.PollInterval
+	p.mu.RUnlock()
 	if currentRate <= 0 {
 		currentRate = int(p.am.GetInterval().Milliseconds())
 	}
@@ -115,6 +119,7 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 				log.Printf("OnWillAppear settings tile unmarshal: %v\n", err)
 			}
 		}
+		p.mu.Lock()
 		if existing := p.settingsContexts[event.Context]; existing != nil {
 			if !hasTitle {
 				tileSettings.Title = existing.Title
@@ -126,6 +131,7 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 				tileSettings.ShowTitleInGraph = existing.ShowTitleInGraph
 			}
 		}
+		p.mu.Unlock()
 		// Set defaults if not set
 		if tileSettings.TileBackground == "" {
 			tileSettings.TileBackground = "#000000"
@@ -150,7 +156,9 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 			tileSettings.ShowLabel,
 			hasShowLabel,
 		)
+		p.mu.Lock()
 		p.settingsContexts[event.Context] = &tileSettings
+		p.mu.Unlock()
 		p.updateSettingsTile(event.Context)
 		return
 	}
@@ -213,7 +221,9 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 	if drawTitle {
 		g.SetLabelText(0, settings.Title)
 	}
+	p.mu.Lock()
 	p.graphs[event.Context] = g
+	p.mu.Unlock()
 
 	// Reset threshold state so updateTiles will re-evaluate and apply correct colors on first run
 	if settings.CurrentThresholdID != "" {
@@ -254,7 +264,9 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 func (p *Plugin) OnWillDisappear(event *streamdeck.EvWillDisappear) {
 	// Handle settings action
 	if event.Action == "com.moeilijk.lhm.settings" {
+		p.mu.Lock()
 		delete(p.settingsContexts, event.Context)
+		p.mu.Unlock()
 		return
 	}
 
@@ -262,8 +274,10 @@ func (p *Plugin) OnWillDisappear(event *streamdeck.EvWillDisappear) {
 	if err != nil {
 		log.Println("OnWillDisappear settings unmarshal", err)
 	}
+	p.mu.Lock()
 	delete(p.graphs, event.Context)
 	delete(p.divisorCache, event.Context)
+	p.mu.Unlock()
 	p.am.RemoveAction(event.Context)
 }
 
@@ -277,8 +291,11 @@ func (p *Plugin) OnApplicationDidTerminate(event *streamdeck.EvApplication) {}
 func (p *Plugin) OnTitleParametersDidChange(event *streamdeck.EvTitleParametersDidChange) {
 	if p.isSettingsAction(event.Action, event.Context) {
 		targetContext := p.resolveSettingsContext(event.Context)
-		tileSettings := p.settingsContexts[targetContext]
-		if tileSettings == nil {
+		p.mu.RLock()
+		existing := p.settingsContexts[targetContext]
+		p.mu.RUnlock()
+		var tileSettings *settingsTileSettings
+		if existing == nil {
 			tileSettings = &settingsTileSettings{
 				TileBackground: "#000000",
 				TileTextColor:  "#ffffff",
@@ -286,6 +303,9 @@ func (p *Plugin) OnTitleParametersDidChange(event *streamdeck.EvTitleParametersD
 				Title:          "",
 				TitleColor:     "#b7b7b7",
 			}
+		} else {
+			cp := *existing
+			tileSettings = &cp
 		}
 
 		tileSettings.Title = event.Payload.Title
@@ -304,7 +324,9 @@ func (p *Plugin) OnTitleParametersDidChange(event *streamdeck.EvTitleParametersD
 			event.Payload.TitleParameters.ShowTitle,
 		)
 
+		p.mu.Lock()
 		p.settingsContexts[targetContext] = tileSettings
+		p.mu.Unlock()
 		if err := p.sd.SetSettings(targetContext, tileSettings); err != nil {
 			log.Printf("OnTitleParametersDidChange settings SetSettings: %v\n", err)
 		}
@@ -322,7 +344,9 @@ func (p *Plugin) OnTitleParametersDidChange(event *streamdeck.EvTitleParametersD
 			log.Println("OnTitleParametersDidChange settings unmarshal", err)
 		}
 	}
+	p.mu.RLock()
 	g, ok := p.graphs[event.Context]
+	p.mu.RUnlock()
 	if !ok {
 		log.Printf("OnTitleParametersDidChange no graph for context: %s\n", event.Context)
 		return
@@ -368,17 +392,15 @@ func (p *Plugin) OnPropertyInspectorConnected(event *streamdeck.EvSendToPlugin) 
 		log.Println("OnPropertyInspectorConnected Sensors", err)
 		go p.restartBridge()
 		payload := evStatus{Error: true, Message: "Libre Hardware Monitor Unavailable"}
-		err := p.sd.SendToPropertyInspector(event.Action, event.Context, payload)
+		if err := p.sd.SendToPropertyInspector(event.Action, event.Context, payload); err != nil {
+			log.Printf("OnPropertyInspectorConnected SendToPropertyInspector: %v\n", err)
+		}
 		settings.InErrorState = true
-		err = p.sd.SetSettings(event.Context, &settings)
-		if err != nil {
+		if err := p.sd.SetSettings(event.Context, &settings); err != nil {
 			log.Printf("OnPropertyInspectorConnected SetSettings: %v\n", err)
 			return
 		}
 		p.am.SetAction(event.Action, event.Context, &settings)
-		if err != nil {
-			log.Println("updateTiles SendToPropertyInspector", err)
-		}
 		return
 	}
 	evsensors := make([]*evSendSensorsPayloadSensor, 0, len(sensors))
@@ -404,10 +426,13 @@ func (p *Plugin) OnPropertyInspectorConnected(event *streamdeck.EvSendToPlugin) 
 }
 
 func (p *Plugin) sendReadingsToPropertyInspector(action, context, sensorID string, settings *actionSettings) ([]hwsensorsservice.Reading, error) {
-	if p.hw == nil {
+	p.hwMu.RLock()
+	hw := p.hw
+	p.hwMu.RUnlock()
+	if hw == nil {
 		return nil, fmt.Errorf("LHM bridge not ready")
 	}
-	readings, err := p.hw.ReadingsForSensorID(sensorID)
+	readings, err := hw.ReadingsForSensorID(sensorID)
 	if err != nil {
 		log.Println("sendReadingsToPropertyInspector ReadingsForSensorID", err)
 		return nil, err
@@ -486,7 +511,10 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 				if appearance.TileTextColor == "" {
 					appearance.TileTextColor = "#ffffff"
 				}
-				if existing := p.settingsContexts[targetContext]; existing != nil {
+				p.mu.RLock()
+				existing := p.settingsContexts[targetContext]
+				p.mu.RUnlock()
+				if existing != nil {
 					if appearance.Title == "" {
 						appearance.Title = existing.Title
 					}
@@ -503,7 +531,9 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 				if appearance.ShowTitleInGraph == nil {
 					appearance.ShowTitleInGraph = boolPtr(true)
 				}
+				p.mu.Lock()
 				p.settingsContexts[targetContext] = &appearance
+				p.mu.Unlock()
 				if err := p.sd.SetSettings(targetContext, &appearance); err != nil {
 					log.Printf("updateTileAppearance SetSettings failed: %v\n", err)
 				}
@@ -670,7 +700,10 @@ func (p *Plugin) OnDidReceiveSettings(event *streamdeck.EvDidReceiveSettings) {
 	if !hasShowLabel {
 		tileSettings.ShowLabel = true
 	}
-	if existing := p.settingsContexts[event.Context]; existing != nil {
+	p.mu.RLock()
+	existing := p.settingsContexts[event.Context]
+	p.mu.RUnlock()
+	if existing != nil {
 		if !hasTitle {
 			tileSettings.Title = existing.Title
 		}
@@ -688,7 +721,9 @@ func (p *Plugin) OnDidReceiveSettings(event *streamdeck.EvDidReceiveSettings) {
 		tileSettings.ShowTitleInGraph = boolPtr(true)
 	}
 
+	p.mu.Lock()
 	p.settingsContexts[event.Context] = &tileSettings
+	p.mu.Unlock()
 	log.Printf(
 		"OnDidReceiveSettings context=%s bg=%s text=%s showLabel=%t\n",
 		event.Context,
@@ -722,7 +757,9 @@ func (p *Plugin) OnDidReceiveGlobalSettings(event *streamdeck.EvDidReceiveGlobal
 
 	if gs.PollInterval <= 0 {
 		// First time, no settings saved yet.
+		p.mu.Lock()
 		p.globalSettings.PollInterval = int(defaultPollInterval.Milliseconds())
+		p.mu.Unlock()
 		return
 	}
 
@@ -734,13 +771,17 @@ func (p *Plugin) OnDidReceiveGlobalSettings(event *streamdeck.EvDidReceiveGlobal
 	}
 
 	// Keep the cached global settings in sync even when value did not change.
+	p.mu.Lock()
 	changed := gs.PollInterval != p.globalSettings.PollInterval
 	p.globalSettings = gs
+	if changed {
+		p.pollTimeCacheTTL = pollTimeCacheTTLForInterval(time.Duration(gs.PollInterval) * time.Millisecond)
+	}
+	p.mu.Unlock()
 
 	if changed {
 		interval := time.Duration(gs.PollInterval) * time.Millisecond
 		p.am.SetInterval(interval)
-		p.pollTimeCacheTTL = pollTimeCacheTTLForInterval(interval)
 		log.Printf("Applied global settings: interval=%v\n", interval)
 	}
 	p.updateAllSettingsTiles()
