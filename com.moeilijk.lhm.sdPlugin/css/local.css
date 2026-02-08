@@ -37,7 +37,31 @@ body,
   display: inline-block !important;
   appearance: auto;
   -webkit-appearance: checkbox;
-  width: 16px;
-  height: 16px;
-  margin-top: 4px;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.show-label-row {
+  align-items: center;
+}
+
+.show-label-row .show-label-cell {
+  flex: none;
+  width: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  margin-left: 4px;
+  margin-right: 14px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.show-label-row .show-label-cell-spacer {
+  visibility: hidden;
+}
+
+.show-label-row .show-label-checkbox {
+  min-height: 18px;
 }

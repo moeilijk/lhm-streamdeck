@@ -49,11 +49,15 @@
         oninput="scheduleTileSettingsSave()" onchange="scheduleTileSettingsSave()" />
     </div>
 
-    <div class="sdpi-item">
-      <div class="sdpi-item-label">Show Label</div>
-      <input type="checkbox" class="sdpi-item-value" id="showLabel" checked
-        onchange="scheduleTileSettingsSave()" oninput="scheduleTileSettingsSave()"
-        onclick="scheduleTileSettingsSave()" />
+    <div class="sdpi-item show-label-row">
+      <div class="sdpi-item-label">Show Background</div>
+      <div class="show-label-cell">
+        <input type="checkbox" class="show-label-checkbox" id="showLabel" checked
+          onchange="scheduleTileSettingsSave()" oninput="scheduleTileSettingsSave()"
+          onclick="scheduleTileSettingsSave()" />
+      </div>
+      <div class="sdpi-item-label empty"></div>
+      <div class="show-label-cell show-label-cell-spacer" aria-hidden="true"></div>
     </div>
 
     <div class="sdpi-heading">Status</div>
