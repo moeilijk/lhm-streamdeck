@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-manifest="com.moeilijk.lhm.sdPlugin/manifest.json"
-state_file=".last_patch"
-
 python3 - <<'PY'
 import pathlib
 import re
@@ -17,23 +14,25 @@ match = re.search(pattern, text)
 if not match:
     sys.exit("Version not found or invalid format in manifest.json")
 
-major = match.group("major")
-minor = match.group("minor")
-patch = match.group("patch")
+major = int(match.group("major"))
+minor = int(match.group("minor"))
+patch = int(match.group("patch"))
 build = int(match.group("build"))
-patch_key = f"{major}.{minor}.{patch}"
-last_patch = state_path.read_text().strip() if state_path.exists() else ""
+lineage = (major, minor, patch)
 
-if patch_key != last_patch:
-    new_version = f"{patch_key}.0"
-    state_path.write_text(patch_key)
-    new_text = re.sub(pattern, f'"Version": "{new_version}"', text, count=1)
-    path.write_text(new_text)
-    print(new_version)
-    sys.exit(0)
+# .last_patch tracks the last committed major.minor.patch lineage.
+# If major/minor/patch changed, reset build to 0.
+last_lineage = None
+if state_path.exists():
+    raw = state_path.read_text().strip()
+    m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", raw)
+    if m:
+        last_lineage = (int(m.group(1)), int(m.group(2)), int(m.group(3)))
 
-new_version = f"{patch_key}.{build + 1}"
+next_build = 0 if lineage != last_lineage else build + 1
+new_version = f"{major}.{minor}.{patch}.{next_build}"
 new_text = re.sub(pattern, f'"Version": "{new_version}"', text, count=1)
 path.write_text(new_text)
+state_path.write_text(f"{major}.{minor}.{patch}")
 print(new_version)
 PY
