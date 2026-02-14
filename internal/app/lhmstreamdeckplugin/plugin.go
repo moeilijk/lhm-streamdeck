@@ -120,9 +120,25 @@ func (p *Plugin) startClient() error {
 	return p.startClientLocked()
 }
 
+// lhmEndpoint builds the LHM endpoint URL from global settings, falling back to defaults.
+func (p *Plugin) lhmEndpoint() string {
+	p.mu.RLock()
+	host := p.globalSettings.LhmHost
+	port := p.globalSettings.LhmPort
+	p.mu.RUnlock()
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	if port <= 0 || port > 65535 {
+		port = 8085
+	}
+	return fmt.Sprintf("http://%s:%d/data.json", host, port)
+}
+
 // startClientLocked starts the bridge client. Caller must hold hwMu write lock.
 func (p *Plugin) startClientLocked() error {
 	cmd := exec.Command("./lhm-bridge.exe")
+	cmd.Env = append(os.Environ(), "LHM_ENDPOINT="+p.lhmEndpoint())
 
 	// We're a host. Start by launching the plugin process.
 	client := plugin.NewClient(&plugin.ClientConfig{
@@ -748,6 +764,49 @@ func (p *Plugin) updateAllSettingsTiles() {
 	for _, ctx := range contexts {
 		p.updateSettingsTile(ctx)
 	}
+}
+
+// setLhmEndpoint updates the LHM host/port and restarts the bridge
+func (p *Plugin) setLhmEndpoint(host string, port int) {
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	if port <= 0 || port > 65535 {
+		port = 8085
+	}
+
+	p.mu.Lock()
+	changed := host != p.globalSettings.LhmHost || port != p.globalSettings.LhmPort
+	p.globalSettings.LhmHost = host
+	p.globalSettings.LhmPort = port
+	gs := p.globalSettings
+	if changed {
+		// Invalidate cached poll time so status checks hit the new endpoint
+		p.cachedPollTime = 0
+		p.cachedPollTimeAt = time.Time{}
+	}
+	p.mu.Unlock()
+
+	if !changed {
+		return
+	}
+
+	// Persist global settings
+	if err := p.sd.SetGlobalSettings(gs); err != nil {
+		log.Printf("SetGlobalSettings failed: %v\n", err)
+	}
+
+	// Clear bridge client immediately so status checks return "Disconnected"
+	p.hwMu.Lock()
+	if p.c != nil {
+		p.c.Kill()
+	}
+	p.c = nil
+	p.hw = nil
+	p.hwMu.Unlock()
+
+	log.Printf("LHM endpoint changed to %s, restarting bridge\n", p.lhmEndpoint())
+	go p.startClient()
 }
 
 // setPollInterval changes the polling interval dynamically

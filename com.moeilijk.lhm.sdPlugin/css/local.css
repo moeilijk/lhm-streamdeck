@@ -65,3 +65,17 @@ body,
 .show-label-row .show-label-checkbox {
   min-height: 18px;
 }
+
+/* Restore spin buttons for port number input */
+#lhmPort {
+  -webkit-appearance: auto !important;
+  appearance: auto !important;
+}
+#lhmPort::-webkit-inner-spin-button,
+#lhmPort::-webkit-outer-spin-button {
+  -webkit-appearance: auto !important;
+  appearance: auto !important;
+  opacity: 1;
+  display: block;
+  cursor: pointer;
+}
