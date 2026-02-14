@@ -2,7 +2,9 @@ package lhmstreamdeckplugin
 
 // globalSettings represents plugin-wide settings (not per-action)
 type globalSettings struct {
-	PollInterval int `json:"pollInterval"` // milliseconds: 250..10000 (matches LHM Update Interval options)
+	PollInterval int    `json:"pollInterval"`          // milliseconds: 250..10000 (matches LHM Update Interval options)
+	LhmHost      string `json:"lhmHost,omitempty"`     // LHM host address (default: 127.0.0.1)
+	LhmPort      int    `json:"lhmPort,omitempty"`     // LHM port (default: 8085)
 }
 
 // settingsTileSettings stores per-tile appearance settings for the settings action

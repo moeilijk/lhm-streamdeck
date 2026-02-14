@@ -60,7 +60,7 @@ func isSettingsPayload(m map[string]*json.RawMessage) bool {
 	if m == nil {
 		return false
 	}
-	for _, k := range []string{"settingsConnected", "setPollInterval", "updateTileAppearance"} {
+	for _, k := range []string{"settingsConnected", "setPollInterval", "setLhmEndpoint", "updateTileAppearance"} {
 		if _, ok := m[k]; ok {
 			return true
 		}
@@ -70,7 +70,7 @@ func isSettingsPayload(m map[string]*json.RawMessage) bool {
 
 func (p *Plugin) sendSettingsStatus(action, context string) {
 	status := "Disconnected"
-	if _, err := p.getCachedPollTime(); err == nil {
+	if pt, err := p.getCachedPollTime(); err == nil && pt != 0 {
 		status = "Connected"
 	}
 	p.mu.RLock()
@@ -492,6 +492,18 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			return
 		}
 
+		// Check for setLhmEndpoint
+		if raw, ok := payload["setLhmEndpoint"]; ok {
+			var ep struct {
+				Host string `json:"host"`
+				Port int    `json:"port"`
+			}
+			if err := json.Unmarshal(*raw, &ep); err == nil {
+				p.setLhmEndpoint(ep.Host, ep.Port)
+			}
+			return
+		}
+
 		// Check for updateTileAppearance
 		if raw, ok := payload["updateTileAppearance"]; ok {
 			var appearance settingsTileSettings
@@ -772,17 +784,35 @@ func (p *Plugin) OnDidReceiveGlobalSettings(event *streamdeck.EvDidReceiveGlobal
 
 	// Keep the cached global settings in sync even when value did not change.
 	p.mu.Lock()
-	changed := gs.PollInterval != p.globalSettings.PollInterval
+	intervalChanged := gs.PollInterval != p.globalSettings.PollInterval
+	endpointChanged := gs.LhmHost != p.globalSettings.LhmHost || gs.LhmPort != p.globalSettings.LhmPort
 	p.globalSettings = gs
-	if changed {
+	if intervalChanged {
 		p.pollTimeCacheTTL = pollTimeCacheTTLForInterval(time.Duration(gs.PollInterval) * time.Millisecond)
+	}
+	if endpointChanged {
+		p.cachedPollTime = 0
+		p.cachedPollTimeAt = time.Time{}
 	}
 	p.mu.Unlock()
 
-	if changed {
+	if intervalChanged {
 		interval := time.Duration(gs.PollInterval) * time.Millisecond
 		p.am.SetInterval(interval)
 		log.Printf("Applied global settings: interval=%v\n", interval)
+	}
+	if endpointChanged {
+		// Clear bridge client immediately so status checks return "Disconnected"
+		p.hwMu.Lock()
+		if p.c != nil {
+			p.c.Kill()
+		}
+		p.c = nil
+		p.hw = nil
+		p.hwMu.Unlock()
+
+		log.Printf("LHM endpoint changed to %s, restarting bridge\n", p.lhmEndpoint())
+		go p.startClient()
 	}
 	p.updateAllSettingsTiles()
 }

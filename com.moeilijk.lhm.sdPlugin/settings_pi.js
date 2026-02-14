@@ -215,7 +215,7 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
     var jsonObj = parseJSONOrEmpty(evt.data);
     var event = jsonObj["event"];
 
-    // Handle global settings received (poll interval)
+    // Handle global settings received (poll interval + LHM endpoint)
     if (event === "didReceiveGlobalSettings") {
       var settings = {};
       if (jsonObj.payload && jsonObj.payload.settings) {
@@ -229,6 +229,14 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       }
       if (rateEl) {
         rateEl.textContent = interval + "ms";
+      }
+      var hostEl = byId("lhmHost");
+      var portEl = byId("lhmPort");
+      if (hostEl) {
+        hostEl.value = settings.lhmHost || "127.0.0.1";
+      }
+      if (portEl) {
+        portEl.value = settings.lhmPort || 8085;
       }
     }
 
@@ -317,6 +325,46 @@ function scheduleTileSettingsSave() {
 window.saveTileSettings = saveTileSettings;
 window.scheduleTileSettingsSave = scheduleTileSettingsSave;
 
+function sendLhmEndpoint() {
+  if (!websocket || websocket.readyState !== 1) {
+    return;
+  }
+  var hostEl = byId("lhmHost");
+  var portEl = byId("lhmPort");
+  if (!hostEl || !portEl) {
+    return;
+  }
+  var host = hostEl.value.trim();
+  if (!host) {
+    host = "127.0.0.1";
+    hostEl.value = host;
+  }
+  var port = parseInt(portEl.value, 10);
+  if (isNaN(port) || port < 1 || port > 65535) {
+    port = 8085;
+    portEl.value = port;
+  }
+
+  sendJson({
+    event: "setGlobalSettings",
+    context: uuid,
+    payload: {
+      pollInterval: normalizeInterval(byId("pollInterval") ? byId("pollInterval").value : 1000),
+      lhmHost: host,
+      lhmPort: port
+    }
+  });
+
+  sendJson({
+    action: action,
+    event: "sendToPlugin",
+    context: sdkContext(),
+    payload: {
+      setLhmEndpoint: { host: host, port: port }
+    }
+  });
+}
+
 function bindUIHandlers() {
   if (uiBound) {
     return;
@@ -330,6 +378,15 @@ function bindUIHandlers() {
     return;
   }
 
+  var hostEl = byId("lhmHost");
+  var portEl = byId("lhmPort");
+  if (hostEl) {
+    hostEl.addEventListener("change", sendLhmEndpoint);
+  }
+  if (portEl) {
+    portEl.addEventListener("change", sendLhmEndpoint);
+  }
+
   pollEl.addEventListener("change", function(e) {
     if (!websocket || websocket.readyState !== 1) {
       return;
@@ -337,12 +394,15 @@ function bindUIHandlers() {
     var interval = normalizeInterval(e.target.value);
     e.target.value = interval;
 
+    var hostVal = byId("lhmHost") ? byId("lhmHost").value.trim() : "";
+    var portVal = byId("lhmPort") ? parseInt(byId("lhmPort").value, 10) : 0;
+    var gsPayload = { pollInterval: interval };
+    if (hostVal) { gsPayload.lhmHost = hostVal; }
+    if (portVal > 0) { gsPayload.lhmPort = portVal; }
     sendJson({
       event: "setGlobalSettings",
       context: uuid,
-      payload: {
-        pollInterval: interval
-      }
+      payload: gsPayload
     });
 
     var rateEl = byId("currentRate");
