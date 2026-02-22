@@ -47,3 +47,8 @@ node_modules/
 
 # Local AI handoff docs (keep local, never push)
 docs/
+
+# AI agent instructions (local only)
+CLAUDE.md
+AGENTS.md
+.github/copilot-instructions.md
