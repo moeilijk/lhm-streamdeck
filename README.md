@@ -41,9 +41,6 @@ I wanted a local, open replacement for Stream Deck hardware monitoring without l
 
     ![alt text](images/updateinterval.png "LHM Update Interval")
 
-> Advanced: set the `LHM_ENDPOINT` environment variable before launching Stream Deck if you prefer another URL (e.g. a different port or host). If you bind LHM to a specific local IP, set `LHM_ENDPOINT` to match that IP and port. The default endpoint is `http://127.0.0.1:8085/data.json`.
-
-
 ## Install and Setup the Plugin
 
 1. Download the latest pre-compiled plugin
@@ -69,6 +66,19 @@ I wanted a local, open replacement for Stream Deck hardware monitoring without l
 6. Configure the action to display the sensor reading you wish
 
     ![alt text](images/configureaction.gif "Configure Action")
+
+### Plugin Settings tile
+
+The **LHM Settings** action (found under "Libre Hardware Monitor" in the action list) provides a dedicated tile for plugin-wide configuration. Drag it to any free tile on the canvas.
+
+In its Property Inspector you can set:
+
+- **Host** – the IP address or hostname where LHM is running (default: `127.0.0.1`). Change this if LHM runs on another machine on your network.
+- **Port** – the port LHM's web server listens on (default: `8085`). Change this if you configured a different port in LHM's Remote Web Server settings.
+- **Interval** – how often the plugin polls LHM for new data (default: `1s`).
+- **Tile Appearance** – default background and text colors for all sensor tiles.
+
+Changes to Host and Port take effect immediately; all sensor tiles reconnect to the new address automatically.
 
 ### Title behavior
 
