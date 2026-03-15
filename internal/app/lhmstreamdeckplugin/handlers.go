@@ -568,6 +568,9 @@ func (p *Plugin) handleAddThreshold(event *streamdeck.EvSendToPlugin, sdpi *evSd
 		Enabled:         true,
 		Operator:        ">=",
 		Value:           0,
+		Hysteresis:      defaultThresholdHysteresis,
+		DwellMs:         defaultThresholdDwellMs,
+		CooldownMs:      defaultThresholdCooldownMs,
 		BackgroundColor: bg,
 		ForegroundColor: fg,
 		HighlightColor:  hl,
@@ -575,6 +578,7 @@ func (p *Plugin) handleAddThreshold(event *streamdeck.EvSendToPlugin, sdpi *evSd
 	}
 
 	settings.Thresholds = append(settings.Thresholds, newThreshold)
+	p.markThresholdDirty(event.Context)
 
 	if err := p.sd.SetSettings(event.Context, &settings); err != nil {
 		return fmt.Errorf("handleAddThreshold SetSettings: %v", err)
@@ -611,6 +615,7 @@ func (p *Plugin) handleRemoveThreshold(event *streamdeck.EvSendToPlugin, sdpi *e
 			p.applyNormalColors(g, &settings)
 		}
 	}
+	p.resetThresholdRuntimeState(event.Context, thresholdID)
 
 	if err := p.sd.SetSettings(event.Context, &settings); err != nil {
 		return fmt.Errorf("handleRemoveThreshold SetSettings: %v", err)
@@ -659,8 +664,7 @@ func (p *Plugin) handleReorderThreshold(event *streamdeck.EvSendToPlugin, sdpi *
 		}
 		settings.Thresholds[pos], settings.Thresholds[pos+1] = settings.Thresholds[pos+1], settings.Thresholds[pos]
 	}
-
-	settings.CurrentThresholdID = "_FORCE_REEVALUATE_"
+	p.markThresholdDirty(event.Context)
 
 	if err := p.sd.SetSettings(event.Context, &settings); err != nil {
 		return fmt.Errorf("handleReorderThreshold SetSettings: %v", err)
@@ -684,23 +688,46 @@ func (p *Plugin) handleThresholdUpdate(event *streamdeck.EvSendToPlugin, sdpi *e
 
 	needsReEvaluation := false
 	needsColorUpdate := false
+	resetRuntimeState := false
 
 	// Update based on key
 	switch sdpi.Key {
 	case "thresholdEnabled":
 		threshold.Enabled = sdpi.Checked
 		needsReEvaluation = true
+		resetRuntimeState = true
 	case "thresholdName":
 		threshold.Name = sdpi.Value
 	case "thresholdOperator":
 		if isValidOperator(sdpi.Value) {
 			threshold.Operator = sdpi.Value
 			needsReEvaluation = true
+			resetRuntimeState = true
 		}
 	case "thresholdValue":
 		value, _ := strconv.ParseFloat(sdpi.Value, 64)
 		threshold.Value = value
 		needsReEvaluation = true
+		resetRuntimeState = true
+	case "thresholdHysteresis":
+		value, _ := strconv.ParseFloat(sdpi.Value, 64)
+		threshold.Hysteresis = value
+		needsReEvaluation = true
+		resetRuntimeState = true
+	case "thresholdDwellMs":
+		value, _ := strconv.Atoi(sdpi.Value)
+		threshold.DwellMs = value
+		needsReEvaluation = true
+		resetRuntimeState = true
+	case "thresholdCooldownMs":
+		value, _ := strconv.Atoi(sdpi.Value)
+		threshold.CooldownMs = value
+		needsReEvaluation = true
+		resetRuntimeState = true
+	case "thresholdSticky":
+		threshold.Sticky = sdpi.Checked
+		needsReEvaluation = true
+		resetRuntimeState = true
 	case "thresholdText":
 		threshold.Text = sdpi.Value
 	case "thresholdTextColor":
@@ -722,8 +749,12 @@ func (p *Plugin) handleThresholdUpdate(event *streamdeck.EvSendToPlugin, sdpi *e
 
 	// Re-evaluate thresholds and apply colors immediately if needed
 	if needsReEvaluation {
-		// Mark as needing re-evaluation by using special marker
-		settings.CurrentThresholdID = "_FORCE_REEVALUATE_"
+		p.markThresholdDirty(event.Context)
+	}
+	if resetRuntimeState {
+		p.resetThresholdRuntimeState(event.Context, threshold.ID)
+	} else {
+		p.markThresholdDirty(event.Context)
 	}
 
 	// If this threshold is currently active and its colors changed, apply immediately
@@ -740,6 +771,9 @@ func (p *Plugin) handleThresholdUpdate(event *streamdeck.EvSendToPlugin, sdpi *e
 		return fmt.Errorf("handleThresholdUpdate SetSettings: %v", err)
 	}
 	p.am.SetAction(event.Action, event.Context, &settings)
+	if sdpi.Key == "thresholdSticky" || needsReEvaluation || needsColorUpdate {
+		p.refreshAction(event.Action, event.Context)
+	}
 	return nil
 }
 

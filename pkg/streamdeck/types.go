@@ -41,6 +41,24 @@ type EvWillDisappear struct {
 	EvWillAppear
 }
 
+// EvKeyDownPayload is the payload structure from the keyDown event.
+type EvKeyDownPayload struct {
+	Settings         *json.RawMessage `json:"settings"`
+	Coordinates      EvCoordinates    `json:"coordinates"`
+	State            int              `json:"state"`
+	UserDesiredState int              `json:"userDesiredState"`
+	IsInMultiAction  bool             `json:"isInMultiAction"`
+}
+
+// EvKeyDown is the payload from the keyDown event.
+type EvKeyDown struct {
+	Action  string           `json:"action"`
+	Event   string           `json:"event"`
+	Context string           `json:"context"`
+	Device  string           `json:"device"`
+	Payload EvKeyDownPayload `json:"payload"`
+}
+
 // EvApplicationPayload is the sub-strcture from the EvApplication struct
 type EvApplicationPayload struct {
 	Application string `json:"application"`
