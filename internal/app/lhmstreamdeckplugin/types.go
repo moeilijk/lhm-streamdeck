@@ -2,9 +2,10 @@ package lhmstreamdeckplugin
 
 // globalSettings represents plugin-wide settings (not per-action)
 type globalSettings struct {
-	PollInterval int    `json:"pollInterval"`      // milliseconds: 250..10000 (matches LHM Update Interval options)
-	LhmHost      string `json:"lhmHost,omitempty"` // LHM host address (default: 127.0.0.1)
-	LhmPort      int    `json:"lhmPort,omitempty"` // LHM port (default: 8085)
+	PollInterval     int               `json:"pollInterval"`               // milliseconds: 250..10000 (matches LHM Update Interval options)
+	LhmHost          string            `json:"lhmHost,omitempty"`          // LHM host address (default: 127.0.0.1)
+	LhmPort          int               `json:"lhmPort,omitempty"`          // LHM port (default: 8085)
+	FavoriteReadings []favoriteReading `json:"favoriteReadings,omitempty"` // shared favorites for all tiles
 }
 
 // settingsTileSettings stores per-tile appearance settings for the settings action
@@ -87,14 +88,26 @@ type actionData struct {
 	settings *actionSettings
 }
 
+type favoriteReading struct {
+	ID           string `json:"id"`
+	SensorUID    string `json:"sensorUid"`
+	SensorName   string `json:"sensorName"`
+	ReadingID    int32  `json:"readingId,string"`
+	ReadingLabel string `json:"readingLabel"`
+	ReadingUnit  string `json:"readingUnit"`
+	Category     string `json:"category,omitempty"`
+}
+
 type evStatus struct {
 	Error   bool   `json:"error"`
 	Message string `json:"message"`
 }
 
 type evSendSensorsPayloadSensor struct {
-	UID  string `json:"uid"`
-	Name string `json:"name"`
+	UID        string `json:"uid"`
+	Name       string `json:"name"`
+	Category   string `json:"category,omitempty"`
+	SearchText string `json:"searchText,omitempty"`
 }
 
 type evSendSensorsPayload struct {
@@ -103,15 +116,31 @@ type evSendSensorsPayload struct {
 }
 
 type evSendReadingsPayloadReading struct {
-	ID     int32  `json:"id,string"`
-	Label  string `json:"label"`
-	Prefix string `json:"prefix"`
-	Unit   string `json:"unit"`
+	ID         int32  `json:"id,string"`
+	Label      string `json:"label"`
+	Prefix     string `json:"prefix"`
+	Unit       string `json:"unit"`
+	Type       string `json:"type,omitempty"`
+	SensorUID  string `json:"sensorUid,omitempty"`
+	SensorName string `json:"sensorName,omitempty"`
+	Category   string `json:"category,omitempty"`
+	SearchText string `json:"searchText,omitempty"`
 }
 
 type evSendReadingsPayload struct {
 	Readings []*evSendReadingsPayloadReading `json:"readings"`
 	Settings *actionSettings                 `json:"settings"`
+}
+
+type evSendCatalogPayloadCatalog struct {
+	Sensors   []*evSendSensorsPayloadSensor   `json:"sensors"`
+	Readings  []*evSendReadingsPayloadReading `json:"readings"`
+	Favorites []favoriteReading               `json:"favorites,omitempty"`
+}
+
+type evSendCatalogPayload struct {
+	Catalog  *evSendCatalogPayloadCatalog `json:"catalog"`
+	Settings *actionSettings              `json:"settings,omitempty"`
 }
 
 type evSdpiCollection struct {

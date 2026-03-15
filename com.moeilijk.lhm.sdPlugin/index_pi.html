@@ -24,6 +24,11 @@
       font-family: monospace;
     }
 
+    #sensorSearch,
+    #sensorCategoryFilter {
+      max-width: 226px;
+    }
+
     #sensorSelect option {
       font-family: monospace;
     }
@@ -91,6 +96,25 @@
     </div>
 
     <div class="sdpi-heading">Libre Hardware Monitor Sensors</div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Find</div>
+      <input class="sdpi-item-value" id="sensorSearch" type="text" placeholder="Search sensors" data-local-only="true" />
+    </div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Category</div>
+      <select class="sdpi-item-value select" id="sensorCategoryFilter" data-local-only="true">
+        <option value="">All</option>
+        <option value="cpu">CPU</option>
+        <option value="gpu">GPU</option>
+        <option value="memory">Memory</option>
+        <option value="disk">Disk</option>
+        <option value="network">Network</option>
+        <option value="motherboard">Motherboard</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
 
     <div class="sdpi-item">
       <div class="sdpi-item-label">Sensor</div>

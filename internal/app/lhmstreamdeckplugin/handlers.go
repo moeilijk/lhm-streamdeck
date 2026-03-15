@@ -26,7 +26,13 @@ func (p *Plugin) handleSensorSelect(event *streamdeck.EvSendToPlugin, sdpi *evSd
 	}
 	evreadings := []*evSendReadingsPayloadReading{}
 	for _, r := range readings {
-		evreadings = append(evreadings, &evSendReadingsPayloadReading{ID: r.ID(), Label: r.Label(), Prefix: r.Unit(), Unit: r.Unit()})
+		evreadings = append(evreadings, &evSendReadingsPayloadReading{
+			ID:     r.ID(),
+			Label:  r.Label(),
+			Prefix: r.Unit(),
+			Unit:   r.Unit(),
+			Type:   r.Type(),
+		})
 	}
 	settings, err := p.am.getSettings(event.Context)
 	if err != nil {
