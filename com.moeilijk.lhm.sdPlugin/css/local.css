@@ -21,8 +21,27 @@ body,
   content: "";
 }
 
+.favorite-empty-label:after {
+  content: "";
+}
+
 .threshold-empty-label:after {
   content: "";
+}
+
+.favorite-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+.favorite-action-row {
+  margin-top: -4px;
+}
+
+.favorite-actions button {
+  min-width: 72px;
 }
 
 .threshold-arrows {

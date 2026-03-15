@@ -601,6 +601,31 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			if err != nil {
 				log.Println("handleSensorSelect", err)
 			}
+		case "toggleFavoriteCurrent":
+			settings, getErr := p.am.getSettings(event.Context)
+			if getErr != nil {
+				log.Println("toggleFavoriteCurrent getSettings", getErr)
+				break
+			}
+			err = p.toggleFavoriteSelection(event.Action, event.Context, &settings)
+			if err != nil {
+				log.Println("toggleFavoriteCurrent", err)
+			}
+		case "applyFavorite":
+			err = p.handleApplyFavorite(event, &sdpi)
+			if err != nil {
+				log.Println("handleApplyFavorite", err)
+			}
+		case "removeFavorite":
+			settings, getErr := p.am.getSettings(event.Context)
+			if getErr != nil {
+				log.Println("removeFavorite getSettings", getErr)
+				break
+			}
+			err = p.removeFavorite(event.Action, event.Context, &settings, sdpi.Value)
+			if err != nil {
+				log.Println("removeFavorite", err)
+			}
 		case "readingSelect":
 			err = p.handleReadingSelect(event, &sdpi)
 			if err != nil {

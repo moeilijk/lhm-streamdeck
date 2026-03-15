@@ -130,6 +130,28 @@
       </select>
     </div>
 
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Favorite</div>
+      <div class="sdpi-item-value favorite-actions">
+        <button id="favoriteToggleBtn" type="button" data-local-only="true" disabled>Save Current</button>
+      </div>
+    </div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Favorites</div>
+      <select class="sdpi-item-value select" id="favoriteSelect" data-local-only="true" disabled>
+        <option>No favorites saved</option>
+      </select>
+    </div>
+
+    <div class="sdpi-item favorite-action-row">
+      <div class="sdpi-item-label favorite-empty-label"></div>
+      <div class="sdpi-item-value favorite-actions">
+        <button id="applyFavoriteBtn" type="button" data-local-only="true" disabled>Use</button>
+        <button id="removeFavoriteBtn" type="button" data-local-only="true" disabled>Delete</button>
+      </div>
+    </div>
+
     <div class="sdpi-heading">Value Params</div>
 
     <div type="sdpi-item" class="sdpi-item" id="paramsgroup">

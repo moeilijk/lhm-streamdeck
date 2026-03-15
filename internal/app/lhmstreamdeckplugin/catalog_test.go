@@ -45,6 +45,14 @@ func TestReadingPayloadIncludesSearchMetadata(t *testing.T) {
 	}
 }
 
+func TestFavoriteID(t *testing.T) {
+	got := favoriteID("/amdcpu/0", 42)
+	want := "/amdcpu/0|42"
+	if got != want {
+		t.Fatalf("expected %q, got %q", want, got)
+	}
+}
+
 type stubReading struct {
 	id    int32
 	typ   string
