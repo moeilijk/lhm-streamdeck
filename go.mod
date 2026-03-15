@@ -1,8 +1,6 @@
 module github.com/shayne/lhm-streamdeck
 
-go 1.24.0
-
-toolchain go1.24.12
+go 1.25.0
 
 require (
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
@@ -11,7 +9,7 @@ require (
 	github.com/hashicorp/go-plugin v1.7.0
 	github.com/shayne/go-winpeg v0.0.0-20200807055429-803ae16a07c6
 	golang.org/x/image v0.36.0
-	golang.org/x/sys v0.41.0
+	golang.org/x/sys v0.42.0
 	google.golang.org/grpc v1.79.1
 	google.golang.org/protobuf v1.36.11
 )
