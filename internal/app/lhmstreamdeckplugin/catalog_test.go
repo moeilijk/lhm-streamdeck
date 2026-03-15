@@ -53,63 +53,6 @@ func TestFavoriteID(t *testing.T) {
 	}
 }
 
-func TestBuildPresets(t *testing.T) {
-	readings := []*evSendReadingsPayloadReading{
-		{
-			ID:         1,
-			SensorUID:  "/amdcpu/0",
-			SensorName: "AMD Ryzen 7 9800X3D",
-			Category:   "cpu",
-			Type:       "Temperature",
-			Label:      "CPU Package",
-			Unit:       "°C",
-		},
-		{
-			ID:         2,
-			SensorUID:  "/gpu/0",
-			SensorName: "NVIDIA GeForce RTX 4090",
-			Category:   "gpu",
-			Type:       "Load",
-			Label:      "GPU Core",
-			Unit:       "%",
-		},
-		{
-			ID:         3,
-			SensorUID:  "/memory/0",
-			SensorName: "Memory",
-			Category:   "memory",
-			Type:       "Data",
-			Label:      "Memory Used",
-			Unit:       "GB",
-		},
-		{
-			ID:         4,
-			SensorUID:  "/nic/0",
-			SensorName: "Intel Ethernet Controller",
-			Category:   "network",
-			Type:       "Throughput",
-			Label:      "Download Speed",
-			Unit:       "MB/s",
-		},
-	}
-
-	presets := buildPresets(readings)
-	if len(presets) != 4 {
-		t.Fatalf("expected 4 presets, got %d", len(presets))
-	}
-
-	ids := make(map[string]catalogPreset, len(presets))
-	for _, preset := range presets {
-		ids[preset.ID] = preset
-	}
-
-	for _, id := range []string{"cpu_temperature", "gpu_load", "memory_used", "network_throughput"} {
-		if _, ok := ids[id]; !ok {
-			t.Fatalf("missing preset %q", id)
-		}
-	}
-}
-
 type stubReading struct {
 	id    int32
 	typ   string

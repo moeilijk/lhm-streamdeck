@@ -98,16 +98,6 @@ type favoriteReading struct {
 	Category     string `json:"category,omitempty"`
 }
 
-type catalogPreset struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	SensorUID    string `json:"sensorUid"`
-	SensorName   string `json:"sensorName"`
-	ReadingID    int32  `json:"readingId,string"`
-	ReadingLabel string `json:"readingLabel"`
-	Category     string `json:"category,omitempty"`
-}
-
 type evStatus struct {
 	Error   bool   `json:"error"`
 	Message string `json:"message"`
@@ -146,7 +136,6 @@ type evSendCatalogPayloadCatalog struct {
 	Sensors   []*evSendSensorsPayloadSensor   `json:"sensors"`
 	Readings  []*evSendReadingsPayloadReading `json:"readings"`
 	Favorites []favoriteReading               `json:"favorites,omitempty"`
-	Presets   []catalogPreset                 `json:"presets,omitempty"`
 }
 
 type evSendCatalogPayload struct {
