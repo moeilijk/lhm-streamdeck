@@ -28,6 +28,7 @@ type EventDelegate interface {
 	OnConnected(*websocket.Conn)
 	OnWillAppear(*EvWillAppear)
 	OnWillDisappear(*EvWillDisappear)
+	OnKeyDown(*EvKeyDown)
 	OnDidReceiveSettings(*EvDidReceiveSettings)
 	OnTitleParametersDidChange(*EvTitleParametersDidChange)
 	OnPropertyInspectorConnected(*EvSendToPlugin)
@@ -189,6 +190,15 @@ func (sd *StreamDeck) spawnMessageReader() {
 			}
 			if sd.delegate != nil {
 				sd.delegate.OnWillDisappear(&ev)
+			}
+		case "keyDown":
+			var ev EvKeyDown
+			if err := json.Unmarshal(message, &ev); err != nil {
+				log.Printf("keyDown unmarshal: %v", err)
+				continue
+			}
+			if sd.delegate != nil {
+				sd.delegate.OnKeyDown(&ev)
 			}
 		case "didReceiveSettings":
 			var ev EvDidReceiveSettings

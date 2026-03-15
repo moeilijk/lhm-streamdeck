@@ -232,6 +232,61 @@
             </div>
           </div>
 
+          <div class="sdpi-item threshold-advanced-toggle-row">
+            <div class="sdpi-item-label threshold-empty-label"></div>
+            <div class="sdpi-item-value threshold-advanced-toggle-cell">
+              <button class="threshold-advanced-toggle" type="button">Advanced</button>
+            </div>
+          </div>
+
+          <div class="threshold-advanced-panel" style="display: none;">
+            <div class="sdpi-item threshold-compact-row">
+              <div class="sdpi-item-label">
+                Hyst
+                <span
+                  class="field-help"
+                  title="Hysteresis prevents alert flapping around the threshold. Example: with &gt;= 70 and Hyst 5, the alert stays active until the value drops below 65. Default: 1. Use 0 or higher."
+                >(i)</span>
+              </div>
+              <input type="number" class="sdpi-item-value threshold-hysteresis threshold-input-compact" step="any" placeholder="1" />
+            </div>
+
+            <div class="sdpi-item threshold-compact-row">
+              <div class="sdpi-item-label">
+                Dwell ms
+                <span
+                  class="field-help"
+                  title="The condition must stay true for this many milliseconds before the alert activates. Use 0 for immediate activation. Default: 1000. Typical values: 500, 1000, 5000."
+                >(i)</span>
+              </div>
+              <input type="number" class="sdpi-item-value threshold-dwell threshold-input-compact" step="100" min="0" placeholder="1000" />
+            </div>
+
+            <div class="sdpi-item threshold-compact-row">
+              <div class="sdpi-item-label">
+                Cooldown ms
+                <span
+                  class="field-help"
+                  title="After the alert clears, it cannot trigger again until this many milliseconds have passed. Use 0 to disable cooldown. Default: 5000. Typical values: 1000, 5000, 10000."
+                >(i)</span>
+              </div>
+              <input type="number" class="sdpi-item-value threshold-cooldown threshold-input-compact" step="100" min="0" placeholder="5000" />
+            </div>
+
+            <div class="sdpi-item threshold-sticky-row">
+              <div class="sdpi-item-label">
+                Sticky
+                <span
+                  class="field-help"
+                  title="Sticky latches the alert and displayed value on the tile until you press the tile to clear it. After clearing, the threshold stays suppressed until the value has actually returned to normal. Toggle on or off."
+                >(i)</span>
+              </div>
+              <div class="sdpi-item-value threshold-sticky-cell">
+                <button class="threshold-sticky-toggle" type="button">off</button>
+              </div>
+            </div>
+          </div>
+
           <div type="color" class="sdpi-item">
             <div class="sdpi-item-label">Background</div>
             <input type="color" class="sdpi-item-value threshold-bg" value="#333300" />

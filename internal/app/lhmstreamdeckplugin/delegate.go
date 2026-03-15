@@ -224,6 +224,7 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 	p.mu.Lock()
 	p.graphs[event.Context] = g
 	p.mu.Unlock()
+	p.resetThresholdRuntimeState(event.Context, "")
 
 	// Reset threshold state so updateTiles will re-evaluate and apply correct colors on first run
 	if settings.CurrentThresholdID != "" {
@@ -278,7 +279,35 @@ func (p *Plugin) OnWillDisappear(event *streamdeck.EvWillDisappear) {
 	delete(p.graphs, event.Context)
 	delete(p.divisorCache, event.Context)
 	p.mu.Unlock()
+	p.clearThresholdRuntimeState(event.Context)
 	p.am.RemoveAction(event.Context)
+}
+
+// OnKeyDown clears a latched sticky threshold for reading tiles.
+func (p *Plugin) OnKeyDown(event *streamdeck.EvKeyDown) {
+	if event.Action != "com.moeilijk.lhm.reading" {
+		return
+	}
+
+	settings, err := p.am.getSettings(event.Context)
+	if err != nil {
+		log.Printf("OnKeyDown getSettings: %v\n", err)
+		return
+	}
+
+	if settings.CurrentThresholdID == "" {
+		return
+	}
+	if !p.clearStickyThreshold(event.Context, settings.CurrentThresholdID) {
+		return
+	}
+
+	settings.CurrentThresholdID = ""
+	if err := p.sd.SetSettings(event.Context, &settings); err != nil {
+		log.Printf("OnKeyDown SetSettings: %v\n", err)
+	}
+	p.am.SetAction(event.Action, event.Context, &settings)
+	p.refreshAction(event.Action, event.Context)
 }
 
 // OnApplicationDidLaunch event (unused for LHM bridge)
@@ -661,7 +690,8 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 				log.Println("handleReorderThreshold", err)
 			}
 		case "thresholdEnabled", "thresholdName",
-			"thresholdOperator", "thresholdValue", "thresholdText", "thresholdTextColor",
+			"thresholdOperator", "thresholdValue", "thresholdHysteresis", "thresholdDwellMs",
+			"thresholdCooldownMs", "thresholdSticky", "thresholdText", "thresholdTextColor",
 			"thresholdBackgroundColor", "thresholdForegroundColor",
 			"thresholdHighlightColor", "thresholdValueTextColor":
 			err := p.handleThresholdUpdate(event, &sdpi)

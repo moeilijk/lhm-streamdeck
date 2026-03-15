@@ -21,6 +21,10 @@ body,
   content: "";
 }
 
+.threshold-empty-label:after {
+  content: "";
+}
+
 .threshold-arrows {
   display: flex;
   gap: 0;
@@ -30,6 +34,82 @@ body,
 .threshold-arrows .threshold-move-up,
 .threshold-arrows .threshold-move-down {
   margin: 0;
+}
+
+.threshold-advanced-toggle-row {
+  margin-top: 2px;
+}
+
+.threshold-advanced-toggle-cell {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.threshold-advanced-toggle {
+  min-width: 88px;
+  padding: 0 8px;
+  text-align: left;
+}
+
+.threshold-advanced-panel {
+  margin-top: 4px;
+}
+
+.threshold-hysteresis,
+.threshold-dwell,
+.threshold-cooldown {
+  box-sizing: border-box;
+  margin: 0 !important;
+  padding-left: 4px !important;
+  padding-right: 4px !important;
+  flex: 0 0 auto !important;
+}
+
+.threshold-compact-row > .sdpi-item-label,
+.threshold-sticky-row > .sdpi-item-label {
+  line-height: 1.15;
+  width: 132px;
+  white-space: nowrap;
+}
+
+.threshold-input-compact {
+  width: 58px !important;
+  min-width: 58px !important;
+  max-width: 58px !important;
+  margin-left: 0 !important;
+  margin-right: auto !important;
+}
+
+.field-help {
+  color: #9fb7d9;
+  cursor: help;
+  font-size: 11px;
+  margin-left: 2px;
+  text-decoration: underline dotted;
+}
+
+.threshold-sticky-row {
+  align-items: center;
+}
+
+.threshold-sticky-cell {
+  flex: none;
+  width: 58px;
+  min-width: 58px;
+  margin-left: 5px;
+  margin-right: 14px;
+  min-height: 26px;
+  display: flex;
+  justify-content: flex-start !important;
+  align-items: center;
+}
+
+.threshold-sticky-toggle {
+  width: 38px;
+  min-width: 38px;
+  padding: 0;
+  margin: 0;
+  color: #fff;
 }
 
 /* Use a native checkbox for settings PI showLabel to avoid hidden/custom toggle issues. */

@@ -2,9 +2,9 @@ package lhmstreamdeckplugin
 
 // globalSettings represents plugin-wide settings (not per-action)
 type globalSettings struct {
-	PollInterval int    `json:"pollInterval"`          // milliseconds: 250..10000 (matches LHM Update Interval options)
-	LhmHost      string `json:"lhmHost,omitempty"`     // LHM host address (default: 127.0.0.1)
-	LhmPort      int    `json:"lhmPort,omitempty"`     // LHM port (default: 8085)
+	PollInterval int    `json:"pollInterval"`      // milliseconds: 250..10000 (matches LHM Update Interval options)
+	LhmHost      string `json:"lhmHost,omitempty"` // LHM host address (default: 127.0.0.1)
+	LhmPort      int    `json:"lhmPort,omitempty"` // LHM port (default: 8085)
 }
 
 // settingsTileSettings stores per-tile appearance settings for the settings action
@@ -19,13 +19,17 @@ type settingsTileSettings struct {
 
 // Threshold represents a single configurable threshold level
 type Threshold struct {
-	ID              string  `json:"id"`              // Unique identifier
-	Name            string  `json:"name"`            // User-friendly name
-	Text            string  `json:"text"`            // Optional alert text to display when triggered
-	TextColor       string  `json:"textColor"`       // Color for alert text
-	Enabled         bool    `json:"enabled"`         // Is this threshold active?
-	Operator        string  `json:"operator"`        // ">", "<", ">=", "<=", "=="
-	Value           float64 `json:"value"`           // Threshold value
+	ID              string  `json:"id"`        // Unique identifier
+	Name            string  `json:"name"`      // User-friendly name
+	Text            string  `json:"text"`      // Optional alert text to display when triggered
+	TextColor       string  `json:"textColor"` // Color for alert text
+	Enabled         bool    `json:"enabled"`   // Is this threshold active?
+	Operator        string  `json:"operator"`  // ">", "<", ">=", "<=", "=="
+	Value           float64 `json:"value"`     // Threshold value
+	Hysteresis      float64 `json:"hysteresis,omitempty"`
+	DwellMs         int     `json:"dwellMs,omitempty"`
+	CooldownMs      int     `json:"cooldownMs,omitempty"`
+	Sticky          bool    `json:"sticky,omitempty"`
 	BackgroundColor string  `json:"backgroundColor"` // Background color when triggered
 	ForegroundColor string  `json:"foregroundColor"` // Graph foreground color
 	HighlightColor  string  `json:"highlightColor"`  // Graph highlight color

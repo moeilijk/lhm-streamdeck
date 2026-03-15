@@ -6,6 +6,7 @@ var websocket = null,
   inInfo = {},
   runningApps = [],
   currentReadings = [], // store readings to look up unit when selection changes
+  thresholdAdvancedOpen = {},
   thresholdSignature = null,
   isQT = navigator.appVersion.includes("QtWebEngine"),
   onchangeevt = "onchange"; // 'oninput'; // change this, if you want interactive elements act on any change, or while they're modified
@@ -686,7 +687,23 @@ function renderThresholds(thresholds) {
 }
 
 function thresholdsSignature(thresholds) {
-  return thresholds.map((t) => t.id).join("|");
+  return JSON.stringify(thresholds.map((t) => ({
+    id: t.id,
+    enabled: t.enabled,
+    name: t.name,
+    text: t.text,
+    operator: t.operator,
+    value: t.value,
+    hysteresis: t.hysteresis,
+    dwellMs: t.dwellMs,
+    cooldownMs: t.cooldownMs,
+    sticky: t.sticky,
+    backgroundColor: t.backgroundColor,
+    foregroundColor: t.foregroundColor,
+    highlightColor: t.highlightColor,
+    valueTextColor: t.valueTextColor,
+    textColor: t.textColor,
+  })));
 }
 
 function maybeRenderThresholds(thresholds, force) {
@@ -717,7 +734,30 @@ function createThresholdElement(threshold, index, total) {
   operatorSelect.value = threshold.operator || ">=";
 
   const valueInput = clone.querySelector(".threshold-value");
-  valueInput.value = threshold.value || "";
+  valueInput.value =
+    threshold.value !== undefined && threshold.value !== null ? threshold.value : "";
+
+  const hysteresisInput = clone.querySelector(".threshold-hysteresis");
+  hysteresisInput.value =
+    threshold.hysteresis !== undefined && threshold.hysteresis !== null
+      ? threshold.hysteresis
+      : "";
+
+  const dwellInput = clone.querySelector(".threshold-dwell");
+  dwellInput.value =
+    threshold.dwellMs !== undefined && threshold.dwellMs !== null
+      ? threshold.dwellMs
+      : "";
+
+  const cooldownInput = clone.querySelector(".threshold-cooldown");
+  cooldownInput.value =
+    threshold.cooldownMs !== undefined && threshold.cooldownMs !== null
+      ? threshold.cooldownMs
+      : "";
+
+  const stickyBtn = clone.querySelector(".threshold-sticky-toggle");
+  const advancedToggleBtn = clone.querySelector(".threshold-advanced-toggle");
+  const advancedPanel = clone.querySelector(".threshold-advanced-panel");
 
   const bgInput = clone.querySelector(".threshold-bg");
   bgInput.value = threshold.backgroundColor || "#333300";
@@ -749,13 +789,31 @@ function createThresholdElement(threshold, index, total) {
   const toggleBtn = clone.querySelector(".threshold-toggle");
   const settingsDiv = clone.querySelector(".threshold-settings");
   let isEnabled = threshold.enabled;
+  let isSticky = threshold.sticky === true;
+  let isAdvancedOpen = thresholdAdvancedOpen[threshold.id] === true;
 
   function updateToggleState() {
     toggleBtn.textContent = isEnabled ? "on" : "off";
     toggleBtn.style.background = isEnabled ? "#4a4" : "#a44";
     settingsDiv.style.display = isEnabled ? "block" : "none";
   }
+
+  function updateStickyState() {
+    if (!stickyBtn) return;
+    stickyBtn.textContent = isSticky ? "on" : "off";
+    stickyBtn.style.background = isSticky ? "#4a4" : "#a44";
+    stickyBtn.style.color = "#fff";
+  }
+
+  function updateAdvancedState() {
+    if (!advancedToggleBtn || !advancedPanel) return;
+    advancedToggleBtn.textContent = isAdvancedOpen ? "Advanced ▼" : "Advanced ▶";
+    advancedPanel.style.display = isAdvancedOpen ? "block" : "none";
+  }
+
   updateToggleState();
+  updateStickyState();
+  updateAdvancedState();
 
   // Add event listeners
   const thresholdId = threshold.id;
@@ -798,6 +856,51 @@ function createThresholdElement(threshold, index, total) {
       sendThresholdUpdate("thresholdValue", thresholdId, e.target.value);
     }, 300);
   });
+
+  let hysteresisTimeout;
+  hysteresisInput.addEventListener("input", function(e) {
+    clearTimeout(hysteresisTimeout);
+    hysteresisTimeout = setTimeout(function() {
+      sendThresholdUpdate("thresholdHysteresis", thresholdId, e.target.value);
+    }, 300);
+  });
+
+  let dwellTimeout;
+  dwellInput.addEventListener("input", function(e) {
+    clearTimeout(dwellTimeout);
+    dwellTimeout = setTimeout(function() {
+      sendThresholdUpdate("thresholdDwellMs", thresholdId, e.target.value);
+    }, 300);
+  });
+
+  let cooldownTimeout;
+  cooldownInput.addEventListener("input", function(e) {
+    clearTimeout(cooldownTimeout);
+    cooldownTimeout = setTimeout(function() {
+      sendThresholdUpdate("thresholdCooldownMs", thresholdId, e.target.value);
+    }, 300);
+  });
+
+  if (stickyBtn) {
+    stickyBtn.addEventListener("click", function() {
+      isSticky = !isSticky;
+      updateStickyState();
+      sendThresholdUpdate(
+        "thresholdSticky",
+        thresholdId,
+        isSticky ? "true" : "false",
+        isSticky
+      );
+    });
+  }
+
+  if (advancedToggleBtn) {
+    advancedToggleBtn.addEventListener("click", function() {
+      isAdvancedOpen = !isAdvancedOpen;
+      thresholdAdvancedOpen[thresholdId] = isAdvancedOpen;
+      updateAdvancedState();
+    });
+  }
 
   // Color inputs
   bgInput.addEventListener("change", function(e) {
@@ -845,6 +948,7 @@ function createThresholdElement(threshold, index, total) {
   // Remove button
   const removeBtn = clone.querySelector(".threshold-remove");
   removeBtn.addEventListener("click", function() {
+    delete thresholdAdvancedOpen[thresholdId];
     sendValueToPlugin({
       key: "removeThreshold",
       thresholdId: thresholdId

@@ -42,6 +42,8 @@ type Plugin struct {
 	cachedPollTimeAt time.Time         // when cachedPollTime was fetched
 	lastPollTime     map[string]uint64 // last processed PollTime per context
 	divisorCache     map[string]divisorCacheEntry
+	thresholdStates  map[string]map[string]*thresholdRuntimeState
+	thresholdDirty   map[string]bool
 
 	// Global settings
 	globalSettings   globalSettings                   // plugin-wide settings (poll interval)
@@ -61,6 +63,9 @@ type divisorCacheEntry struct {
 
 const defaultPollInterval = time.Second
 const settingsTitleFontSize = 9.0
+const defaultThresholdHysteresis = 1.0
+const defaultThresholdDwellMs = int(defaultPollInterval / time.Millisecond)
+const defaultThresholdCooldownMs = int((5 * defaultPollInterval) / time.Millisecond)
 
 func pollTimeCacheTTLForInterval(interval time.Duration) time.Duration {
 	if interval <= 0 {
@@ -181,6 +186,8 @@ func NewPlugin(port, uuid, event, info string) (*Plugin, error) {
 		graphs:           make(map[string]*graph.Graph),
 		lastPollTime:     make(map[string]uint64),
 		divisorCache:     make(map[string]divisorCacheEntry),
+		thresholdStates:  make(map[string]map[string]*thresholdRuntimeState),
+		thresholdDirty:   make(map[string]bool),
 		pollTimeCacheTTL: pollTimeCacheTTLForInterval(defaultPollInterval),
 		settingsContexts: make(map[string]*settingsTileSettings),
 	}
@@ -438,7 +445,7 @@ func (p *Plugin) updateTiles(data *actionData) {
 	}
 
 	s := data.settings
-	forceUpdate := s.CurrentThresholdID == "_FORCE_REEVALUATE_"
+	forceUpdate := p.consumeThresholdDirty(data.context)
 
 	pollTime, err := p.getCachedPollTime()
 	if err != nil {
@@ -502,27 +509,6 @@ func (p *Plugin) updateTiles(data *actionData) {
 	if divisor != 1 {
 		graphValue = graphValue / divisor
 	}
-	g.Update(graphValue)
-
-	// Check threshold alerts (evaluate by priority, highest first)
-	activeThreshold := p.evaluateThresholds(v, s.Thresholds)
-
-	newThresholdID := ""
-	if activeThreshold != nil {
-		newThresholdID = activeThreshold.ID
-	}
-
-	// Check if forced re-evaluation or state transition
-	if forceUpdate || newThresholdID != s.CurrentThresholdID {
-		if activeThreshold != nil {
-			p.applyThresholdColors(g, activeThreshold)
-		} else {
-			p.applyNormalColors(g, s)
-		}
-		s.CurrentThresholdID = newThresholdID
-		p.am.SetAction(data.action, data.context, s)
-		_ = p.sd.SetSettings(data.context, s)
-	}
 
 	// Determine display value and unit
 	displayValue := v
@@ -557,10 +543,45 @@ func (p *Plugin) updateTiles(data *actionData) {
 		}
 	}
 
-	g.SetLabelText(1, displayText)
-	if activeThreshold != nil && activeThreshold.Text != "" {
-		alertText := p.applyThresholdText(activeThreshold.Text, valueTextNoUnit, displayUnit)
-		g.SetLabelText(2, alertText)
+	// Check threshold alerts (evaluate by priority, highest first)
+	activeThreshold := p.evaluateThresholds(data.context, v, s.Thresholds, time.Now())
+
+	newThresholdID := ""
+	alertText := ""
+	if activeThreshold != nil {
+		newThresholdID = activeThreshold.ID
+		if activeThreshold.Text != "" {
+			alertText = p.applyThresholdText(activeThreshold.Text, valueTextNoUnit, displayUnit)
+		}
+	}
+
+	// Apply colors before drawing so the current frame matches the active threshold state.
+	if forceUpdate || newThresholdID != s.CurrentThresholdID {
+		if activeThreshold != nil {
+			p.applyThresholdColors(g, activeThreshold)
+		} else {
+			p.applyNormalColors(g, s)
+		}
+		s.CurrentThresholdID = newThresholdID
+		p.am.SetAction(data.action, data.context, s)
+		_ = p.sd.SetSettings(data.context, s)
+	}
+
+	renderDisplayText, renderAlertText, renderGraphValue, freezeGraph := p.resolveThresholdDisplay(
+		data.context,
+		activeThreshold,
+		v,
+		graphValue,
+		displayText,
+		alertText,
+	)
+	if !freezeGraph {
+		g.Update(renderGraphValue)
+	}
+
+	g.SetLabelText(1, renderDisplayText)
+	if renderAlertText != "" {
+		g.SetLabelText(2, renderAlertText)
 	} else {
 		g.SetLabelText(2, "")
 	}
@@ -582,26 +603,23 @@ func (p *Plugin) updateTiles(data *actionData) {
 	p.mu.Unlock()
 }
 
+func (p *Plugin) refreshAction(action, context string) {
+	settings, err := p.am.getSettings(context)
+	if err != nil {
+		log.Printf("refreshAction getSettings: %v\n", err)
+		return
+	}
+	p.updateTiles(&actionData{
+		action:   action,
+		context:  context,
+		settings: &settings,
+	})
+}
+
 func (p *Plugin) applyThresholdText(template, valueTextNoUnit, unit string) string {
 	out := strings.ReplaceAll(template, "{value}", valueTextNoUnit)
 	out = strings.ReplaceAll(out, "{unit}", unit)
 	return out
-}
-
-// evaluateThresholds checks all thresholds top-to-bottom, last matching wins
-func (p *Plugin) evaluateThresholds(value float64, thresholds []Threshold) *Threshold {
-	if len(thresholds) == 0 {
-		return nil
-	}
-
-	var active *Threshold
-	for i := range thresholds {
-		t := &thresholds[i]
-		if t.Enabled && t.Operator != "" && evaluateThreshold(value, t.Value, t.Operator) {
-			active = t
-		}
-	}
-	return active
 }
 
 // updateSettingsTile updates the settings tile with current interval and appearance
