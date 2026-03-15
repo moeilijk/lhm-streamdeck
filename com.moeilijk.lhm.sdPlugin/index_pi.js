@@ -5,9 +5,13 @@ var websocket = null,
   actionInfo = {},
   inInfo = {},
   runningApps = [],
+  currentSensors = [],
+  currentSensorSettings = {},
+  currentCatalog = null,
   currentReadings = [], // store readings to look up unit when selection changes
   thresholdAdvancedOpen = {},
   thresholdSignature = null,
+  catalogControlsInitialized = false,
   isQT = navigator.appVersion.includes("QtWebEngine"),
   onchangeevt = "onchange"; // 'oninput'; // change this, if you want interactive elements act on any change, or while they're modified
 
@@ -66,6 +70,12 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       );
     }
     if (
+      getPropFromString(jsonObj, "payload.catalog") &&
+      event === "sendToPropertyInspector"
+    ) {
+      currentCatalog = jsonObj.payload.catalog;
+    }
+    if (
       getPropFromString(jsonObj, "payload.readings") &&
       event === "sendToPropertyInspector"
     ) {
@@ -84,6 +94,7 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
     }
     if (getPropFromString(jsonObj, "payload.settings")) {
       var settings = jsonObj.payload.settings;
+      currentSensorSettings = settings || {};
       if (settings.min === 0 && settings.max === 0) {
         // don't show 0, 0 min/max
       } else {
@@ -141,7 +152,24 @@ function sortBy(key) {
   };
 }
 
-function addSensors(el, sensors, settings) {
+function sensorMatchesFilter(sensor, term, category) {
+  var searchText = (sensor.searchText || `${sensor.name || ""} ${sensor.category || ""}`).toLowerCase();
+  var sensorCategory = (sensor.category || "other").toLowerCase();
+  if (category && sensorCategory !== category) {
+    return false;
+  }
+  if (!term) {
+    return true;
+  }
+  return searchText.includes(term);
+}
+
+function renderSensorOptions(triggerSelectionChange) {
+  var el = document.querySelector("#sensorSelect");
+  if (!el) {
+    return;
+  }
+
   var i;
   for (i = el.options.length - 1; i >= 0; i--) {
     el.remove(i);
@@ -149,27 +177,56 @@ function addSensors(el, sensors, settings) {
 
   el.removeAttribute("disabled");
 
+  var searchInput = document.querySelector("#sensorSearch");
+  var categorySelect = document.querySelector("#sensorCategoryFilter");
+  var term = searchInput ? searchInput.value.trim().toLowerCase() : "";
+  var category = categorySelect ? categorySelect.value.trim().toLowerCase() : "";
+  var settings = currentSensorSettings || {};
+  var sensors = (currentSensors || []).slice().sort(sortBy("name"));
+  var filteredSensors = sensors.filter(function(sensor) {
+    return sensorMatchesFilter(sensor, term, category);
+  });
+
   var option = document.createElement("option");
   option.text = "Choose a sensor";
   option.disabled = true;
-  if (settings.isValid !== true) {
+  if (settings.isValid !== true || !filteredSensors.some(function(sensor) {
+    return sensor.uid === settings.sensorUid;
+  })) {
     option.selected = true;
   }
   el.add(option);
-  var sortByName = sortBy("name");
-  sensors.sort(sortByName).forEach((s) => {
-    var option = document.createElement("option");
-    option.text = s.name;
-    option.value = s.uid;
-    if (settings.sensorUid === s.uid) {
+
+  if (filteredSensors.length === 0) {
+    option = document.createElement("option");
+    option.text = "No sensors match";
+    option.disabled = true;
+    el.add(option);
+    return;
+  }
+
+  filteredSensors.forEach(function(sensor) {
+    option = document.createElement("option");
+    option.text = sensor.name;
+    option.value = sensor.uid;
+    option.dataset.category = sensor.category || "";
+    if (settings.sensorUid === sensor.uid) {
       option.selected = true;
-      setTimeout(function () {
-        var event = new Event("change");
-        el.dispatchEvent(event);
-      }, 0);
+      if (triggerSelectionChange) {
+        setTimeout(function () {
+          var event = new Event("change");
+          el.dispatchEvent(event);
+        }, 0);
+      }
     }
     el.add(option);
   });
+}
+
+function addSensors(el, sensors, settings) {
+  currentSensors = Array.isArray(sensors) ? sensors.slice() : [];
+  currentSensorSettings = settings || {};
+  renderSensorOptions(true);
 }
 
 function addReadings(el, readings, settings) {
@@ -215,13 +272,15 @@ function addReadings(el, readings, settings) {
     el.add(option);
   });
 
-  // Add change listener to show/hide graphUnit when reading changes
-  el.addEventListener("change", function() {
-    var selectedOption = el.options[el.selectedIndex];
-    if (selectedOption && selectedOption.dataset.unit) {
-      updateGraphUnitVisibility(selectedOption.dataset.unit);
-    }
-  });
+  if (!el.dataset.unitListenerBound) {
+    el.addEventListener("change", function() {
+      var selectedOption = el.options[el.selectedIndex];
+      if (selectedOption && selectedOption.dataset.unit) {
+        updateGraphUnitVisibility(selectedOption.dataset.unit);
+      }
+    });
+    el.dataset.unitListenerBound = "true";
+  }
 }
 
 // Show graphUnit only for throughput readings (units containing /s)
@@ -237,7 +296,30 @@ function updateGraphUnitVisibility(unit) {
 }
 
 function initPropertyInspector(initDelay) {
+  setupCatalogControls();
   prepareDOMElements(document);
+}
+
+function setupCatalogControls() {
+  if (catalogControlsInitialized) {
+    return;
+  }
+
+  var sensorSearch = document.querySelector("#sensorSearch");
+  if (sensorSearch) {
+    sensorSearch.oninput = function() {
+      renderSensorOptions(false);
+    };
+  }
+
+  var sensorCategoryFilter = document.querySelector("#sensorCategoryFilter");
+  if (sensorCategoryFilter) {
+    sensorCategoryFilter.onchange = function() {
+      renderSensorOptions(false);
+    };
+  }
+
+  catalogControlsInitialized = true;
 }
 
 function revealSdpiWrapper() {
@@ -319,6 +401,9 @@ function prepareDOMElements(baseElement) {
   baseElement = baseElement || document;
   Array.from(baseElement.querySelectorAll(".sdpi-item-value")).forEach(
     (el, i) => {
+      if (el.dataset && el.dataset.localOnly === "true") {
+        return;
+      }
       const elementsToClick = [
         "BUTTON",
         "OL",

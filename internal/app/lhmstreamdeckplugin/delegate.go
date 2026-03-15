@@ -434,7 +434,7 @@ func (p *Plugin) OnPropertyInspectorConnected(event *streamdeck.EvSendToPlugin) 
 	}
 	evsensors := make([]*evSendSensorsPayloadSensor, 0, len(sensors))
 	for _, s := range sensors {
-		evsensors = append(evsensors, &evSendSensorsPayloadSensor{UID: s.ID(), Name: s.Name()})
+		evsensors = append(evsensors, sensorPayload(s.ID(), s.Name()))
 	}
 	payload := evSendSensorsPayload{Sensors: evsensors, Settings: &settings}
 	err = p.sd.SendToPropertyInspector(event.Action, event.Context, payload)
@@ -442,6 +442,9 @@ func (p *Plugin) OnPropertyInspectorConnected(event *streamdeck.EvSendToPlugin) 
 		log.Println("OnPropertyInspectorConnected SendToPropertyInspector", err)
 	} else {
 		log.Printf("OnPropertyInspectorConnected Sent sensors: %d\n", len(evsensors))
+	}
+	if err := p.sendCatalogToPropertyInspector(event.Action, event.Context, &settings, sensors); err != nil {
+		log.Printf("OnPropertyInspectorConnected sendCatalogToPropertyInspector: %v\n", err)
 	}
 	if settings.SensorUID != "" {
 		readings, rerr := p.sendReadingsToPropertyInspector(event.Action, event.Context, settings.SensorUID, &settings)
@@ -473,6 +476,7 @@ func (p *Plugin) sendReadingsToPropertyInspector(action, context, sensorID strin
 			Label:  r.Label(),
 			Prefix: r.Unit(),
 			Unit:   r.Unit(),
+			Type:   r.Type(),
 		})
 	}
 	payload := evSendReadingsPayload{Readings: evreadings, Settings: settings}
@@ -795,14 +799,10 @@ func (p *Plugin) OnDidReceiveGlobalSettings(event *streamdeck.EvDidReceiveGlobal
 		return
 	}
 
-	log.Printf("Received global settings: pollInterval=%d\n", gs.PollInterval)
+	log.Printf("Received global settings: pollInterval=%d favorites=%d\n", gs.PollInterval, len(gs.FavoriteReadings))
 
 	if gs.PollInterval <= 0 {
-		// First time, no settings saved yet.
-		p.mu.Lock()
-		p.globalSettings.PollInterval = int(defaultPollInterval.Milliseconds())
-		p.mu.Unlock()
-		return
+		gs.PollInterval = int(defaultPollInterval.Milliseconds())
 	}
 
 	if gs.PollInterval < 250 {
