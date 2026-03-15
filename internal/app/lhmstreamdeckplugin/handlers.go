@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -147,26 +148,66 @@ func (p *Plugin) handleApplyFavorite(event *streamdeck.EvSendToPlugin, sdpi *evS
 		return fmt.Errorf("favorite not found: %s", sdpi.Value)
 	}
 
-	settings, err := p.am.getSettings(event.Context)
+	if err := p.applyCatalogSelection(event.Action, event.Context, favorite.SensorUID, favorite.ReadingID); err != nil {
+		return fmt.Errorf("handleApplyFavorite applyCatalogSelection: %v", err)
+	}
+
+	return nil
+}
+
+func parseCatalogSelection(value string) (string, int32, error) {
+	separator := strings.LastIndex(value, "|")
+	if separator <= 0 || separator >= len(value)-1 {
+		return "", 0, fmt.Errorf("invalid selection: %s", value)
+	}
+
+	sensorUID := value[:separator]
+	readingID, err := strconv.ParseInt(value[separator+1:], 10, 32)
 	if err != nil {
-		return fmt.Errorf("handleApplyFavorite getSettings: %v", err)
+		return "", 0, fmt.Errorf("invalid reading id: %w", err)
 	}
 
-	settings.SensorUID = favorite.SensorUID
-	settings.ReadingID = favorite.ReadingID
-	settings.ReadingLabel = favorite.ReadingLabel
+	return sensorUID, int32(readingID), nil
+}
 
-	if err := p.applyReadingSettings(event.Context, &settings); err != nil {
-		return fmt.Errorf("handleApplyFavorite applyReadingSettings: %v", err)
+func (p *Plugin) applyCatalogSelection(action, context, sensorUID string, readingID int32) error {
+	settings, err := p.am.getSettings(context)
+	if err != nil {
+		return fmt.Errorf("getSettings: %v", err)
 	}
 
-	if err := p.sd.SetSettings(event.Context, &settings); err != nil {
-		return fmt.Errorf("handleApplyFavorite SetSettings: %v", err)
-	}
-	p.am.SetAction(event.Action, event.Context, &settings)
+	settings.SensorUID = sensorUID
+	settings.ReadingID = readingID
+	settings.ReadingLabel = ""
 
-	if _, err := p.sendReadingsToPropertyInspector(event.Action, event.Context, settings.SensorUID, &settings); err != nil {
-		return fmt.Errorf("handleApplyFavorite sendReadingsToPropertyInspector: %v", err)
+	if err := p.applyReadingSettings(context, &settings); err != nil {
+		return fmt.Errorf("applyReadingSettings: %v", err)
+	}
+
+	if err := p.sd.SetSettings(context, &settings); err != nil {
+		return fmt.Errorf("SetSettings: %v", err)
+	}
+	p.am.SetAction(action, context, &settings)
+
+	if _, err := p.sendReadingsToPropertyInspector(action, context, settings.SensorUID, &settings); err != nil {
+		return fmt.Errorf("sendReadingsToPropertyInspector: %v", err)
+	}
+
+	return nil
+}
+
+func (p *Plugin) handleApplyCatalogSelection(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection) error {
+	if sdpi.Value == "" {
+		return fmt.Errorf("selection is required")
+	}
+
+	sensorUID, readingID, err := parseCatalogSelection(sdpi.Value)
+	if err != nil {
+		return err
+	}
+
+	if err := p.applyCatalogSelection(event.Action, event.Context, sensorUID, readingID); err != nil {
+		return fmt.Errorf("applyCatalogSelection: %v", err)
 	}
 
 	return nil
