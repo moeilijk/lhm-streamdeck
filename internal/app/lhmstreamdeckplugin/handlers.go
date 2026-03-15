@@ -95,31 +95,80 @@ func (p *Plugin) handleReadingSelect(event *streamdeck.EvSendToPlugin, sdpi *evS
 
 	settings.ReadingID = rid
 
-	// set default min/max
-	r, _, err := p.getReading(settings.SensorUID, settings.ReadingID)
-	if err != nil {
-		return fmt.Errorf("handleReadingSelect getReading: %v", err)
+	if err := p.applyReadingSettings(event.Context, &settings); err != nil {
+		return fmt.Errorf("handleReadingSelect applyReadingSettings: %v", err)
 	}
-	settings.ReadingLabel = r.Label()
-
-	p.mu.RLock()
-	g, ok := p.graphs[event.Context]
-	p.mu.RUnlock()
-	if !ok {
-		return fmt.Errorf("handleReadingSelect no graph for context: %s", event.Context)
-	}
-	defaultMin, defaultMax := getDefaultMinMaxForReading(r)
-	settings.Min = defaultMin
-	g.SetMin(settings.Min)
-	settings.Max = defaultMax
-	g.SetMax(settings.Max)
-	settings.IsValid = true // set IsValid once we choose reading
 
 	err = p.sd.SetSettings(event.Context, &settings)
 	if err != nil {
 		return fmt.Errorf("handleReadingSelect SetSettings: %v", err)
 	}
 	p.am.SetAction(event.Action, event.Context, &settings)
+	return nil
+}
+
+func (p *Plugin) applyReadingSettings(context string, settings *actionSettings) error {
+	if settings == nil {
+		return fmt.Errorf("settings are required")
+	}
+
+	r, _, err := p.getReading(settings.SensorUID, settings.ReadingID)
+	if err != nil {
+		return fmt.Errorf("getReading: %v", err)
+	}
+	settings.ReadingLabel = r.Label()
+
+	p.mu.RLock()
+	g, ok := p.graphs[context]
+	p.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("no graph for context: %s", context)
+	}
+
+	defaultMin, defaultMax := getDefaultMinMaxForReading(r)
+	settings.Min = defaultMin
+	g.SetMin(settings.Min)
+	settings.Max = defaultMax
+	g.SetMax(settings.Max)
+	settings.IsValid = true
+
+	return nil
+}
+
+func (p *Plugin) handleApplyFavorite(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection) error {
+	if sdpi.Value == "" {
+		return fmt.Errorf("favorite id is required")
+	}
+
+	p.mu.RLock()
+	favorite, _, found := findFavoriteByID(p.globalSettings.FavoriteReadings, sdpi.Value)
+	p.mu.RUnlock()
+	if !found {
+		return fmt.Errorf("favorite not found: %s", sdpi.Value)
+	}
+
+	settings, err := p.am.getSettings(event.Context)
+	if err != nil {
+		return fmt.Errorf("handleApplyFavorite getSettings: %v", err)
+	}
+
+	settings.SensorUID = favorite.SensorUID
+	settings.ReadingID = favorite.ReadingID
+	settings.ReadingLabel = favorite.ReadingLabel
+
+	if err := p.applyReadingSettings(event.Context, &settings); err != nil {
+		return fmt.Errorf("handleApplyFavorite applyReadingSettings: %v", err)
+	}
+
+	if err := p.sd.SetSettings(event.Context, &settings); err != nil {
+		return fmt.Errorf("handleApplyFavorite SetSettings: %v", err)
+	}
+	p.am.SetAction(event.Action, event.Context, &settings)
+
+	if _, err := p.sendReadingsToPropertyInspector(event.Action, event.Context, settings.SensorUID, &settings); err != nil {
+		return fmt.Errorf("handleApplyFavorite sendReadingsToPropertyInspector: %v", err)
+	}
+
 	return nil
 }
 

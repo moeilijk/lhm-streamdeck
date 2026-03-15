@@ -74,6 +74,7 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       event === "sendToPropertyInspector"
     ) {
       currentCatalog = jsonObj.payload.catalog;
+      renderFavoriteControls();
     }
     if (
       getPropFromString(jsonObj, "payload.readings") &&
@@ -95,6 +96,9 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
     if (getPropFromString(jsonObj, "payload.settings")) {
       var settings = jsonObj.payload.settings;
       currentSensorSettings = settings || {};
+      if (currentSensors.length > 0) {
+        renderSensorOptions(false);
+      }
       if (settings.min === 0 && settings.max === 0) {
         // don't show 0, 0 min/max
       } else {
@@ -140,6 +144,7 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       if (settings.thresholds) {
         maybeRenderThresholds(settings.thresholds, false);
       }
+      renderFavoriteControls();
     }
   };
 }
@@ -186,6 +191,15 @@ function renderSensorOptions(triggerSelectionChange) {
   var filteredSensors = sensors.filter(function(sensor) {
     return sensorMatchesFilter(sensor, term, category);
   });
+  if (settings.sensorUid && !filteredSensors.some(function(sensor) {
+    return sensor.uid === settings.sensorUid;
+  })) {
+    sensors.forEach(function(sensor) {
+      if (sensor.uid === settings.sensorUid) {
+        filteredSensors.unshift(sensor);
+      }
+    });
+  }
 
   var option = document.createElement("option");
   option.text = "Choose a sensor";
@@ -227,6 +241,7 @@ function addSensors(el, sensors, settings) {
   currentSensors = Array.isArray(sensors) ? sensors.slice() : [];
   currentSensorSettings = settings || {};
   renderSensorOptions(true);
+  renderFavoriteControls();
 }
 
 function addReadings(el, readings, settings) {
@@ -278,9 +293,12 @@ function addReadings(el, readings, settings) {
       if (selectedOption && selectedOption.dataset.unit) {
         updateGraphUnitVisibility(selectedOption.dataset.unit);
       }
+      renderFavoriteControls();
     });
     el.dataset.unitListenerBound = "true";
   }
+
+  renderFavoriteControls();
 }
 
 // Show graphUnit only for throughput readings (units containing /s)
@@ -319,7 +337,149 @@ function setupCatalogControls() {
     };
   }
 
+  var favoriteToggleBtn = document.querySelector("#favoriteToggleBtn");
+  if (favoriteToggleBtn) {
+    favoriteToggleBtn.onclick = function() {
+      sendValueToPlugin({
+        key: "toggleFavoriteCurrent",
+        value: "toggle"
+      }, "sdpi_collection");
+    };
+  }
+
+  var applyFavoriteBtn = document.querySelector("#applyFavoriteBtn");
+  if (applyFavoriteBtn) {
+    applyFavoriteBtn.onclick = function() {
+      var favoriteSelect = document.querySelector("#favoriteSelect");
+      if (!favoriteSelect || !favoriteSelect.value) {
+        return;
+      }
+      sendValueToPlugin({
+        key: "applyFavorite",
+        value: favoriteSelect.value
+      }, "sdpi_collection");
+    };
+  }
+
+  var removeFavoriteBtn = document.querySelector("#removeFavoriteBtn");
+  if (removeFavoriteBtn) {
+    removeFavoriteBtn.onclick = function() {
+      var favoriteSelect = document.querySelector("#favoriteSelect");
+      if (!favoriteSelect || !favoriteSelect.value) {
+        return;
+      }
+      sendValueToPlugin({
+        key: "removeFavorite",
+        value: favoriteSelect.value
+      }, "sdpi_collection");
+    };
+  }
+
+  var favoriteSelect = document.querySelector("#favoriteSelect");
+  if (favoriteSelect) {
+    favoriteSelect.onchange = function() {
+      renderFavoriteControls();
+    };
+  }
+
   catalogControlsInitialized = true;
+}
+
+function currentFavoriteSelection() {
+  if (!currentCatalog || !Array.isArray(currentCatalog.favorites)) {
+    return null;
+  }
+
+  var settings = currentSensorSettings || {};
+  if (!settings.sensorUid || !settings.readingId) {
+    return null;
+  }
+
+  for (var i = 0; i < currentCatalog.favorites.length; i++) {
+    var favorite = currentCatalog.favorites[i];
+    if (
+      favorite.sensorUid === settings.sensorUid &&
+      String(favorite.readingId) === String(settings.readingId)
+    ) {
+      return favorite;
+    }
+  }
+
+  return null;
+}
+
+function favoriteOptionLabel(favorite) {
+  var category = favorite.category ? favorite.category.toUpperCase() : "OTHER";
+  return `${category} - ${favorite.sensorName} - ${favorite.readingLabel}`;
+}
+
+function renderFavoriteControls() {
+  var toggleBtn = document.querySelector("#favoriteToggleBtn");
+  var favoriteSelect = document.querySelector("#favoriteSelect");
+  var applyBtn = document.querySelector("#applyFavoriteBtn");
+  var removeBtn = document.querySelector("#removeFavoriteBtn");
+  if (!toggleBtn || !favoriteSelect || !applyBtn || !removeBtn) {
+    return;
+  }
+
+  var settings = currentSensorSettings || {};
+  var currentFavorite = currentFavoriteSelection();
+  var hasValidSelection = !!(settings.isValid && settings.sensorUid && settings.readingId);
+  toggleBtn.disabled = !hasValidSelection;
+  toggleBtn.textContent = currentFavorite ? "Remove Current" : "Save Current";
+
+  var favorites = currentCatalog && Array.isArray(currentCatalog.favorites)
+    ? currentCatalog.favorites.slice()
+    : [];
+  favorites.sort(function(a, b) {
+    var left = favoriteOptionLabel(a).toLowerCase();
+    var right = favoriteOptionLabel(b).toLowerCase();
+    if (left > right) return 1;
+    if (right > left) return -1;
+    return 0;
+  });
+
+  var previousValue = favoriteSelect.value;
+  while (favoriteSelect.options.length > 0) {
+    favoriteSelect.remove(0);
+  }
+
+  if (favorites.length === 0) {
+    var emptyOption = document.createElement("option");
+    emptyOption.text = "No favorites saved";
+    emptyOption.value = "";
+    favoriteSelect.add(emptyOption);
+    favoriteSelect.disabled = true;
+    applyBtn.disabled = true;
+    removeBtn.disabled = true;
+    return;
+  }
+
+  favoriteSelect.disabled = false;
+
+  var placeholder = document.createElement("option");
+  placeholder.text = "Choose favorite";
+  placeholder.value = "";
+  placeholder.disabled = true;
+  favoriteSelect.add(placeholder);
+
+  favorites.forEach(function(favorite) {
+    var option = document.createElement("option");
+    option.value = favorite.id;
+    option.text = favoriteOptionLabel(favorite);
+    favoriteSelect.add(option);
+  });
+
+  var selectedValue = previousValue;
+  if (!selectedValue && currentFavorite) {
+    selectedValue = currentFavorite.id;
+  }
+  favoriteSelect.value = selectedValue && favorites.some(function(favorite) {
+    return favorite.id === selectedValue;
+  }) ? selectedValue : "";
+
+  applyBtn.disabled = favoriteSelect.value === "";
+  removeBtn.disabled = favoriteSelect.value === "";
 }
 
 function revealSdpiWrapper() {

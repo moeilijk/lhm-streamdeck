@@ -3,7 +3,9 @@ package lhmstreamdeckplugin
 import (
 	"fmt"
 	"log"
+	"sort"
 	"strings"
+	"time"
 
 	hwsensorsservice "github.com/shayne/lhm-streamdeck/pkg/service"
 )
@@ -149,4 +151,130 @@ func (p *Plugin) sendCatalogToPropertyInspector(action, context string, settings
 
 	payload := evSendCatalogPayload{Catalog: catalog, Settings: settings}
 	return p.sd.SendToPropertyInspector(action, context, payload)
+}
+
+func favoriteID(sensorUID string, readingID int32) string {
+	return fmt.Sprintf("%s|%d", sensorUID, readingID)
+}
+
+func findSensorName(sensors []hwsensorsservice.Sensor, sensorID string) string {
+	for _, sensor := range sensors {
+		if sensor.ID() == sensorID {
+			return sensor.Name()
+		}
+	}
+	return sensorID
+}
+
+func favoriteFromSelection(sensorName string, settings *actionSettings, reading hwsensorsservice.Reading) favoriteReading {
+	category := sensorCategory(settings.SensorUID, sensorName)
+	return favoriteReading{
+		ID:           favoriteID(settings.SensorUID, settings.ReadingID),
+		SensorUID:    settings.SensorUID,
+		SensorName:   sensorName,
+		ReadingID:    settings.ReadingID,
+		ReadingLabel: reading.Label(),
+		ReadingUnit:  reading.Unit(),
+		Category:     category,
+	}
+}
+
+func findFavoriteByID(favorites []favoriteReading, id string) (favoriteReading, int, bool) {
+	for i, favorite := range favorites {
+		if favorite.ID == id {
+			return favorite, i, true
+		}
+	}
+	return favoriteReading{}, -1, false
+}
+
+func sortFavorites(favorites []favoriteReading) {
+	sort.SliceStable(favorites, func(i, j int) bool {
+		left := favorites[i]
+		right := favorites[j]
+
+		if left.Category != right.Category {
+			return left.Category < right.Category
+		}
+		if left.SensorName != right.SensorName {
+			return left.SensorName < right.SensorName
+		}
+		if left.ReadingLabel != right.ReadingLabel {
+			return left.ReadingLabel < right.ReadingLabel
+		}
+		return left.ID < right.ID
+	})
+}
+
+func (p *Plugin) persistGlobalSettings() error {
+	p.mu.RLock()
+	gs := p.globalSettings
+	p.mu.RUnlock()
+	return p.sd.SetGlobalSettings(gs)
+}
+
+func (p *Plugin) toggleFavoriteSelection(action, context string, settings *actionSettings) error {
+	if settings == nil || settings.SensorUID == "" || settings.ReadingID == 0 || !settings.IsValid {
+		return fmt.Errorf("favorite requires a valid sensor and reading selection")
+	}
+
+	sensors, err := p.sensorsWithTimeout(2 * time.Second)
+	if err != nil {
+		return err
+	}
+
+	reading, _, err := p.getReading(settings.SensorUID, settings.ReadingID)
+	if err != nil {
+		return err
+	}
+
+	favorite := favoriteFromSelection(findSensorName(sensors, settings.SensorUID), settings, reading)
+
+	p.mu.Lock()
+	_, index, exists := findFavoriteByID(p.globalSettings.FavoriteReadings, favorite.ID)
+	if exists {
+		p.globalSettings.FavoriteReadings = append(
+			p.globalSettings.FavoriteReadings[:index],
+			p.globalSettings.FavoriteReadings[index+1:]...,
+		)
+	} else {
+		p.globalSettings.FavoriteReadings = append(p.globalSettings.FavoriteReadings, favorite)
+		sortFavorites(p.globalSettings.FavoriteReadings)
+	}
+	p.mu.Unlock()
+
+	if err := p.persistGlobalSettings(); err != nil {
+		return err
+	}
+
+	return p.sendCatalogToPropertyInspector(action, context, settings, sensors)
+}
+
+func (p *Plugin) removeFavorite(action, context string, settings *actionSettings, favoriteID string) error {
+	if favoriteID == "" {
+		return fmt.Errorf("favorite id is required")
+	}
+
+	p.mu.Lock()
+	_, index, exists := findFavoriteByID(p.globalSettings.FavoriteReadings, favoriteID)
+	if !exists {
+		p.mu.Unlock()
+		return nil
+	}
+	p.globalSettings.FavoriteReadings = append(
+		p.globalSettings.FavoriteReadings[:index],
+		p.globalSettings.FavoriteReadings[index+1:]...,
+	)
+	p.mu.Unlock()
+
+	if err := p.persistGlobalSettings(); err != nil {
+		return err
+	}
+
+	sensors, err := p.sensorsWithTimeout(2 * time.Second)
+	if err != nil {
+		return err
+	}
+
+	return p.sendCatalogToPropertyInspector(action, context, settings, sensors)
 }
