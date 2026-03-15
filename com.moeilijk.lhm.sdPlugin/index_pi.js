@@ -75,7 +75,6 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
     ) {
       currentCatalog = jsonObj.payload.catalog;
       renderFavoriteControls();
-      renderPresetControls();
     }
     if (
       getPropFromString(jsonObj, "payload.readings") &&
@@ -146,7 +145,6 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
         maybeRenderThresholds(settings.thresholds, false);
       }
       renderFavoriteControls();
-      renderPresetControls();
     }
   };
 }
@@ -244,7 +242,6 @@ function addSensors(el, sensors, settings) {
   currentSensorSettings = settings || {};
   renderSensorOptions(true);
   renderFavoriteControls();
-  renderPresetControls();
 }
 
 function addReadings(el, readings, settings) {
@@ -302,7 +299,6 @@ function addReadings(el, readings, settings) {
   }
 
   renderFavoriteControls();
-  renderPresetControls();
 }
 
 // Show graphUnit only for throughput readings (units containing /s)
@@ -386,27 +382,6 @@ function setupCatalogControls() {
     };
   }
 
-  var applyPresetBtn = document.querySelector("#applyPresetBtn");
-  if (applyPresetBtn) {
-    applyPresetBtn.onclick = function() {
-      var presetSelect = document.querySelector("#presetSelect");
-      if (!presetSelect || !presetSelect.value) {
-        return;
-      }
-      sendValueToPlugin({
-        key: "applyCatalogSelection",
-        value: presetSelect.value
-      }, "sdpi_collection");
-    };
-  }
-
-  var presetSelect = document.querySelector("#presetSelect");
-  if (presetSelect) {
-    presetSelect.onchange = function() {
-      renderPresetControls();
-    };
-  }
-
   catalogControlsInitialized = true;
 }
 
@@ -436,33 +411,6 @@ function currentFavoriteSelection() {
 function favoriteOptionLabel(favorite) {
   var category = favorite.category ? favorite.category.toUpperCase() : "OTHER";
   return `${category} - ${favorite.sensorName} - ${favorite.readingLabel}`;
-}
-
-function currentPresetSelection() {
-  if (!currentCatalog || !Array.isArray(currentCatalog.presets)) {
-    return null;
-  }
-
-  var settings = currentSensorSettings || {};
-  if (!settings.sensorUid || !settings.readingId) {
-    return null;
-  }
-
-  for (var i = 0; i < currentCatalog.presets.length; i++) {
-    var preset = currentCatalog.presets[i];
-    if (
-      preset.sensorUid === settings.sensorUid &&
-      String(preset.readingId) === String(settings.readingId)
-    ) {
-      return preset;
-    }
-  }
-
-  return null;
-}
-
-function presetOptionLabel(preset) {
-  return `${preset.name} - ${preset.sensorName} - ${preset.readingLabel}`;
 }
 
 function renderFavoriteControls() {
@@ -532,66 +480,6 @@ function renderFavoriteControls() {
 
   applyBtn.disabled = favoriteSelect.value === "";
   removeBtn.disabled = favoriteSelect.value === "";
-}
-
-function renderPresetControls() {
-  var presetSelect = document.querySelector("#presetSelect");
-  var applyBtn = document.querySelector("#applyPresetBtn");
-  if (!presetSelect || !applyBtn) {
-    return;
-  }
-
-  var presets = currentCatalog && Array.isArray(currentCatalog.presets)
-    ? currentCatalog.presets.slice()
-    : [];
-  presets.sort(function(a, b) {
-    var left = presetOptionLabel(a).toLowerCase();
-    var right = presetOptionLabel(b).toLowerCase();
-    if (left > right) return 1;
-    if (right > left) return -1;
-    return 0;
-  });
-
-  var previousValue = presetSelect.value;
-  while (presetSelect.options.length > 0) {
-    presetSelect.remove(0);
-  }
-
-  if (presets.length === 0) {
-    var emptyOption = document.createElement("option");
-    emptyOption.text = "No presets available";
-    emptyOption.value = "";
-    presetSelect.add(emptyOption);
-    presetSelect.disabled = true;
-    applyBtn.disabled = true;
-    return;
-  }
-
-  presetSelect.disabled = false;
-
-  var placeholder = document.createElement("option");
-  placeholder.text = "Choose preset";
-  placeholder.value = "";
-  placeholder.disabled = true;
-  presetSelect.add(placeholder);
-
-  presets.forEach(function(preset) {
-    var option = document.createElement("option");
-    option.value = `${preset.sensorUid}|${preset.readingId}`;
-    option.text = presetOptionLabel(preset);
-    presetSelect.add(option);
-  });
-
-  var currentPreset = currentPresetSelection();
-  var selectedValue = previousValue;
-  if (!selectedValue && currentPreset) {
-    selectedValue = `${currentPreset.sensorUid}|${currentPreset.readingId}`;
-  }
-  presetSelect.value = selectedValue && presets.some(function(preset) {
-    return `${preset.sensorUid}|${preset.readingId}` === selectedValue;
-  }) ? selectedValue : "";
-
-  applyBtn.disabled = presetSelect.value === "";
 }
 
 function revealSdpiWrapper() {
