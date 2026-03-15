@@ -616,6 +616,11 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			if err != nil {
 				log.Println("handleApplyFavorite", err)
 			}
+		case "applyCatalogSelection":
+			err = p.handleApplyCatalogSelection(event, &sdpi)
+			if err != nil {
+				log.Println("handleApplyCatalogSelection", err)
+			}
 		case "removeFavorite":
 			settings, getErr := p.am.getSettings(event.Context)
 			if getErr != nil {
