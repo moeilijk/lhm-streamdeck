@@ -10,7 +10,7 @@ SDPLUGINDIR=./com.moeilijk.lhm.sdPlugin
 PROTOS=$(wildcard ./*/**/**/*.proto)
 PROTOPB=$(PROTOS:.proto=.pb.go)
 
-plugin: bump-version
+plugin:
 	$(GOTARGETENV) $(GOBUILD) -o $(SDPLUGINDIR)/lhm.exe ./cmd/lhm_streamdeck_plugin
 	$(GOTARGETENV) $(GOBUILD) -o $(SDPLUGINDIR)/lhm-bridge.exe ./cmd/lhm-bridge
 	-@install-plugin.bat
@@ -42,9 +42,10 @@ verify:
 	bash scripts/verify-settings-pi.sh
 	streamdeck validate $(SDPLUGINDIR)
 
-release: verify bump-version
+release: verify
 	-@rm build/com.moeilijk.lhm.streamDeckPlugin
 	streamdeck pack com.moeilijk.lhm.sdPlugin --output build --force
 
+# Version bumps are explicit. Commit/release paths must not mutate manifest.json.
 bump-version:
 	./scripts/bump-manifest-version.sh
