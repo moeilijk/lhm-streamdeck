@@ -228,6 +228,25 @@
       <input type="color" class="sdpi-item-value" id="highlight" value="#009e00" />
     </div>
 
+    <div class="sdpi-heading">Alert Snooze</div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">On Key Press</div>
+      <div class="sdpi-item-value snooze-options" data-local-only="true">
+        <button type="button" class="snooze-duration snooze-preset" id="snooze5m" data-value="300000">5m</button>
+        <button type="button" class="snooze-duration snooze-preset" id="snooze15m" data-value="900000">15m</button>
+        <button type="button" class="snooze-duration snooze-preset" id="snooze1h" data-value="3600000">1h</button>
+        <button type="button" class="snooze-duration snooze-preset" id="snoozeUntilResumed" data-value="0">Until resumed</button>
+      </div>
+    </div>
+
+    <div class="sdpi-item">
+      <details class="noInnerMargins">
+        <summary>Help</summary>
+        <p>Select one or more presets. Each key press steps through the selected presets in order. After the last preset, the next press resumes alerts.</p>
+      </details>
+    </div>
+
     <div class="sdpi-heading">Thresholds</div>
 
     <div id="thresholdsContainer">

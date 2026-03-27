@@ -43,6 +43,7 @@ type Plugin struct {
 	lastPollTime     map[string]uint64 // last processed PollTime per context
 	divisorCache     map[string]divisorCacheEntry
 	thresholdStates  map[string]map[string]*thresholdRuntimeState
+	thresholdSnoozes map[string]*thresholdSnoozeState
 	thresholdDirty   map[string]bool
 
 	// Global settings
@@ -187,6 +188,7 @@ func NewPlugin(port, uuid, event, info string) (*Plugin, error) {
 		lastPollTime:     make(map[string]uint64),
 		divisorCache:     make(map[string]divisorCacheEntry),
 		thresholdStates:  make(map[string]map[string]*thresholdRuntimeState),
+		thresholdSnoozes: make(map[string]*thresholdSnoozeState),
 		thresholdDirty:   make(map[string]bool),
 		pollTimeCacheTTL: pollTimeCacheTTLForInterval(defaultPollInterval),
 		settingsContexts: make(map[string]*settingsTileSettings),
@@ -543,8 +545,10 @@ func (p *Plugin) updateTiles(data *actionData) {
 		}
 	}
 
+	now := time.Now()
+
 	// Check threshold alerts (evaluate by priority, highest first)
-	activeThreshold := p.evaluateThresholds(data.context, v, s.Thresholds, time.Now())
+	activeThreshold := p.evaluateThresholds(data.context, v, s.Thresholds, now)
 
 	newThresholdID := ""
 	alertText := ""
@@ -555,9 +559,21 @@ func (p *Plugin) updateTiles(data *actionData) {
 		}
 	}
 
+	snoozeState, snoozed, snoozeChanged := p.currentThresholdSnoozeState(data.context, now)
+	if activeThreshold == nil {
+		if p.clearThresholdSnooze(data.context) {
+			snoozeChanged = true
+		}
+		snoozed = false
+		snoozeState = thresholdSnoozeState{}
+	}
+	if snoozeChanged {
+		forceUpdate = true
+	}
+
 	// Apply colors before drawing so the current frame matches the active threshold state.
 	if forceUpdate || newThresholdID != s.CurrentThresholdID {
-		if activeThreshold != nil {
+		if activeThreshold != nil && !snoozed {
 			p.applyThresholdColors(g, activeThreshold)
 		} else {
 			p.applyNormalColors(g, s)
@@ -575,6 +591,12 @@ func (p *Plugin) updateTiles(data *actionData) {
 		displayText,
 		alertText,
 	)
+	if snoozed {
+		renderDisplayText = displayText
+		renderAlertText = thresholdSnoozeText(snoozeState, now)
+		renderGraphValue = graphValue
+		freezeGraph = false
+	}
 	if !freezeGraph {
 		g.Update(renderGraphValue)
 	}

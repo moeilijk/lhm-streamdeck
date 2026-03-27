@@ -12,8 +12,11 @@ var websocket = null,
   thresholdAdvancedOpen = {},
   thresholdSignature = null,
   catalogControlsInitialized = false,
+  snoozeControlsInitialized = false,
   isQT = navigator.appVersion.includes("QtWebEngine"),
   onchangeevt = "onchange"; // 'oninput'; // change this, if you want interactive elements act on any change, or while they're modified
+
+var snoozeDurationOptions = [300000, 900000, 3600000, 0];
 
 function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
   uuid = inUUID;
@@ -140,6 +143,7 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       if (settings.graphUnit !== undefined) {
         document.querySelector("#graphUnit").value = settings.graphUnit;
       }
+      applySnoozeDurationsToUI(settings);
       // Render dynamic thresholds
       if (settings.thresholds) {
         maybeRenderThresholds(settings.thresholds, false);
@@ -315,6 +319,7 @@ function updateGraphUnitVisibility(unit) {
 
 function initPropertyInspector(initDelay) {
   setupCatalogControls();
+  bindSnoozeControls();
   prepareDOMElements(document);
 }
 
@@ -383,6 +388,75 @@ function setupCatalogControls() {
   }
 
   catalogControlsInitialized = true;
+}
+
+function normalizeSnoozeDurations(values) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  var seen = {};
+  values.forEach(function(value) {
+    var parsed = parseInt(value, 10);
+    if (!isNaN(parsed)) {
+      seen[parsed] = true;
+    }
+  });
+
+  return snoozeDurationOptions.filter(function(value) {
+    return seen[value] === true;
+  });
+}
+
+function readSnoozeDurationsFromUI() {
+  var selected = [];
+  Array.from(document.querySelectorAll(".snooze-duration")).forEach(function(button) {
+    if (button.classList.contains("is-selected")) {
+      selected.push(parseInt(button.dataset.value, 10));
+    }
+  });
+  return normalizeSnoozeDurations(selected);
+}
+
+function setSnoozePresetSelected(button, selected) {
+  if (!button || !button.classList) {
+    return;
+  }
+  button.classList.toggle("is-selected", selected === true);
+}
+
+function applySnoozeDurationsToUI(settings) {
+  var selected = normalizeSnoozeDurations(settings && settings.snoozeDurations ? settings.snoozeDurations : []);
+  var selectedMap = {};
+  selected.forEach(function(value) {
+    selectedMap[String(value)] = true;
+  });
+
+  Array.from(document.querySelectorAll(".snooze-duration")).forEach(function(button) {
+    setSnoozePresetSelected(button, selectedMap[button.dataset.value] === true);
+  });
+}
+
+function bindSnoozeControls() {
+  if (snoozeControlsInitialized) {
+    return;
+  }
+
+  Array.from(document.querySelectorAll(".snooze-duration")).forEach(function(button) {
+    button.addEventListener("click", function() {
+      setSnoozePresetSelected(button, !button.classList.contains("is-selected"));
+      var selection = readSnoozeDurationsFromUI().map(function(value) {
+        return String(value);
+      });
+      sendValueToPlugin({
+        key: "snoozeDurations",
+        value: selection.join(","),
+        selection: selection
+      }, "sdpi_collection");
+    });
+  });
+
+  snoozeControlsInitialized = true;
 }
 
 function currentFavoriteSelection() {

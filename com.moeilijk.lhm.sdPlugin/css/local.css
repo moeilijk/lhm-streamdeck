@@ -131,6 +131,25 @@ body,
   color: #fff;
 }
 
+.snooze-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+.snooze-preset {
+  min-width: 44px;
+  margin: 0 !important;
+  padding: 0 8px;
+}
+
+.snooze-preset.is-selected {
+  background: #4a4;
+  border-color: #4a4;
+  color: #fff;
+}
+
 /* Use a native checkbox for settings PI showLabel to avoid hidden/custom toggle issues. */
 #showLabel {
   display: inline-block !important;

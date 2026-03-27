@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -264,6 +265,48 @@ func (p *Plugin) handleSetGraphUnit(event *streamdeck.EvSendToPlugin, sdpi *evSd
 		return fmt.Errorf("handleSetGraphUnit SetSettings: %v", err)
 	}
 	p.am.SetAction(event.Action, event.Context, &settings)
+	return nil
+}
+
+func parseSnoozeDurations(sdpi *evSdpiCollection) []int {
+	values := make([]int, 0, len(sdpi.Selection))
+	for _, raw := range sdpi.Selection {
+		value, err := strconv.Atoi(strings.TrimSpace(raw))
+		if err == nil {
+			values = append(values, value)
+		}
+	}
+	if len(values) == 0 && sdpi.Value != "" {
+		for _, raw := range strings.Split(sdpi.Value, ",") {
+			value, err := strconv.Atoi(strings.TrimSpace(raw))
+			if err == nil {
+				values = append(values, value)
+			}
+		}
+	}
+	return normalizeThresholdSnoozeDurations(values)
+}
+
+func (p *Plugin) handleSnoozeDurations(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection) error {
+	settings, err := p.am.getSettings(event.Context)
+	if err != nil {
+		return fmt.Errorf("handleSnoozeDurations getSettings: %v", err)
+	}
+
+	settings.SnoozeDurations = parseSnoozeDurations(sdpi)
+	activeSnooze, snoozed := p.currentThresholdSnooze(event.Context, time.Now())
+	cleared := false
+	if snoozed && !containsThresholdSnoozeDuration(settings.SnoozeDurations, activeSnooze.Duration) {
+		cleared = p.clearThresholdSnooze(event.Context)
+	}
+
+	if err := p.sd.SetSettings(event.Context, &settings); err != nil {
+		return fmt.Errorf("handleSnoozeDurations SetSettings: %v", err)
+	}
+	p.am.SetAction(event.Action, event.Context, &settings)
+	if cleared {
+		p.refreshAction(event.Action, event.Context)
+	}
 	return nil
 }
 

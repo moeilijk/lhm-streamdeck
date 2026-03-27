@@ -1,6 +1,7 @@
 package lhmstreamdeckplugin
 
 import (
+	"fmt"
 	"math"
 	"time"
 )
@@ -16,6 +17,19 @@ type thresholdRuntimeState struct {
 	LatchedGraphValue    float64
 	LatchedDisplayText   string
 	LatchedAlertText     string
+}
+
+type thresholdSnoozeState struct {
+	Duration time.Duration
+	SetAt    time.Time
+	Until    time.Time
+}
+
+var thresholdSnoozeDurationOrder = []int{
+	int((5 * time.Minute) / time.Millisecond),
+	int((15 * time.Minute) / time.Millisecond),
+	int(time.Hour / time.Millisecond),
+	0,
 }
 
 func resetThresholdSnapshot(state *thresholdRuntimeState) {
@@ -60,6 +74,7 @@ func (p *Plugin) clearThresholdRuntimeState(context string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	delete(p.thresholdStates, context)
+	delete(p.thresholdSnoozes, context)
 	delete(p.thresholdDirty, context)
 }
 
@@ -103,6 +118,151 @@ func (p *Plugin) clearStickyThreshold(context, thresholdID string) bool {
 	}
 
 	return false
+}
+
+func (p *Plugin) setThresholdSnooze(context string, duration time.Duration, now time.Time) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.thresholdSnoozes == nil {
+		p.thresholdSnoozes = make(map[string]*thresholdSnoozeState)
+	}
+
+	state := &thresholdSnoozeState{
+		Duration: duration,
+		SetAt:    now,
+	}
+	if duration > 0 {
+		state.Until = now.Add(duration)
+	}
+	p.thresholdSnoozes[context] = state
+	p.thresholdDirty[context] = true
+}
+
+func (p *Plugin) currentThresholdSnooze(context string, now time.Time) (thresholdSnoozeState, bool) {
+	state, ok, _ := p.currentThresholdSnoozeState(context, now)
+	return state, ok
+}
+
+func (p *Plugin) currentThresholdSnoozeState(context string, now time.Time) (thresholdSnoozeState, bool, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	state := p.thresholdSnoozes[context]
+	if state == nil {
+		return thresholdSnoozeState{}, false, false
+	}
+	if state.Duration > 0 && !state.Until.IsZero() && !now.Before(state.Until) {
+		delete(p.thresholdSnoozes, context)
+		p.thresholdDirty[context] = true
+		return thresholdSnoozeState{}, false, true
+	}
+	return *state, true, false
+}
+
+func (p *Plugin) clearThresholdSnooze(context string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if _, ok := p.thresholdSnoozes[context]; !ok {
+		return false
+	}
+	delete(p.thresholdSnoozes, context)
+	p.thresholdDirty[context] = true
+	return true
+}
+
+func normalizeThresholdSnoozeDurations(values []int) []int {
+	if len(values) == 0 {
+		return nil
+	}
+
+	seen := make(map[int]struct{}, len(values))
+	for _, value := range values {
+		seen[value] = struct{}{}
+	}
+
+	out := make([]int, 0, len(thresholdSnoozeDurationOrder))
+	for _, candidate := range thresholdSnoozeDurationOrder {
+		if _, ok := seen[candidate]; ok {
+			out = append(out, candidate)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func sameIntSlice(left, right []int) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func nextThresholdSnoozeDuration(configured []int, current *thresholdSnoozeState) (time.Duration, bool) {
+	normalized := normalizeThresholdSnoozeDurations(configured)
+	if len(normalized) == 0 {
+		return 0, false
+	}
+	if current == nil {
+		return thresholdDurationMs(normalized[0]), true
+	}
+
+	currentMs := 0
+	if current.Duration > 0 {
+		currentMs = int(current.Duration / time.Millisecond)
+	}
+
+	for idx, candidate := range normalized {
+		if candidate != currentMs {
+			continue
+		}
+		if idx+1 >= len(normalized) {
+			return 0, false
+		}
+		return thresholdDurationMs(normalized[idx+1]), true
+	}
+
+	return thresholdDurationMs(normalized[0]), true
+}
+
+func containsThresholdSnoozeDuration(configured []int, duration time.Duration) bool {
+	currentMs := 0
+	if duration > 0 {
+		currentMs = int(duration / time.Millisecond)
+	}
+	for _, candidate := range normalizeThresholdSnoozeDurations(configured) {
+		if candidate == currentMs {
+			return true
+		}
+	}
+	return false
+}
+
+func thresholdSnoozeText(state thresholdSnoozeState, now time.Time) string {
+	if state.Duration <= 0 || state.Until.IsZero() {
+		return "Snoozed"
+	}
+
+	remaining := state.Until.Sub(now)
+	if remaining < 0 {
+		remaining = 0
+	}
+	seconds := int(remaining / time.Second)
+	hours := seconds / 3600
+	minutes := (seconds % 3600) / 60
+	secs := seconds % 60
+	if hours > 0 {
+		return fmt.Sprintf("Snoozed\n%d:%02d:%02d", hours, minutes, secs)
+	}
+	return fmt.Sprintf("Snoozed\n%d:%02d", minutes, secs)
 }
 
 func stickySnapshotShouldUpdate(t *Threshold, currentValue, snapshotValue float64) bool {
