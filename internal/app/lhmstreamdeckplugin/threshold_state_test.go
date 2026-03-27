@@ -205,3 +205,126 @@ func TestStickySnapshotShouldUpdate(t *testing.T) {
 		}
 	}
 }
+
+func TestSetThresholdSnoozeExpires(t *testing.T) {
+	p := &Plugin{
+		thresholdDirty: make(map[string]bool),
+	}
+	now := time.Unix(700, 0)
+
+	p.setThresholdSnooze("ctx-a", 5*time.Minute, now)
+
+	if _, ok := p.currentThresholdSnooze("ctx-a", now.Add(4*time.Minute)); !ok {
+		t.Fatalf("expected timed snooze to remain active before expiry")
+	}
+	if _, ok := p.currentThresholdSnooze("ctx-a", now.Add(6*time.Minute)); ok {
+		t.Fatalf("expected timed snooze to expire after its duration")
+	}
+}
+
+func TestSetThresholdSnoozeIndefiniteUntilCleared(t *testing.T) {
+	p := &Plugin{
+		thresholdDirty: make(map[string]bool),
+	}
+	now := time.Unix(800, 0)
+
+	p.setThresholdSnooze("ctx-a", 0, now)
+
+	if _, ok := p.currentThresholdSnooze("ctx-a", now.Add(24*time.Hour)); !ok {
+		t.Fatalf("expected indefinite snooze to remain active until cleared")
+	}
+	if !p.clearThresholdSnooze("ctx-a") {
+		t.Fatalf("expected manual clear to remove an active snooze")
+	}
+	if _, ok := p.currentThresholdSnooze("ctx-a", now.Add(24*time.Hour)); ok {
+		t.Fatalf("expected cleared snooze to be inactive")
+	}
+}
+
+func TestThresholdSnoozeIsTileScoped(t *testing.T) {
+	p := &Plugin{
+		thresholdDirty: make(map[string]bool),
+	}
+	now := time.Unix(900, 0)
+
+	p.setThresholdSnooze("ctx-a", 5*time.Minute, now)
+	p.setThresholdSnooze("ctx-b", 15*time.Minute, now)
+
+	snoozeA, okA := p.currentThresholdSnooze("ctx-a", now.Add(time.Minute))
+	snoozeB, okB := p.currentThresholdSnooze("ctx-b", now.Add(time.Minute))
+	if !okA || !okB {
+		t.Fatalf("expected snoozes to be tracked independently per tile")
+	}
+	if snoozeA.Duration != 5*time.Minute {
+		t.Fatalf("expected ctx-a snooze duration to remain 5m, got %v", snoozeA.Duration)
+	}
+	if snoozeB.Duration != 15*time.Minute {
+		t.Fatalf("expected ctx-b snooze duration to remain 15m, got %v", snoozeB.Duration)
+	}
+}
+
+func TestNormalizeThresholdSnoozeDurations(t *testing.T) {
+	got := normalizeThresholdSnoozeDurations([]int{
+		900000,
+		300000,
+		12345,
+		0,
+		3600000,
+		900000,
+	})
+	want := []int{300000, 900000, 3600000, 0}
+
+	if len(got) != len(want) {
+		t.Fatalf("expected %d snooze durations, got %d (%v)", len(want), len(got), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("expected snooze duration %d at index %d, got %d", want[i], i, got[i])
+		}
+	}
+}
+
+func TestNextThresholdSnoozeDuration(t *testing.T) {
+	configured := normalizeThresholdSnoozeDurations([]int{0, 3600000, 900000, 300000})
+
+	next, ok := nextThresholdSnoozeDuration(configured, nil)
+	if !ok || next != 5*time.Minute {
+		t.Fatalf("expected first snooze duration to be 5m, got %v ok=%t", next, ok)
+	}
+
+	next, ok = nextThresholdSnoozeDuration(configured, &thresholdSnoozeState{Duration: 5 * time.Minute})
+	if !ok || next != 15*time.Minute {
+		t.Fatalf("expected second snooze duration to be 15m, got %v ok=%t", next, ok)
+	}
+
+	next, ok = nextThresholdSnoozeDuration(configured, &thresholdSnoozeState{Duration: 15 * time.Minute})
+	if !ok || next != time.Hour {
+		t.Fatalf("expected third snooze duration to be 1h, got %v ok=%t", next, ok)
+	}
+
+	next, ok = nextThresholdSnoozeDuration(configured, &thresholdSnoozeState{Duration: time.Hour})
+	if !ok || next != 0 {
+		t.Fatalf("expected final snooze duration to be manual resume, got %v ok=%t", next, ok)
+	}
+
+	if next, ok = nextThresholdSnoozeDuration(configured, &thresholdSnoozeState{Duration: 0}); ok {
+		t.Fatalf("expected no next snooze duration after manual resume preset, got %v", next)
+	}
+}
+
+func TestThresholdSnoozeText(t *testing.T) {
+	now := time.Unix(1000, 0)
+
+	if got := thresholdSnoozeText(thresholdSnoozeState{}, now); got != "Snoozed" {
+		t.Fatalf("expected indefinite snooze text, got %q", got)
+	}
+
+	state := thresholdSnoozeState{
+		Duration: 5 * time.Minute,
+		SetAt:    now,
+		Until:    now.Add(5 * time.Minute),
+	}
+	if got := thresholdSnoozeText(state, now.Add(61*time.Second)); got != "Snoozed\n3:59" {
+		t.Fatalf("expected countdown text, got %q", got)
+	}
+}

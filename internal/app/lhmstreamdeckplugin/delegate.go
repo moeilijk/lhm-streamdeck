@@ -283,7 +283,7 @@ func (p *Plugin) OnWillDisappear(event *streamdeck.EvWillDisappear) {
 	p.am.RemoveAction(event.Context)
 }
 
-// OnKeyDown clears a latched sticky threshold for reading tiles.
+// OnKeyDown snoozes or resumes active threshold alerts for reading tiles.
 func (p *Plugin) OnKeyDown(event *streamdeck.EvKeyDown) {
 	if event.Action != "com.moeilijk.lhm.reading" {
 		return
@@ -298,6 +298,25 @@ func (p *Plugin) OnKeyDown(event *streamdeck.EvKeyDown) {
 	if settings.CurrentThresholdID == "" {
 		return
 	}
+
+	if configured := normalizeThresholdSnoozeDurations(settings.SnoozeDurations); len(configured) > 0 {
+		now := time.Now()
+		currentSnooze, snoozed := p.currentThresholdSnooze(event.Context, now)
+		var current *thresholdSnoozeState
+		if snoozed {
+			current = &currentSnooze
+		}
+
+		if nextDuration, ok := nextThresholdSnoozeDuration(configured, current); ok {
+			p.setThresholdSnooze(event.Context, nextDuration, now)
+		} else if !p.clearThresholdSnooze(event.Context) {
+			return
+		}
+
+		p.refreshAction(event.Action, event.Context)
+		return
+	}
+
 	if !p.clearStickyThreshold(event.Context, settings.CurrentThresholdID) {
 		return
 	}
@@ -655,6 +674,11 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			err := p.handleSetGraphUnit(event, &sdpi)
 			if err != nil {
 				log.Println("handleSetGraphUnit", err)
+			}
+		case "snoozeDurations":
+			err := p.handleSnoozeDurations(event, &sdpi)
+			if err != nil {
+				log.Println("handleSnoozeDurations", err)
 			}
 		case "foreground", "background", "highlight", "valuetext":
 			err := p.handleColorChange(event, sdpi.Key, &sdpi)

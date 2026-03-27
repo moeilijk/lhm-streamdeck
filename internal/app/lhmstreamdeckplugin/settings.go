@@ -64,6 +64,10 @@ func decodeActionSettings(raw *json.RawMessage) (actionSettings, bool, error) {
 	if migrateToThresholds(&settings) {
 		migrated = true
 	}
+	if normalized := normalizeThresholdSnoozeDurations(settings.SnoozeDurations); !sameIntSlice(normalized, settings.SnoozeDurations) {
+		settings.SnoozeDurations = normalized
+		migrated = true
+	}
 
 	return settings, migrated, nil
 }

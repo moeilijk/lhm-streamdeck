@@ -61,6 +61,7 @@ type actionSettings struct {
 	// Dynamic threshold system
 	Thresholds         []Threshold `json:"thresholds"`
 	CurrentThresholdID string      `json:"currentThresholdId"`
+	SnoozeDurations    []int       `json:"snoozeDurations,omitempty"`
 
 	// Legacy Warning Threshold Settings (kept for migration, omitempty)
 	WarningEnabled         bool    `json:"warningEnabled,omitempty"`
