@@ -52,3 +52,10 @@ docs/
 CLAUDE.md
 AGENTS.md
 .github/copilot-instructions.md
+
+# Local implementation plans (keep local, never push)
+PLAN-*.md
+
+# Mockup tool and output (internal use only)
+cmd/composite_mockup/
+mockup_output/
