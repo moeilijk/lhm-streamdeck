@@ -144,6 +144,33 @@ type evSendCatalogPayload struct {
 	Settings *actionSettings              `json:"settings,omitempty"`
 }
 
+type compositeSlotSettings struct {
+	SensorUID       string  `json:"sensorUid"`
+	ReadingID       int32   `json:"readingId,string"`
+	ReadingLabel    string  `json:"readingLabel"`
+	IsValid         bool    `json:"isValid"`
+	Title           string  `json:"title"`
+	TitleFontSize   float64 `json:"titleFontSize"`
+	ValueFontSize   float64 `json:"valueFontSize"`
+	ForegroundColor string  `json:"foregroundColor"`
+	BackgroundColor string  `json:"backgroundColor"`
+	HighlightColor  string  `json:"highlightColor"`
+	ValueTextColor  string  `json:"valueTextColor"`
+	TitleColor      string  `json:"titleColor"`
+	FillAlpha       int     `json:"fillAlpha"`
+	Min             int     `json:"min"`
+	Max             int     `json:"max"`
+	Format          string  `json:"format"`
+	Divisor         string  `json:"divisor"`
+	GraphUnit       string  `json:"graphUnit"`
+}
+
+type compositeActionSettings struct {
+	SlotCount int                      `json:"slotCount"`
+	Mode      string                   `json:"mode"`
+	Slots     [4]compositeSlotSettings `json:"slots"`
+}
+
 type evSdpiCollection struct {
 	Group       bool     `json:"group"`
 	Index       int      `json:"index"`

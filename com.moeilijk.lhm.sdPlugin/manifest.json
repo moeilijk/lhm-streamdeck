@@ -22,6 +22,20 @@
 			"UUID": "com.moeilijk.lhm.reading"
 		},
 		{
+			"Icon": "actionIcon",
+			"Name": "LHM Composite Dashboard",
+			"States": [
+				{
+					"Image": "defaultImage",
+					"ShowTitle": false
+				}
+			],
+			"SupportedInMultiActions": false,
+			"Tooltip": "Display 2–4 sensor readings on one tile with overlaid graphs",
+			"UUID": "com.moeilijk.lhm.composite",
+			"PropertyInspectorPath": "composite_pi.html"
+		},
+		{
 			"Icon": "actionIcon_gear_white",
 			"Name": "LHM Settings",
 			"States": [

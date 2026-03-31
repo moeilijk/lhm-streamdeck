@@ -50,6 +50,10 @@ type Plugin struct {
 	globalSettings   globalSettings                   // plugin-wide settings (poll interval)
 	pollTimeCacheTTL time.Duration                    // cache TTL (matches poll interval)
 	settingsContexts map[string]*settingsTileSettings // tracks settings action contexts with appearance
+
+	// Composite tile state
+	compositeSettings map[string]*compositeActionSettings
+	compositeStates   map[string]*compositeState
 }
 
 type sensorResult struct {
@@ -189,9 +193,11 @@ func NewPlugin(port, uuid, event, info string) (*Plugin, error) {
 		divisorCache:     make(map[string]divisorCacheEntry),
 		thresholdStates:  make(map[string]map[string]*thresholdRuntimeState),
 		thresholdSnoozes: make(map[string]*thresholdSnoozeState),
-		thresholdDirty:   make(map[string]bool),
-		pollTimeCacheTTL: pollTimeCacheTTLForInterval(defaultPollInterval),
-		settingsContexts: make(map[string]*settingsTileSettings),
+		thresholdDirty:    make(map[string]bool),
+		pollTimeCacheTTL:  pollTimeCacheTTLForInterval(defaultPollInterval),
+		settingsContexts:  make(map[string]*settingsTileSettings),
+		compositeSettings: make(map[string]*compositeActionSettings),
+		compositeStates:   make(map[string]*compositeState),
 	}
 
 	// Cache placeholder image at startup.
@@ -225,6 +231,7 @@ func (p *Plugin) RunForever() error {
 
 	p.sd.SetDelegate(p)
 	p.am.Run(p.updateTiles)
+	p.runCompositeTicker()
 
 	go func() {
 		for {

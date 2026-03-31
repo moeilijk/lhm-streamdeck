@@ -163,6 +163,15 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 		return
 	}
 
+	if event.Action == compositeAction {
+		cs, _ := decodeCompositeSettings(event.Payload.Settings)
+		p.mu.Lock()
+		p.compositeSettings[event.Context] = &cs
+		p.compositeStates[event.Context] = &compositeState{graphs: initCompositeGraphs(&cs)}
+		p.mu.Unlock()
+		return
+	}
+
 	settings, migrated, err := decodeActionSettings(event.Payload.Settings)
 	if err != nil {
 		log.Println("OnWillAppear settings unmarshal", err)
@@ -267,6 +276,14 @@ func (p *Plugin) OnWillDisappear(event *streamdeck.EvWillDisappear) {
 	if event.Action == "com.moeilijk.lhm.settings" {
 		p.mu.Lock()
 		delete(p.settingsContexts, event.Context)
+		p.mu.Unlock()
+		return
+	}
+
+	if event.Action == compositeAction {
+		p.mu.Lock()
+		delete(p.compositeSettings, event.Context)
+		delete(p.compositeStates, event.Context)
 		p.mu.Unlock()
 		return
 	}
@@ -382,6 +399,10 @@ func (p *Plugin) OnTitleParametersDidChange(event *streamdeck.EvTitleParametersD
 		return
 	}
 
+	if event.Action == compositeAction {
+		return // composite tile gebruikt geen SD-native titel
+	}
+
 	// Get existing settings from actionManager to preserve threshold settings
 	// Do NOT decode from event payload as it may have stale/different settings
 	settings, err := p.am.getSettings(event.Context)
@@ -427,6 +448,11 @@ func (p *Plugin) OnPropertyInspectorConnected(event *streamdeck.EvSendToPlugin) 
 	if p.isSettingsAction(event.Action, event.Context) {
 		log.Printf("OnPropertyInspectorConnected settings context=%s action=%s\n", event.Context, event.Action)
 		p.sendSettingsStatus("com.moeilijk.lhm.settings", event.Context)
+		return
+	}
+
+	if event.Action == compositeAction {
+		p.handleCompositePropertyInspectorConnected(event)
 		return
 	}
 
@@ -606,6 +632,35 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			}
 			return
 		}
+	}
+
+	if event.Action == compositeAction {
+		if data, ok := payload["sdpi_collection"]; ok {
+			sdpi := evSdpiCollection{}
+			if err := json.Unmarshal(*data, &sdpi); err != nil {
+				log.Printf("composite sdpi unmarshal: %v", err)
+				return
+			}
+			switch sdpi.Key {
+			case "composite_mode", "composite_slotCount":
+				p.handleCompositeGlobalField(event, &sdpi)
+			default:
+				slotIdx, field := parseCompositeSlotKey(sdpi.Key)
+				if slotIdx < 0 {
+					log.Printf("composite unknown sdpi key: %s", sdpi.Key)
+					return
+				}
+				switch field {
+				case "sensorSelect":
+					p.handleCompositeSlotSensorSelect(event, &sdpi, slotIdx)
+				case "readingSelect":
+					p.handleCompositeSlotReadingSelect(event, &sdpi, slotIdx)
+				default:
+					p.handleCompositeSlotField(event, &sdpi, slotIdx, field)
+				}
+			}
+		}
+		return
 	}
 
 	if data, ok := payload["sdpi_collection"]; ok {
