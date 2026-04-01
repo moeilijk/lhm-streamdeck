@@ -67,6 +67,31 @@ I wanted a local, open replacement for Stream Deck hardware monitoring without l
 
     ![alt text](images/configureaction.gif "Configure Action")
 
+   The sensor picker supports **search**, **category filtering**, and **favorites**:
+   - Use the search field to filter sensors by name.
+   - Use the category dropdown to narrow down to a specific sensor group.
+   - Save frequently used sensor/reading combinations as favorites with **Save Current**, then reload them from the favorites dropdown.
+
+### Composite Dashboard tile
+
+The **LHM Composite Dashboard** action displays 2–4 sensor readings on a single Stream Deck key, each with its own graph. Drag it to a tile from the action list.
+
+In its Property Inspector:
+
+- **Slots** – choose how many readings to display (2, 3, or 4).
+- Per slot:
+  - **Sensor / Reading** – select the sensor and reading to display.
+  - **Label** – optional custom label; leave blank to use the reading name.
+  - **Highlight / Fill / Value text / Title text / Background** – per-slot colors.
+  - **Fill alpha** – graph fill transparency (0–100).
+  - **Min / Max** – fixed graph scale; leave blank to auto-scale.
+  - **Title size / Value size** – font sizes for the label and value.
+  - **Format** – printf-style format string (default: `%.0f`).
+  - **Divisor** – divide the raw value before display (e.g. `1000` to convert MB → GB).
+  - **Graph unit** – time axis scale for the graph.
+
+Graphs are composited with lighten blending so overlapping areas remain readable. Text is drawn as an overlay on top.
+
 ### Plugin Settings tile
 
 The **LHM Settings** action (found under "Libre Hardware Monitor" in the action list) provides a dedicated tile for plugin-wide configuration. Drag it to any free tile on the canvas.
@@ -94,6 +119,14 @@ Changes to Host and Port take effect immediately; all sensor tiles reconnect to 
 - **Order matters:** thresholds are evaluated **top → bottom**, and the **last match wins**. Use the arrow buttons to move a threshold up/down.
 - Per-threshold colors: background, foreground, highlight, value text, and alert text.
 - Optional alert text is shown **under** the value; supports `{value}` and `{unit}` placeholders.
+- **Hysteresis** – the reading must clear the threshold by this amount before the alert deactivates, preventing rapid on/off flicker.
+- **Dwell time** – the threshold must be exceeded for this many milliseconds before the alert activates.
+- **Cooldown** – after an alert clears, it cannot trigger again until this many milliseconds have passed (default: 5000 ms).
+- **Sticky alerts** – once triggered, the alert stays active until cleared manually by pressing the key.
+
+#### Threshold snooze
+
+Press the key while an alert is active to step through snooze presets: **5m**, **15m**, **1h**, and **Until resumed**. Snoozed tiles render in a muted state with a countdown. Pressing again cycles to the next preset; pressing past the last preset resumes normal alert behavior.
 
 ## Credits
 
