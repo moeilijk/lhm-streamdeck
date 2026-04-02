@@ -22,7 +22,7 @@
 			"UUID": "com.moeilijk.lhm.reading"
 		},
 		{
-			"Icon": "actionIcon",
+			"Icon": "actionIcon_composite",
 			"Name": "LHM Composite Dashboard",
 			"States": [
 				{
