@@ -4,9 +4,6 @@ import (
 	"flag"
 	"io/ioutil"
 	"log"
-
-	// "net/http"
-	// _ "net/http/pprof"
 	"os"
 	"path/filepath"
 	"time"
@@ -20,10 +17,6 @@ var registerEvent = flag.String("registerEvent", "", "Registration event")
 var info = flag.String("info", "", "A stringified json containing the Stream Deck application information and devices information")
 
 func main() {
-	// go func() {
-	// 	log.Println(http.ListenAndServe("localhost:6060", nil))
-	// }()
-
 	// make sure files are read relative to exe
 	err := os.Chdir(filepath.Dir(os.Args[0]))
 	if err != nil {
@@ -36,7 +29,7 @@ func main() {
 	if err == nil {
 		log.SetOutput(f)
 		log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
-log.Println("BOOT", time.Now().Format(time.RFC3339Nano))
+		log.Println("BOOT", time.Now().Format(time.RFC3339Nano))
 	} else {
 		log.SetOutput(ioutil.Discard)
 	}
