@@ -184,6 +184,14 @@ body,
   min-height: 18px;
 }
 
+/* Override sdpi.css :disabled red color — use grey instead */
+:disabled,
+select.disabled,
+select option:disabled {
+  color: #888 !important;
+  font-style: normal !important;
+}
+
 /* Restore spin buttons for port number input */
 #lhmPort {
   -webkit-appearance: auto !important;

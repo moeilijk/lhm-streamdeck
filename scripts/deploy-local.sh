@@ -19,6 +19,13 @@ if [[ "$win_plugin_dir" != /mnt/c/Users/*/AppData/Roaming/Elgato/StreamDeck/Plug
   exit 1
 fi
 
+echo "build: $plugin_dir/lhm.exe"
+(
+  cd "$root_dir"
+  GOOS=windows GOARCH=amd64 go build -o "$plugin_dir/lhm.exe" ./cmd/lhm_streamdeck_plugin
+  GOOS=windows GOARCH=amd64 go build -o "$plugin_dir/lhm-bridge.exe" ./cmd/lhm-bridge
+)
+
 echo "kill: Stream Deck + plugin processes"
 powershell.exe -NoProfile -Command "Get-Process StreamDeck,lhm,lhm-bridge -ErrorAction SilentlyContinue | Stop-Process -Force" >/dev/null 2>&1 || true
 

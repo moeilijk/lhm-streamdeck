@@ -36,6 +36,20 @@
 			"PropertyInspectorPath": "composite_pi.html"
 		},
 		{
+			"Icon": "actionIcon",
+			"Name": "LHM Derived Metric",
+			"States": [
+				{
+					"Image": "defaultImage",
+					"ShowTitle": false
+				}
+			],
+			"SupportedInMultiActions": false,
+			"Tooltip": "Aggregate 2–8 sensor readings with sum, average, max, min, delta or pct formula",
+			"UUID": "com.moeilijk.lhm.derived",
+			"PropertyInspectorPath": "derived_pi.html"
+		},
+		{
 			"Icon": "actionIcon_gear_white",
 			"Name": "LHM Settings",
 			"States": [

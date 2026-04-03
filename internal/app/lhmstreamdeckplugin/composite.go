@@ -3,7 +3,6 @@ package lhmstreamdeckplugin
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -349,24 +348,7 @@ func (p *Plugin) updateCompositeTile(ctx string) {
 			displayV = p.normalizeForGraph(v, r.Unit(), slot.GraphUnit)
 			displayUnit = slot.GraphUnit + "/s"
 		}
-		var txt string
-		if slot.Format != "" {
-			result := fmt.Sprintf(slot.Format, displayV)
-			if strings.Contains(result, "%!") {
-				txt = p.applyDefaultFormatValueOnly(displayV, hwsensorsservice.ReadingType(r.TypeI()))
-			} else {
-				txt = result
-			}
-		} else {
-			numStr := p.applyDefaultFormatValueOnly(displayV, hwsensorsservice.ReadingType(r.TypeI()))
-			if displayUnit == "%" {
-				txt = numStr + displayUnit
-			} else if displayUnit != "" {
-				txt = numStr + " " + displayUnit
-			} else {
-				txt = numStr
-			}
-		}
+		_, txt := p.formatDisplayValue(displayV, displayUnit, slot.Format, hwsensorsservice.ReadingType(r.TypeI()))
 		displayTexts[i] = txt
 	}
 
@@ -395,28 +377,16 @@ func (p *Plugin) updateCompositeTile(ctx string) {
 	p.mu.Unlock()
 }
 
-// runCompositeTicker runs the composite tile update loop.
-func (p *Plugin) runCompositeTicker() {
-	go func() {
-		interval := p.am.GetInterval()
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for range ticker.C {
-			if newInterval := p.am.GetInterval(); newInterval != interval {
-				ticker.Reset(newInterval)
-				interval = newInterval
-			}
-			p.mu.RLock()
-			contexts := make([]string, 0, len(p.compositeSettings))
-			for ctx := range p.compositeSettings {
-				contexts = append(contexts, ctx)
-			}
-			p.mu.RUnlock()
-			for _, ctx := range contexts {
-				p.updateCompositeTile(ctx)
-			}
-		}
-	}()
+func (p *Plugin) updateCompositeTick() {
+	p.mu.RLock()
+	contexts := make([]string, 0, len(p.compositeSettings))
+	for ctx := range p.compositeSettings {
+		contexts = append(contexts, ctx)
+	}
+	p.mu.RUnlock()
+	for _, ctx := range contexts {
+		p.updateCompositeTile(ctx)
+	}
 }
 
 // --- PI handlers ---
@@ -670,7 +640,7 @@ func parseCompositeSlotKey(key string) (int, string) {
 		return -1, ""
 	}
 	idx, err := strconv.Atoi(rest[:under])
-	if err != nil || idx < 0 || idx > 3 {
+	if err != nil || idx < 0 || idx > 7 {
 		return -1, ""
 	}
 	return idx, rest[under+1:]

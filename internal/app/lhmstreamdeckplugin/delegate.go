@@ -163,6 +163,15 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 		return
 	}
 
+	if event.Action == derivedAction {
+		ds, _ := decodeDerivedSettings(event.Payload.Settings)
+		p.mu.Lock()
+		p.derivedSettings[event.Context] = &ds
+		p.derivedStates[event.Context] = &derivedState{graph: initDerivedGraph(&ds)}
+		p.mu.Unlock()
+		return
+	}
+
 	if event.Action == compositeAction {
 		cs, _ := decodeCompositeSettings(event.Payload.Settings)
 		p.mu.Lock()
@@ -276,6 +285,14 @@ func (p *Plugin) OnWillDisappear(event *streamdeck.EvWillDisappear) {
 	if event.Action == "com.moeilijk.lhm.settings" {
 		p.mu.Lock()
 		delete(p.settingsContexts, event.Context)
+		p.mu.Unlock()
+		return
+	}
+
+	if event.Action == derivedAction {
+		p.mu.Lock()
+		delete(p.derivedSettings, event.Context)
+		delete(p.derivedStates, event.Context)
 		p.mu.Unlock()
 		return
 	}
@@ -399,6 +416,11 @@ func (p *Plugin) OnTitleParametersDidChange(event *streamdeck.EvTitleParametersD
 		return
 	}
 
+	if event.Action == derivedAction {
+		p.handleDerivedTitleParametersDidChange(event)
+		return
+	}
+
 	if event.Action == compositeAction {
 		return // composite tile gebruikt geen SD-native titel
 	}
@@ -448,6 +470,11 @@ func (p *Plugin) OnPropertyInspectorConnected(event *streamdeck.EvSendToPlugin) 
 	if p.isSettingsAction(event.Action, event.Context) {
 		log.Printf("OnPropertyInspectorConnected settings context=%s action=%s\n", event.Context, event.Action)
 		p.sendSettingsStatus("com.moeilijk.lhm.settings", event.Context)
+		return
+	}
+
+	if event.Action == derivedAction {
+		p.handleDerivedPropertyInspectorConnected(event)
 		return
 	}
 
@@ -632,6 +659,52 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			}
 			return
 		}
+	}
+
+	if event.Action == derivedAction {
+		if data, ok := payload["loadDerivedPreset"]; ok {
+			var preset derivedPresetPayload
+			if err := json.Unmarshal(*data, &preset); err != nil {
+				log.Printf("derived loadDerivedPreset unmarshal: %v", err)
+				return
+			}
+			p.handleDerivedLoadPreset(event, preset)
+			return
+		}
+		if data, ok := payload["sdpi_collection"]; ok {
+			sdpi := evSdpiCollection{}
+			if err := json.Unmarshal(*data, &sdpi); err != nil {
+				log.Printf("derived sdpi unmarshal: %v", err)
+				return
+			}
+			switch sdpi.Key {
+			case "derived_formula", "derived_slotCount", "derived_format", "derived_divisor",
+				"derived_graphUnit", "derived_min", "derived_max",
+				"derived_foregroundColor", "derived_backgroundColor", "derived_highlightColor",
+				"derived_valueTextColor", "derived_titleColor", "derived_title",
+				"titleFontSize", "valueFontSize":
+				p.handleDerivedGlobalField(event, &sdpi)
+			case "allSlots_sensorSelect":
+				p.handleDerivedAllSlotsSensor(event, &sdpi)
+			default:
+				slotIdx, field := parseCompositeSlotKey(sdpi.Key) // reuse — zelfde slot{N}_{field} patroon
+				if slotIdx < 0 {
+					log.Printf("derived unknown sdpi key: %s", sdpi.Key)
+					return
+				}
+				switch field {
+				case "sensorSelect":
+					p.handleDerivedSlotSensorSelect(event, &sdpi, slotIdx)
+				case "readingSelect":
+					p.handleDerivedSlotReadingSelect(event, &sdpi, slotIdx)
+				case "applyFavorite":
+					p.handleDerivedSlotApplyFavorite(event, &sdpi, slotIdx)
+				default:
+					p.handleDerivedSlotField(event, &sdpi, slotIdx, field)
+				}
+			}
+		}
+		return
 	}
 
 	if event.Action == compositeAction {
