@@ -54,6 +54,10 @@ type Plugin struct {
 	// Composite tile state
 	compositeSettings map[string]*compositeActionSettings
 	compositeStates   map[string]*compositeState
+
+	// Derived metric tile state
+	derivedSettings map[string]*derivedActionSettings
+	derivedStates   map[string]*derivedState
 }
 
 type sensorResult struct {
@@ -187,17 +191,19 @@ func (p *Plugin) startClientLocked() error {
 // NewPlugin creates an instance and initializes the plugin
 func NewPlugin(port, uuid, event, info string) (*Plugin, error) {
 	p := &Plugin{
-		am:               newActionManager(defaultPollInterval),
-		graphs:           make(map[string]*graph.Graph),
-		lastPollTime:     make(map[string]uint64),
-		divisorCache:     make(map[string]divisorCacheEntry),
-		thresholdStates:  make(map[string]map[string]*thresholdRuntimeState),
-		thresholdSnoozes: make(map[string]*thresholdSnoozeState),
+		am:                newActionManager(defaultPollInterval),
+		graphs:            make(map[string]*graph.Graph),
+		lastPollTime:      make(map[string]uint64),
+		divisorCache:      make(map[string]divisorCacheEntry),
+		thresholdStates:   make(map[string]map[string]*thresholdRuntimeState),
+		thresholdSnoozes:  make(map[string]*thresholdSnoozeState),
 		thresholdDirty:    make(map[string]bool),
 		pollTimeCacheTTL:  pollTimeCacheTTLForInterval(defaultPollInterval),
 		settingsContexts:  make(map[string]*settingsTileSettings),
 		compositeSettings: make(map[string]*compositeActionSettings),
 		compositeStates:   make(map[string]*compositeState),
+		derivedSettings:   make(map[string]*derivedActionSettings),
+		derivedStates:     make(map[string]*derivedState),
 	}
 
 	// Cache placeholder image at startup.
@@ -230,8 +236,7 @@ func (p *Plugin) RunForever() error {
 	}()
 
 	p.sd.SetDelegate(p)
-	p.am.Run(p.updateTiles)
-	p.runCompositeTicker()
+	p.am.Run(p.updateTiles, p.updateAuxTiles)
 
 	go func() {
 		for {
@@ -384,6 +389,34 @@ func (p *Plugin) getCachedPollTime() (uint64, error) {
 	return pollTime, nil
 }
 
+// formatDisplayValue formats a numeric value and unit into display strings.
+// Returns (valueTextNoUnit, displayText).
+func (p *Plugin) formatDisplayValue(v float64, displayUnit, format string, readingType hwsensorsservice.ReadingType) (string, string) {
+	valueTextNoUnit := ""
+	displayText := ""
+	if format != "" {
+		result := fmt.Sprintf(format, v)
+		if strings.Contains(result, "%!") {
+			valueTextNoUnit = p.applyDefaultFormatValueOnly(v, readingType)
+		} else {
+			valueTextNoUnit = result
+		}
+		displayText = valueTextNoUnit
+	} else {
+		valueTextNoUnit = p.applyDefaultFormatValueOnly(v, readingType)
+		if displayUnit != "" {
+			if displayUnit == "%" {
+				displayText = valueTextNoUnit + displayUnit
+			} else {
+				displayText = valueTextNoUnit + " " + displayUnit
+			}
+		} else {
+			displayText = valueTextNoUnit
+		}
+	}
+	return valueTextNoUnit, displayText
+}
+
 func (p *Plugin) getCachedDivisor(context, raw string) (float64, error) {
 	if raw == "" {
 		return 1, nil
@@ -528,29 +561,7 @@ func (p *Plugin) updateTiles(data *actionData) {
 		displayUnit = s.GraphUnit + "/s"
 	}
 
-	valueTextNoUnit := ""
-	displayText := ""
-	if f := s.Format; f != "" {
-		result := fmt.Sprintf(f, displayValue)
-		if strings.Contains(result, "%!") {
-			// Invalid format string — fall back to default
-			valueTextNoUnit = p.applyDefaultFormatValueOnly(displayValue, hwsensorsservice.ReadingType(r.TypeI()))
-		} else {
-			valueTextNoUnit = result
-		}
-		displayText = valueTextNoUnit
-	} else {
-		valueTextNoUnit = p.applyDefaultFormatValueOnly(displayValue, hwsensorsservice.ReadingType(r.TypeI()))
-		if displayUnit != "" {
-			if displayUnit == "%" {
-				displayText = valueTextNoUnit + displayUnit
-			} else {
-				displayText = valueTextNoUnit + " " + displayUnit
-			}
-		} else {
-			displayText = valueTextNoUnit
-		}
-	}
+	valueTextNoUnit, displayText := p.formatDisplayValue(displayValue, displayUnit, s.Format, hwsensorsservice.ReadingType(r.TypeI()))
 
 	now := time.Now()
 
@@ -643,6 +654,11 @@ func (p *Plugin) refreshAction(action, context string) {
 		context:  context,
 		settings: &settings,
 	})
+}
+
+func (p *Plugin) updateAuxTiles() {
+	p.updateCompositeTick()
+	p.updateDerivedTick()
 }
 
 func (p *Plugin) applyThresholdText(template, valueTextNoUnit, unit string) string {

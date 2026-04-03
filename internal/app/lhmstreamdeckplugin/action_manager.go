@@ -30,7 +30,7 @@ func newActionManager(interval time.Duration) *actionManager {
 	}
 }
 
-func (tm *actionManager) Run(updateTiles func(*actionData)) {
+func (tm *actionManager) Run(updateTiles func(*actionData), onTick func()) {
 	go func() {
 		ticker := time.NewTicker(tm.updateInterval)
 		defer ticker.Stop()
@@ -65,6 +65,9 @@ func (tm *actionManager) Run(updateTiles func(*actionData)) {
 					tm.mux.Lock()
 					tm.lastRun[data.context] = now
 					tm.mux.Unlock()
+				}
+				if onTick != nil {
+					onTick()
 				}
 			}
 		}

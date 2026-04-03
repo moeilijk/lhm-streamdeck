@@ -171,6 +171,40 @@ type compositeActionSettings struct {
 	Slots     [4]compositeSlotSettings `json:"slots"`
 }
 
+type derivedSlotSettings struct {
+	SensorUID    string `json:"sensorUid"`
+	ReadingID    int32  `json:"readingId,string"`
+	ReadingLabel string `json:"readingLabel"`
+	IsValid      bool   `json:"isValid"`
+	Divisor      string `json:"divisor"`
+	GraphUnit    string `json:"graphUnit"`
+}
+
+type derivedActionSettings struct {
+	SlotCount int                    `json:"slotCount"`
+	Formula   string                 `json:"formula"` // "sum","average","max","min","delta","pct"
+	Slots     [8]derivedSlotSettings `json:"slots"`
+
+	// Tile-level display — mirrors actionSettings so threshold/color/format pipeline works unchanged
+	Title              string      `json:"title"`
+	TitleFontSize      float64     `json:"titleFontSize"`
+	ValueFontSize      float64     `json:"valueFontSize"`
+	ShowTitleInGraph   *bool       `json:"showTitleInGraph"`
+	Min                int         `json:"min"`
+	Max                int         `json:"max"`
+	Format             string      `json:"format"`
+	Divisor            string      `json:"divisor"`
+	GraphUnit          string      `json:"graphUnit"`
+	TitleColor         string      `json:"titleColor"`
+	ForegroundColor    string      `json:"foregroundColor"`
+	BackgroundColor    string      `json:"backgroundColor"`
+	HighlightColor     string      `json:"highlightColor"`
+	ValueTextColor     string      `json:"valueTextColor"`
+	Thresholds         []Threshold `json:"thresholds"`
+	CurrentThresholdID string      `json:"currentThresholdId"`
+	SnoozeDurations    []int       `json:"snoozeDurations,omitempty"`
+}
+
 type evSdpiCollection struct {
 	Group       bool     `json:"group"`
 	Index       int      `json:"index"`
