@@ -690,15 +690,6 @@ func (p *Plugin) updateSettingsTile(context string) {
 			ShowTitleInGraph: boolPtr(true),
 		}
 	}
-	log.Printf(
-		"updateSettingsTile context=%s rate=%d bg=%s text=%s showLabel=%t\n",
-		context,
-		intervalMs,
-		tileSettings.TileBackground,
-		tileSettings.TileTextColor,
-		tileSettings.ShowLabel,
-	)
-
 	// Parse colors
 	bgColor := hexToRGBA(tileSettings.TileBackground)
 	if bgColor == nil {

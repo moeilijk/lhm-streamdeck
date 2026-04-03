@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"image/color"
 	"log"
-	"sort"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -45,15 +44,6 @@ func (p *Plugin) resolveSettingsContext(context string) string {
 		}
 	}
 	return context
-}
-
-func payloadKeys(m map[string]*json.RawMessage) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
 }
 
 func isSettingsPayload(m map[string]*json.RawMessage) bool {
@@ -148,14 +138,6 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 		if tileSettings.ShowTitleInGraph == nil {
 			tileSettings.ShowTitleInGraph = boolPtr(true)
 		}
-		log.Printf(
-			"OnWillAppear settings context=%s bg=%s text=%s showLabel=%t hasShowLabel=%t\n",
-			event.Context,
-			tileSettings.TileBackground,
-			tileSettings.TileTextColor,
-			tileSettings.ShowLabel,
-			hasShowLabel,
-		)
 		p.mu.Lock()
 		p.settingsContexts[event.Context] = &tileSettings
 		p.mu.Unlock()
@@ -398,14 +380,6 @@ func (p *Plugin) OnTitleParametersDidChange(event *streamdeck.EvTitleParametersD
 		}
 		drawTitle := !event.Payload.TitleParameters.ShowTitle
 		tileSettings.ShowTitleInGraph = boolPtr(drawTitle)
-		log.Printf(
-			"OnTitleParametersDidChange settings context=%s title=%q drawTitle=%t nativeShowTitle=%t\n",
-			targetContext,
-			tileSettings.Title,
-			drawTitle,
-			event.Payload.TitleParameters.ShowTitle,
-		)
-
 		p.mu.Lock()
 		p.settingsContexts[targetContext] = tileSettings
 		p.mu.Unlock()
@@ -483,7 +457,6 @@ func (p *Plugin) OnPropertyInspectorConnected(event *streamdeck.EvSendToPlugin) 
 		return
 	}
 
-	log.Println("OnPropertyInspectorConnected enter", event.Context)
 	settings, err := p.am.getSettings(event.Context)
 	if err != nil {
 		log.Println("OnPropertyInspectorConnected getSettings", err)
@@ -512,8 +485,6 @@ func (p *Plugin) OnPropertyInspectorConnected(event *streamdeck.EvSendToPlugin) 
 	err = p.sd.SendToPropertyInspector(event.Action, event.Context, payload)
 	if err != nil {
 		log.Println("OnPropertyInspectorConnected SendToPropertyInspector", err)
-	} else {
-		log.Printf("OnPropertyInspectorConnected Sent sensors: %d\n", len(evsensors))
 	}
 	if err := p.sendCatalogToPropertyInspector(event.Action, event.Context, &settings, sensors); err != nil {
 		log.Printf("OnPropertyInspectorConnected sendCatalogToPropertyInspector: %v\n", err)
@@ -555,16 +526,12 @@ func (p *Plugin) sendReadingsToPropertyInspector(action, context, sensorID strin
 	err = p.sd.SendToPropertyInspector(action, context, payload)
 	if err != nil {
 		log.Println("sendReadingsToPropertyInspector SendToPropertyInspector", err)
-	} else {
-		log.Printf("sendReadingsToPropertyInspector Sent readings: %d\n", len(evreadings))
 	}
 	return readings, nil
 }
 
 // OnSendToPlugin event
 func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
-	log.Printf("OnSendToPlugin action=%s context=%s\n", event.Action, event.Context)
-
 	var payload map[string]*json.RawMessage
 	err := json.Unmarshal(*event.Payload, &payload)
 	if err != nil {
@@ -574,16 +541,8 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 	// Handle settings action commands
 	if p.isSettingsAction(event.Action, event.Context) || isSettingsPayload(payload) {
 		targetContext := p.resolveSettingsContext(event.Context)
-		log.Printf(
-			"OnSendToPlugin settings action=%s context=%s target=%s keys=%v\n",
-			event.Action,
-			event.Context,
-			targetContext,
-			payloadKeys(payload),
-		)
 		// Check for settingsConnected
 		if _, ok := payload["settingsConnected"]; ok {
-			log.Println("Settings PI connected")
 			p.sendSettingsStatus("com.moeilijk.lhm.settings", targetContext)
 			return
 		}
@@ -613,14 +572,6 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 		if raw, ok := payload["updateTileAppearance"]; ok {
 			var appearance settingsTileSettings
 			if err := json.Unmarshal(*raw, &appearance); err == nil {
-				log.Printf(
-					"updateTileAppearance context=%s target=%s bg=%s text=%s showLabel=%t\n",
-					event.Context,
-					targetContext,
-					appearance.TileBackground,
-					appearance.TileTextColor,
-					appearance.ShowLabel,
-				)
 				// Update stored settings
 				if appearance.TileBackground == "" {
 					appearance.TileBackground = "#000000"
@@ -894,7 +845,6 @@ func (p *Plugin) OnDidReceiveSettings(event *streamdeck.EvDidReceiveSettings) {
 	if event.Payload.Settings == nil {
 		return
 	}
-	log.Printf("OnDidReceiveSettings raw context=%s payload=%s\n", event.Context, string(*event.Payload.Settings))
 
 	var rawSettings map[string]json.RawMessage
 	hasShowLabel := false
@@ -947,13 +897,6 @@ func (p *Plugin) OnDidReceiveSettings(event *streamdeck.EvDidReceiveSettings) {
 	p.mu.Lock()
 	p.settingsContexts[event.Context] = &tileSettings
 	p.mu.Unlock()
-	log.Printf(
-		"OnDidReceiveSettings context=%s bg=%s text=%s showLabel=%t\n",
-		event.Context,
-		tileSettings.TileBackground,
-		tileSettings.TileTextColor,
-		tileSettings.ShowLabel,
-	)
 	// Repair partial payloads (e.g. PI sending only color/showLabel) so title fields persist.
 	if !hasShowLabel || !hasTitle || !hasTitleColor || !hasShowTitleInGraph {
 		if err := p.sd.SetSettings(event.Context, &tileSettings); err != nil {
