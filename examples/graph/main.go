@@ -8,7 +8,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/shayne/lhm-streamdeck/pkg/graph"
+	"github.com/moeilijk/lhm-streamdeck/pkg/graph"
 )
 
 const (

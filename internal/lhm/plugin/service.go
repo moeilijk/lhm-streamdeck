@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	hwsensorsservice "github.com/shayne/lhm-streamdeck/pkg/service"
+	hwsensorsservice "github.com/moeilijk/lhm-streamdeck/pkg/service"
 )
 
 const (

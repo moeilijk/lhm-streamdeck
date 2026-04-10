@@ -1,7 +1,7 @@
 package plugin
 
 import (
-	hwsensorsservice "github.com/shayne/lhm-streamdeck/pkg/service"
+	hwsensorsservice "github.com/moeilijk/lhm-streamdeck/pkg/service"
 )
 
 // Plugin adapts the Libre Hardware Monitor service to the gRPC interface.
