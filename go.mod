@@ -1,4 +1,4 @@
-module github.com/shayne/lhm-streamdeck
+module github.com/moeilijk/lhm-streamdeck
 
 go 1.25.0
 

@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shayne/lhm-streamdeck/pkg/graph"
-	hwsensorsservice "github.com/shayne/lhm-streamdeck/pkg/service"
-	"github.com/shayne/lhm-streamdeck/pkg/streamdeck"
+	"github.com/moeilijk/lhm-streamdeck/pkg/graph"
+	hwsensorsservice "github.com/moeilijk/lhm-streamdeck/pkg/service"
+	"github.com/moeilijk/lhm-streamdeck/pkg/streamdeck"
 	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
 )

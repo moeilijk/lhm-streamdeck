@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	plugin "github.com/shayne/lhm-streamdeck/internal/app/lhmstreamdeckplugin"
+	plugin "github.com/moeilijk/lhm-streamdeck/internal/app/lhmstreamdeckplugin"
 )
 
 var port = flag.String("port", "", "The port that should be used to create the WebSocket")

@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shayne/lhm-streamdeck/pkg/graph"
-	hwsensorsservice "github.com/shayne/lhm-streamdeck/pkg/service"
-	"github.com/shayne/lhm-streamdeck/pkg/streamdeck"
+	"github.com/moeilijk/lhm-streamdeck/pkg/graph"
+	hwsensorsservice "github.com/moeilijk/lhm-streamdeck/pkg/service"
+	"github.com/moeilijk/lhm-streamdeck/pkg/streamdeck"
 )
 
 func (p *Plugin) handleSensorSelect(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection) error {

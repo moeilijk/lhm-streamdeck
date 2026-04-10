@@ -2,8 +2,8 @@ package main
 
 import (
 	"github.com/hashicorp/go-plugin"
-	lhmplugin "github.com/shayne/lhm-streamdeck/internal/lhm/plugin"
-	hwsensorsservice "github.com/shayne/lhm-streamdeck/pkg/service"
+	lhmplugin "github.com/moeilijk/lhm-streamdeck/internal/lhm/plugin"
+	hwsensorsservice "github.com/moeilijk/lhm-streamdeck/pkg/service"
 )
 
 func main() {

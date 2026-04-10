@@ -27,7 +27,7 @@ $(PROTOPB): $(PROTOS)
 
 # plugin:
 # 	-@kill-streamdeck.bat
-# 	@go build -o com.moeilijk.lhm.sdPlugin\\lhm.exe github.com/shayne/lhm-streamdeck/cmd/lhm_streamdeck_plugin
+# 	@go build -o com.moeilijk.lhm.sdPlugin\\lhm.exe github.com/moeilijk/lhm-streamdeck/cmd/lhm_streamdeck_plugin
 # 	@xcopy com.moeilijk.lhm.sdPlugin $(APPDATA)\\Elgato\\StreamDeck\\Plugins\\com.moeilijk.lhm.sdPlugin\\ /E /Q /Y
 # 	@start-streamdeck.bat
 
