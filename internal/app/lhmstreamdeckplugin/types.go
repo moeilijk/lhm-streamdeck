@@ -1,21 +1,34 @@
 package lhmstreamdeckplugin
 
+// lhmSourceProfile represents a named Libre Hardware Monitor endpoint.
+type lhmSourceProfile struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Host string `json:"host"`
+	Port int    `json:"port"`
+}
+
 // globalSettings represents plugin-wide settings (not per-action)
 type globalSettings struct {
-	PollInterval     int               `json:"pollInterval"`               // milliseconds: 250..10000 (matches LHM Update Interval options)
-	LhmHost          string            `json:"lhmHost,omitempty"`          // LHM host address (default: 127.0.0.1)
-	LhmPort          int               `json:"lhmPort,omitempty"`          // LHM port (default: 8085)
-	FavoriteReadings []favoriteReading `json:"favoriteReadings,omitempty"` // shared favorites for all tiles
+	PollInterval           int                `json:"pollInterval"`                     // milliseconds: 250..10000 (matches LHM Update Interval options)
+	SourceProfiles         []lhmSourceProfile `json:"sourceProfiles,omitempty"`         // named LHM source profiles
+	DefaultSourceProfileID string             `json:"defaultSourceProfileId,omitempty"` // ID of the default source profile
+	FavoriteReadings       []favoriteReading  `json:"favoriteReadings,omitempty"`       // shared favorites for all tiles
+
+	// Legacy fields — kept for migration only, omitempty so they are dropped after migration
+	LhmHost string `json:"lhmHost,omitempty"`
+	LhmPort int    `json:"lhmPort,omitempty"`
 }
 
 // settingsTileSettings stores per-tile appearance settings for the settings action
 type settingsTileSettings struct {
-	TileBackground   string `json:"tileBackground"`   // hex color for tile background
-	TileTextColor    string `json:"tileTextColor"`    // hex color for tile value text
-	ShowLabel        bool   `json:"showLabel"`        // toggles startup placeholder background
-	Title            string `json:"title"`            // title text, like graph tiles
-	TitleColor       string `json:"titleColor"`       // title color, like graph tiles
-	ShowTitleInGraph *bool  `json:"showTitleInGraph"` // mirrors graph tile title behavior
+	TileBackground          string `json:"tileBackground"`          // hex color for tile background
+	TileTextColor           string `json:"tileTextColor"`           // hex color for tile value text
+	ShowLabel               bool   `json:"showLabel"`               // toggles startup placeholder background
+	Title                   string `json:"title"`                   // title text, like graph tiles
+	TitleColor              string `json:"titleColor"`              // title color, like graph tiles
+	ShowTitleInGraph        *bool  `json:"showTitleInGraph"`        // mirrors graph tile title behavior
+	SelectedSourceProfileID string `json:"selectedSourceProfileId,omitempty"` // which source profile this tile monitors
 }
 
 // Threshold represents a single configurable threshold level
@@ -38,6 +51,7 @@ type Threshold struct {
 }
 
 type actionSettings struct {
+	SourceProfileID  string  `json:"sourceProfileId,omitempty"`
 	SensorUID        string  `json:"sensorUid"`
 	ReadingID        int32   `json:"readingId,string"`
 	ReadingLabel     string  `json:"readingLabel"`
@@ -90,8 +104,9 @@ type actionData struct {
 }
 
 type favoriteReading struct {
-	ID           string `json:"id"`
-	SensorUID    string `json:"sensorUid"`
+	ID              string `json:"id"`
+	SourceProfileID string `json:"sourceProfileId,omitempty"`
+	SensorUID       string `json:"sensorUid"`
 	SensorName   string `json:"sensorName"`
 	ReadingID    int32  `json:"readingId,string"`
 	ReadingLabel string `json:"readingLabel"`
@@ -134,9 +149,10 @@ type evSendReadingsPayload struct {
 }
 
 type evSendCatalogPayloadCatalog struct {
-	Sensors   []*evSendSensorsPayloadSensor   `json:"sensors"`
-	Readings  []*evSendReadingsPayloadReading `json:"readings"`
-	Favorites []favoriteReading               `json:"favorites,omitempty"`
+	Sensors        []*evSendSensorsPayloadSensor   `json:"sensors"`
+	Readings       []*evSendReadingsPayloadReading `json:"readings"`
+	Favorites      []favoriteReading               `json:"favorites,omitempty"`
+	SourceProfiles []lhmSourceProfile              `json:"sourceProfiles,omitempty"`
 }
 
 type evSendCatalogPayload struct {
@@ -166,9 +182,10 @@ type compositeSlotSettings struct {
 }
 
 type compositeActionSettings struct {
-	SlotCount int                      `json:"slotCount"`
-	Mode      string                   `json:"mode"`
-	Slots     [4]compositeSlotSettings `json:"slots"`
+	SourceProfileID string                   `json:"sourceProfileId,omitempty"`
+	SlotCount       int                      `json:"slotCount"`
+	Mode            string                   `json:"mode"`
+	Slots           [4]compositeSlotSettings `json:"slots"`
 }
 
 type derivedSlotSettings struct {
@@ -181,8 +198,9 @@ type derivedSlotSettings struct {
 }
 
 type derivedActionSettings struct {
-	SlotCount int                    `json:"slotCount"`
-	Formula   string                 `json:"formula"` // "sum","average","max","min","delta","pct"
+	SourceProfileID string                 `json:"sourceProfileId,omitempty"`
+	SlotCount       int                    `json:"slotCount"`
+	Formula         string                 `json:"formula"` // "sum","average","max","min","delta","pct"
 	Slots     [8]derivedSlotSettings `json:"slots"`
 
 	// Tile-level display — mirrors actionSettings so threshold/color/format pipeline works unchanged

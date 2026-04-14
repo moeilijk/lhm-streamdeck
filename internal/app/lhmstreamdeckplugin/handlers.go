@@ -14,9 +14,12 @@ import (
 )
 
 func (p *Plugin) handleSensorSelect(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection) error {
-	p.hwMu.RLock()
-	hw := p.hw
-	p.hwMu.RUnlock()
+	settings0, _ := p.am.getSettings(event.Context)
+	profileID := p.resolvedSourceProfileID(settings0.SourceProfileID)
+	rt := p.runtimeForSource(profileID)
+	rt.mu.RLock()
+	hw := rt.hw
+	rt.mu.RUnlock()
 	if hw == nil {
 		return fmt.Errorf("LHM bridge not ready")
 	}

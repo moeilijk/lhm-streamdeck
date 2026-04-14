@@ -2,7 +2,8 @@ var websocket = null,
   uuid = null,
   actionInfo = {},
   allSensors = [],
-  currentSettings = {};
+  currentSettings = {},
+  sourceProfiles = [];
 
 var onchangeevt = "onchange";
 
@@ -32,6 +33,12 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       return;
     }
 
+    // Source profiles
+    if (Array.isArray(payload.sourceProfiles)) {
+      sourceProfiles = payload.sourceProfiles;
+      rebuildSourceProfileDropdown(currentSettings.sourceProfileId || "");
+    }
+
     // Sensor list
     if (Array.isArray(payload.sensors)) {
       allSensors = payload.sensors;
@@ -49,6 +56,7 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
     if (payload.compositeSettings) {
       currentSettings = payload.compositeSettings;
       applySettingsToUI(currentSettings);
+      rebuildSourceProfileDropdown(currentSettings.sourceProfileId || "");
     }
   };
 }
@@ -65,6 +73,26 @@ function sendValueToPlugin(value, event) {
 
 function sendSdpi(key, value) {
   sendValueToPlugin({ key: key, value: String(value) }, "sdpi_collection");
+}
+
+function rebuildSourceProfileDropdown(selectedId) {
+  var sel = document.getElementById("sourceProfileSelect");
+  if (!sel) return;
+  sel.innerHTML = "";
+  for (var i = 0; i < sourceProfiles.length; i++) {
+    var opt = document.createElement("option");
+    opt.value = sourceProfiles[i].id;
+    opt.textContent = sourceProfiles[i].name || sourceProfiles[i].id;
+    if (sourceProfiles[i].id === selectedId) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  if (!sel.dataset.bound) {
+    sel.dataset.bound = "1";
+    sel.addEventListener("change", function(e) {
+      sendValueToPlugin(e.target.value, "sourceProfileId");
+      sendValueToPlugin("propertyInspectorConnected", "property_inspector");
+    });
+  }
 }
 
 // --- sensor / reading dropdowns ---

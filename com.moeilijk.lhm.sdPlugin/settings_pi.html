@@ -14,7 +14,27 @@
 
 <body>
   <div class="sdpi-wrapper localbody">
+    <div class="sdpi-heading">Source Profiles</div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Profile</div>
+      <select class="sdpi-item-value select" id="sourceProfileSelect"></select>
+    </div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label"></div>
+      <div class="sdpi-item-value" style="display:flex;gap:4px;">
+        <button class="sdpi-item-value" id="addProfileBtn" onclick="addSourceProfile()">Add</button>
+        <button class="sdpi-item-value" id="deleteProfileBtn" onclick="deleteSourceProfile()">Delete</button>
+      </div>
+    </div>
+
     <div class="sdpi-heading">LHM Connection</div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Name</div>
+      <input type="text" class="sdpi-item-value" id="profileName" placeholder="Default" />
+    </div>
 
     <div class="sdpi-item">
       <div class="sdpi-item-label">Host</div>
@@ -24,6 +44,11 @@
     <div class="sdpi-item">
       <div class="sdpi-item-label">Port</div>
       <input type="number" class="sdpi-item-value" id="lhmPort" value="8085" min="1" max="65535" placeholder="8085" />
+    </div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Default Source</div>
+      <select class="sdpi-item-value select" id="defaultProfileSelect"></select>
     </div>
 
     <div class="sdpi-heading">Refresh Rate</div>

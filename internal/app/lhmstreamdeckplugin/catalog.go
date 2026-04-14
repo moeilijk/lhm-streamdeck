@@ -107,6 +107,10 @@ func readingPayload(sensorID, sensorName string, reading hwsensorsservice.Readin
 }
 
 func (p *Plugin) favoriteReadingsSnapshot() []favoriteReading {
+	return p.favoriteReadingsSnapshotForSource("")
+}
+
+func (p *Plugin) favoriteReadingsSnapshotForSource(profileID string) []favoriteReading {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -114,23 +118,42 @@ func (p *Plugin) favoriteReadingsSnapshot() []favoriteReading {
 		return nil
 	}
 
-	out := make([]favoriteReading, len(p.globalSettings.FavoriteReadings))
-	copy(out, p.globalSettings.FavoriteReadings)
+	// Empty profileID means "all" — used before source profiles existed.
+	if profileID == "" {
+		out := make([]favoriteReading, len(p.globalSettings.FavoriteReadings))
+		copy(out, p.globalSettings.FavoriteReadings)
+		return out
+	}
+
+	out := make([]favoriteReading, 0, len(p.globalSettings.FavoriteReadings))
+	for _, f := range p.globalSettings.FavoriteReadings {
+		if f.SourceProfileID == profileID || f.SourceProfileID == "" {
+			out = append(out, f)
+		}
+	}
 	return out
 }
 
 func (p *Plugin) sendCatalogToPropertyInspector(action, context string, settings *actionSettings, sensors []hwsensorsservice.Sensor) error {
-	p.hwMu.RLock()
-	hw := p.hw
-	p.hwMu.RUnlock()
+	profileID := p.resolvedSourceProfileID(settings.SourceProfileID)
+	rt := p.runtimeForSource(profileID)
+	rt.mu.RLock()
+	hw := rt.hw
+	rt.mu.RUnlock()
 	if hw == nil {
 		return fmt.Errorf("LHM bridge not ready")
 	}
 
+	p.mu.RLock()
+	profiles := make([]lhmSourceProfile, len(p.globalSettings.SourceProfiles))
+	copy(profiles, p.globalSettings.SourceProfiles)
+	p.mu.RUnlock()
+
 	catalog := &evSendCatalogPayloadCatalog{
-		Sensors:   make([]*evSendSensorsPayloadSensor, 0, len(sensors)),
-		Readings:  make([]*evSendReadingsPayloadReading, 0),
-		Favorites: p.favoriteReadingsSnapshot(),
+		Sensors:        make([]*evSendSensorsPayloadSensor, 0, len(sensors)),
+		Readings:       make([]*evSendReadingsPayloadReading, 0),
+		Favorites:      p.favoriteReadingsSnapshotForSource(profileID),
+		SourceProfiles: profiles,
 	}
 
 	for _, sensor := range sensors {
@@ -169,13 +192,14 @@ func findSensorName(sensors []hwsensorsservice.Sensor, sensorID string) string {
 func favoriteFromSelection(sensorName string, settings *actionSettings, reading hwsensorsservice.Reading) favoriteReading {
 	category := sensorCategory(settings.SensorUID, sensorName)
 	return favoriteReading{
-		ID:           favoriteID(settings.SensorUID, settings.ReadingID),
-		SensorUID:    settings.SensorUID,
-		SensorName:   sensorName,
-		ReadingID:    settings.ReadingID,
-		ReadingLabel: reading.Label(),
-		ReadingUnit:  reading.Unit(),
-		Category:     category,
+		ID:              favoriteID(settings.SensorUID, settings.ReadingID),
+		SourceProfileID: settings.SourceProfileID,
+		SensorUID:       settings.SensorUID,
+		SensorName:      sensorName,
+		ReadingID:       settings.ReadingID,
+		ReadingLabel:    reading.Label(),
+		ReadingUnit:     reading.Unit(),
+		Category:        category,
 	}
 }
 
@@ -218,12 +242,13 @@ func (p *Plugin) toggleFavoriteSelection(action, context string, settings *actio
 		return fmt.Errorf("favorite requires a valid sensor and reading selection")
 	}
 
-	sensors, err := p.sensorsWithTimeout(2 * time.Second)
+	profileID := p.resolvedSourceProfileID(settings.SourceProfileID)
+	sensors, err := p.sensorsWithTimeoutForSource(profileID, 2*time.Second)
 	if err != nil {
 		return err
 	}
 
-	reading, _, err := p.getReading(settings.SensorUID, settings.ReadingID)
+	reading, _, err := p.getReadingForSource(profileID, settings.SensorUID, settings.ReadingID)
 	if err != nil {
 		return err
 	}
@@ -271,7 +296,8 @@ func (p *Plugin) removeFavorite(action, context string, settings *actionSettings
 		return err
 	}
 
-	sensors, err := p.sensorsWithTimeout(2 * time.Second)
+	profileID := p.resolvedSourceProfileID(settings.SourceProfileID)
+	sensors, err := p.sensorsWithTimeoutForSource(profileID, 2*time.Second)
 	if err != nil {
 		return err
 	}
