@@ -50,7 +50,9 @@ func isSettingsPayload(m map[string]*json.RawMessage) bool {
 	if m == nil {
 		return false
 	}
-	for _, k := range []string{"settingsConnected", "setPollInterval", "setLhmEndpoint", "updateTileAppearance"} {
+	for _, k := range []string{"settingsConnected", "setPollInterval", "setLhmEndpoint", "updateTileAppearance",
+		"addSourceProfile", "deleteSourceProfile", "setSourceProfile", "setDefaultSourceProfile",
+		"setSelectedSourceProfile", "requestSettingsStatus"} {
 		if _, ok := m[k]; ok {
 			return true
 		}
@@ -58,20 +60,38 @@ func isSettingsPayload(m map[string]*json.RawMessage) bool {
 	return false
 }
 
-func (p *Plugin) sendSettingsStatus(action, context string) {
-	status := "Disconnected"
-	if pt, err := p.getCachedPollTime(); err == nil && pt != 0 {
-		status = "Connected"
-	}
+func (p *Plugin) sendSettingsStatus(action, context string, includeProfiles bool) {
 	p.mu.RLock()
 	currentRate := p.globalSettings.PollInterval
+	profiles := make([]lhmSourceProfile, len(p.globalSettings.SourceProfiles))
+	copy(profiles, p.globalSettings.SourceProfiles)
+	defaultProfileID := p.globalSettings.DefaultSourceProfileID
+	var selectedProfileID string
+	if ts := p.settingsContexts[context]; ts != nil {
+		selectedProfileID = ts.SelectedSourceProfileID
+	}
 	p.mu.RUnlock()
+
 	if currentRate <= 0 {
 		currentRate = int(p.am.GetInterval().Milliseconds())
 	}
+	if selectedProfileID == "" {
+		selectedProfileID = defaultProfileID
+	}
+
+	status := "Disconnected"
+	if pt, err := p.getCachedPollTimeForSource(selectedProfileID); err == nil && pt != 0 {
+		status = "Connected"
+	}
+
 	statusPayload := map[string]interface{}{
 		"connectionStatus": status,
 		"currentRate":      currentRate,
+	}
+	if includeProfiles {
+		statusPayload["sourceProfiles"] = profiles
+		statusPayload["defaultSourceProfileId"] = defaultProfileID
+		statusPayload["selectedSourceProfileId"] = selectedProfileID
 	}
 	if err := p.sd.SendToPropertyInspector(action, context, statusPayload); err != nil {
 		log.Printf("SendToPropertyInspector settings status failed: %v\n", err)
@@ -443,7 +463,7 @@ func (p *Plugin) OnTitleParametersDidChange(event *streamdeck.EvTitleParametersD
 func (p *Plugin) OnPropertyInspectorConnected(event *streamdeck.EvSendToPlugin) {
 	if p.isSettingsAction(event.Action, event.Context) {
 		log.Printf("OnPropertyInspectorConnected settings context=%s action=%s\n", event.Context, event.Action)
-		p.sendSettingsStatus("com.moeilijk.lhm.settings", event.Context)
+		p.sendSettingsStatus("com.moeilijk.lhm.settings", event.Context, true)
 		return
 	}
 
@@ -461,10 +481,11 @@ func (p *Plugin) OnPropertyInspectorConnected(event *streamdeck.EvSendToPlugin) 
 	if err != nil {
 		log.Println("OnPropertyInspectorConnected getSettings", err)
 	}
-	sensors, err := p.sensorsWithTimeout(2 * time.Second)
+	profileID := p.resolvedSourceProfileID(settings.SourceProfileID)
+	sensors, err := p.sensorsWithTimeoutForSource(profileID, 2*time.Second)
 	if err != nil {
 		log.Println("OnPropertyInspectorConnected Sensors", err)
-		go p.restartBridge()
+		go p.restartSource(p.runtimeForSource(profileID))
 		payload := evStatus{Error: true, Message: "Libre Hardware Monitor Unavailable"}
 		if err := p.sd.SendToPropertyInspector(event.Action, event.Context, payload); err != nil {
 			log.Printf("OnPropertyInspectorConnected SendToPropertyInspector: %v\n", err)
@@ -501,9 +522,11 @@ func (p *Plugin) OnPropertyInspectorConnected(event *streamdeck.EvSendToPlugin) 
 }
 
 func (p *Plugin) sendReadingsToPropertyInspector(action, context, sensorID string, settings *actionSettings) ([]hwsensorsservice.Reading, error) {
-	p.hwMu.RLock()
-	hw := p.hw
-	p.hwMu.RUnlock()
+	profileID := p.resolvedSourceProfileID(settings.SourceProfileID)
+	rt := p.runtimeForSource(profileID)
+	rt.mu.RLock()
+	hw := rt.hw
+	rt.mu.RUnlock()
 	if hw == nil {
 		return nil, fmt.Errorf("LHM bridge not ready")
 	}
@@ -543,7 +566,13 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 		targetContext := p.resolveSettingsContext(event.Context)
 		// Check for settingsConnected
 		if _, ok := payload["settingsConnected"]; ok {
-			p.sendSettingsStatus("com.moeilijk.lhm.settings", targetContext)
+			p.sendSettingsStatus("com.moeilijk.lhm.settings", targetContext, true)
+			return
+		}
+
+		// Check for periodic settings status refresh
+		if _, ok := payload["requestSettingsStatus"]; ok {
+			p.sendSettingsStatus("com.moeilijk.lhm.settings", targetContext, false)
 			return
 		}
 
@@ -552,6 +581,138 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			var intervalMs int
 			if err := json.Unmarshal(*raw, &intervalMs); err == nil && intervalMs > 0 {
 				p.setPollInterval(intervalMs)
+			}
+			return
+		}
+
+		// Check for setSelectedSourceProfile (which profile this settings tile monitors)
+		if raw, ok := payload["setSelectedSourceProfile"]; ok {
+			var profileID string
+			if err := json.Unmarshal(*raw, &profileID); err == nil {
+				p.mu.Lock()
+				if ts := p.settingsContexts[targetContext]; ts != nil {
+					ts.SelectedSourceProfileID = profileID
+					if err2 := p.sd.SetSettings(targetContext, ts); err2 != nil {
+						log.Printf("setSelectedSourceProfile SetSettings: %v\n", err2)
+					}
+				}
+				p.mu.Unlock()
+				p.sendSettingsStatus("com.moeilijk.lhm.settings", targetContext, true)
+			}
+			return
+		}
+
+		// Check for addSourceProfile
+		if _, ok := payload["addSourceProfile"]; ok {
+			p.mu.Lock()
+			id := fmt.Sprintf("source_%d", time.Now().UnixNano())
+			newProfile := lhmSourceProfile{ID: id, Name: "New Source", Host: "127.0.0.1", Port: 8085}
+			p.globalSettings.SourceProfiles = append(p.globalSettings.SourceProfiles, newProfile)
+			gs := p.globalSettings
+			p.mu.Unlock()
+			if err := p.sd.SetGlobalSettings(gs); err != nil {
+				log.Printf("addSourceProfile SetGlobalSettings: %v\n", err)
+			}
+			p.sendSettingsStatus("com.moeilijk.lhm.settings", targetContext, true)
+			return
+		}
+
+		// Check for deleteSourceProfile
+		if raw, ok := payload["deleteSourceProfile"]; ok {
+			var profileID string
+			if err := json.Unmarshal(*raw, &profileID); err == nil {
+				p.mu.Lock()
+				profiles := p.globalSettings.SourceProfiles
+				for i, sp := range profiles {
+					if sp.ID == profileID && sp.ID != p.globalSettings.DefaultSourceProfileID {
+						p.globalSettings.SourceProfiles = append(profiles[:i], profiles[i+1:]...)
+						break
+					}
+				}
+				gs := p.globalSettings
+				p.mu.Unlock()
+				// Kill runtime for deleted profile
+				p.sourceMu.Lock()
+				if rt, exists := p.sources[profileID]; exists {
+					rt.mu.Lock()
+					if rt.c != nil {
+						rt.c.Kill()
+					}
+					rt.mu.Unlock()
+					delete(p.sources, profileID)
+				}
+				p.sourceMu.Unlock()
+				if err := p.sd.SetGlobalSettings(gs); err != nil {
+					log.Printf("deleteSourceProfile SetGlobalSettings: %v\n", err)
+				}
+				p.sendSettingsStatus("com.moeilijk.lhm.settings", targetContext, true)
+			}
+			return
+		}
+
+		// Check for setSourceProfile (update name/host/port of a profile)
+		if raw, ok := payload["setSourceProfile"]; ok {
+			var sp lhmSourceProfile
+			if err := json.Unmarshal(*raw, &sp); err == nil {
+				p.mu.Lock()
+				changed := false
+				for i := range p.globalSettings.SourceProfiles {
+					if p.globalSettings.SourceProfiles[i].ID == sp.ID {
+						old := p.globalSettings.SourceProfiles[i]
+						p.globalSettings.SourceProfiles[i].Name = sp.Name
+						p.globalSettings.SourceProfiles[i].Host = sp.Host
+						p.globalSettings.SourceProfiles[i].Port = sp.Port
+						changed = old.Host != sp.Host || old.Port != sp.Port
+						break
+					}
+				}
+				gs := p.globalSettings
+				p.mu.Unlock()
+				if err := p.sd.SetGlobalSettings(gs); err != nil {
+					log.Printf("setSourceProfile SetGlobalSettings: %v\n", err)
+				}
+				if changed {
+					p.sourceMu.RLock()
+					rt := p.sources[sp.ID]
+					p.sourceMu.RUnlock()
+					if rt != nil {
+						rt.mu.Lock()
+						rt.profile.Host = sp.Host
+						rt.profile.Port = sp.Port
+						if rt.c != nil {
+							rt.c.Kill()
+						}
+						rt.c = nil
+						rt.hw = nil
+						rt.mu.Unlock()
+						p.mu.Lock()
+						invalidatePollCacheForRuntime(rt)
+						p.mu.Unlock()
+						go p.startSourceClient(rt)
+					}
+				}
+				p.sendSettingsStatus("com.moeilijk.lhm.settings", targetContext, true)
+			}
+			return
+		}
+
+		// Check for setDefaultSourceProfile
+		if raw, ok := payload["setDefaultSourceProfile"]; ok {
+			var profileID string
+			if err := json.Unmarshal(*raw, &profileID); err == nil {
+				p.mu.Lock()
+				for _, sp := range p.globalSettings.SourceProfiles {
+					if sp.ID == profileID {
+						p.globalSettings.DefaultSourceProfileID = profileID
+						break
+					}
+				}
+				gs := p.globalSettings
+				p.mu.Unlock()
+				if err := p.sd.SetGlobalSettings(gs); err != nil {
+					log.Printf("setDefaultSourceProfile SetGlobalSettings: %v\n", err)
+				}
+				p.sendSettingsStatus("com.moeilijk.lhm.settings", targetContext, true)
 			}
 			return
 		}
@@ -606,10 +767,40 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 					log.Printf("updateTileAppearance SetSettings failed: %v\n", err)
 				}
 				p.updateSettingsTile(targetContext)
-				p.sendSettingsStatus("com.moeilijk.lhm.settings", targetContext)
+				p.sendSettingsStatus("com.moeilijk.lhm.settings", targetContext, true)
 			}
 			return
 		}
+	}
+
+	// Handle source profile selection for reading, composite, and derived tiles.
+	if raw, ok := payload["sourceProfileId"]; ok {
+		var profileID string
+		if err := json.Unmarshal(*raw, &profileID); err == nil {
+			if event.Action == derivedAction {
+				p.mu.Lock()
+				if ds, exists := p.derivedSettings[event.Context]; exists {
+					ds.SourceProfileID = profileID
+					_ = p.sd.SetSettings(event.Context, ds)
+				}
+				p.mu.Unlock()
+			} else if event.Action == compositeAction {
+				p.mu.Lock()
+				if cs, exists := p.compositeSettings[event.Context]; exists {
+					cs.SourceProfileID = profileID
+					_ = p.sd.SetSettings(event.Context, cs)
+				}
+				p.mu.Unlock()
+			} else {
+				settings, err2 := p.am.getSettings(event.Context)
+				if err2 == nil {
+					settings.SourceProfileID = profileID
+					_ = p.sd.SetSettings(event.Context, &settings)
+					p.am.SetAction(event.Action, event.Context, &settings)
+				}
+			}
+		}
+		return
 	}
 
 	if event.Action == derivedAction {
@@ -904,7 +1095,7 @@ func (p *Plugin) OnDidReceiveSettings(event *streamdeck.EvDidReceiveSettings) {
 		}
 	}
 	p.updateSettingsTile(event.Context)
-	p.sendSettingsStatus("com.moeilijk.lhm.settings", event.Context)
+	p.sendSettingsStatus("com.moeilijk.lhm.settings", event.Context, true)
 }
 
 // OnDidReceiveGlobalSettings handles global settings from Stream Deck
@@ -919,12 +1110,11 @@ func (p *Plugin) OnDidReceiveGlobalSettings(event *streamdeck.EvDidReceiveGlobal
 		return
 	}
 
-	log.Printf("Received global settings: pollInterval=%d favorites=%d\n", gs.PollInterval, len(gs.FavoriteReadings))
+	log.Printf("Received global settings: pollInterval=%d profiles=%d favorites=%d\n", gs.PollInterval, len(gs.SourceProfiles), len(gs.FavoriteReadings))
 
 	if gs.PollInterval <= 0 {
 		gs.PollInterval = int(defaultPollInterval.Milliseconds())
 	}
-
 	if gs.PollInterval < 250 {
 		gs.PollInterval = 250
 	}
@@ -932,37 +1122,87 @@ func (p *Plugin) OnDidReceiveGlobalSettings(event *streamdeck.EvDidReceiveGlobal
 		gs.PollInterval = 10000
 	}
 
-	// Keep the cached global settings in sync even when value did not change.
 	p.mu.Lock()
 	intervalChanged := gs.PollInterval != p.globalSettings.PollInterval
-	endpointChanged := gs.LhmHost != p.globalSettings.LhmHost || gs.LhmPort != p.globalSettings.LhmPort
+
+	// Compute which profiles changed endpoint before updating globalSettings.
+	type profileDelta struct {
+		rt      *sourceRuntime
+		profile lhmSourceProfile
+	}
+	var endpointChanges []profileDelta
+	for _, newProf := range gs.SourceProfiles {
+		for _, oldProf := range p.globalSettings.SourceProfiles {
+			if oldProf.ID == newProf.ID {
+				if oldProf.Host != newProf.Host || oldProf.Port != newProf.Port {
+					p.sourceMu.RLock()
+					rt := p.sources[newProf.ID]
+					p.sourceMu.RUnlock()
+					if rt != nil {
+						endpointChanges = append(endpointChanges, profileDelta{rt: rt, profile: newProf})
+					}
+				}
+				break
+			}
+		}
+	}
+
 	p.globalSettings = gs
+	migrated := p.migrateSourceProfiles()
 	if intervalChanged {
 		p.pollTimeCacheTTL = pollTimeCacheTTLForInterval(time.Duration(gs.PollInterval) * time.Millisecond)
 	}
-	if endpointChanged {
-		p.cachedPollTime = 0
-		p.cachedPollTimeAt = time.Time{}
+	for _, d := range endpointChanges {
+		invalidatePollCacheForRuntime(d.rt)
 	}
 	p.mu.Unlock()
+
+	if migrated {
+		if err := p.sd.SetGlobalSettings(p.globalSettings); err != nil {
+			log.Printf("SetGlobalSettings migration persist failed: %v\n", err)
+		}
+	}
 
 	if intervalChanged {
 		interval := time.Duration(gs.PollInterval) * time.Millisecond
 		p.am.SetInterval(interval)
 		log.Printf("Applied global settings: interval=%v\n", interval)
 	}
-	if endpointChanged {
-		// Clear bridge client immediately so status checks return "Disconnected"
-		p.hwMu.Lock()
-		if p.c != nil {
-			p.c.Kill()
-		}
-		p.c = nil
-		p.hw = nil
-		p.hwMu.Unlock()
 
-		log.Printf("LHM endpoint changed to %s, restarting bridge\n", p.lhmEndpoint())
-		go p.startClient()
+	// Restart bridges whose endpoint changed.
+	for _, d := range endpointChanges {
+		rt := d.rt
+		rt.mu.Lock()
+		rt.profile = d.profile
+		if rt.c != nil {
+			rt.c.Kill()
+		}
+		rt.c = nil
+		rt.hw = nil
+		rt.mu.Unlock()
+		log.Printf("LHM endpoint changed for source %s, restarting bridge\n", d.profile.ID)
+		go p.startSourceClient(rt)
 	}
+
+	// Ensure a runtime exists and is started for each profile.
+	p.mu.RLock()
+	profiles := make([]lhmSourceProfile, len(p.globalSettings.SourceProfiles))
+	copy(profiles, p.globalSettings.SourceProfiles)
+	p.mu.RUnlock()
+
+	for _, prof := range profiles {
+		rt := p.runtimeForSource(prof.ID)
+		rt.mu.RLock()
+		needsStart := rt.c == nil
+		rt.mu.RUnlock()
+		if needsStart {
+			go func(r *sourceRuntime) {
+				if err := p.startSourceClient(r); err != nil {
+					log.Printf("startSourceClient %s failed: %v\n", r.profile.ID, err)
+				}
+			}(rt)
+		}
+	}
+
 	p.updateAllSettingsTiles()
 }

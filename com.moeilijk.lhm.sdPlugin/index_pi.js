@@ -16,6 +16,32 @@ var websocket = null,
   isQT = navigator.appVersion.includes("QtWebEngine"),
   onchangeevt = "onchange"; // 'oninput'; // change this, if you want interactive elements act on any change, or while they're modified
 
+var sourceProfiles = [];
+
+function rebuildSourceProfileDropdown(selectedId) {
+  var sel = document.getElementById("sourceProfileSelect");
+  if (!sel) return;
+  sel.innerHTML = "";
+  for (var i = 0; i < sourceProfiles.length; i++) {
+    var opt = document.createElement("option");
+    opt.value = sourceProfiles[i].id;
+    opt.textContent = sourceProfiles[i].name || sourceProfiles[i].id;
+    if (sourceProfiles[i].id === selectedId) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+
+function initSourceProfileDropdown() {
+  var sel = document.getElementById("sourceProfileSelect");
+  if (!sel || sel.dataset.bound) return;
+  sel.dataset.bound = "1";
+  sel.addEventListener("change", function(e) {
+    var profileId = e.target.value;
+    sendValueToPlugin(profileId, "sourceProfileId");
+    sendValueToPlugin("propertyInspectorConnected", "property_inspector");
+  });
+}
+
 var snoozeDurationOptions = [300000, 900000, 3600000, 0];
 
 function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
@@ -77,6 +103,12 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       event === "sendToPropertyInspector"
     ) {
       currentCatalog = jsonObj.payload.catalog;
+      if (Array.isArray(currentCatalog.sourceProfiles)) {
+        sourceProfiles = currentCatalog.sourceProfiles;
+        var selId = currentSensorSettings.sourceProfileId || "";
+        rebuildSourceProfileDropdown(selId);
+        initSourceProfileDropdown();
+      }
       renderFavoriteControls();
     }
     if (

@@ -166,7 +166,8 @@ func (p *Plugin) updateDerivedTile(ctx string) {
 		return
 	}
 
-	pollTime, err := p.getCachedPollTime()
+	profileID := p.resolvedSourceProfileID(settings.SourceProfileID)
+	pollTime, err := p.getCachedPollTimeForSource(profileID)
 	if err != nil || pollTime == 0 || time.Since(time.Unix(0, int64(pollTime))) > 5*time.Second {
 		return
 	}
@@ -183,7 +184,7 @@ func (p *Plugin) updateDerivedTile(ctx string) {
 		if !slot.IsValid || slot.SensorUID == "" {
 			continue
 		}
-		r, _, err := p.getReading(slot.SensorUID, slot.ReadingID)
+		r, _, err := p.getReadingForSource(profileID, slot.SensorUID, slot.ReadingID)
 		if err != nil {
 			continue
 		}
@@ -417,10 +418,15 @@ func (p *Plugin) handleDerivedPropertyInspectorConnected(event *streamdeck.EvSen
 	settings, ok := p.derivedSettings[event.Context]
 	p.mu.RUnlock()
 
-	sensors, err := p.sensorsWithTimeout(2 * time.Second)
+	var derivedProfileID string
+	if ok {
+		derivedProfileID = settings.SourceProfileID
+	}
+	profileID := p.resolvedSourceProfileID(derivedProfileID)
+	sensors, err := p.sensorsWithTimeoutForSource(profileID, 2*time.Second)
 	if err != nil {
 		log.Printf("derived PI connected sensors: %v", err)
-		go p.restartBridge()
+		go p.restartSource(p.runtimeForSource(profileID))
 		_ = p.sd.SendToPropertyInspector(event.Action, event.Context, evStatus{Error: true, Message: "Libre Hardware Monitor Unavailable"})
 		return
 	}
@@ -437,10 +443,16 @@ func (p *Plugin) handleDerivedPropertyInspectorConnected(event *streamdeck.EvSen
 		settingsCopy, _ = decodeDerivedSettings(nil)
 	}
 
+	p.mu.RLock()
+	profiles := make([]lhmSourceProfile, len(p.globalSettings.SourceProfiles))
+	copy(profiles, p.globalSettings.SourceProfiles)
+	p.mu.RUnlock()
+
 	payload := map[string]interface{}{
 		"sensors":         evsensors,
 		"derivedSettings": settingsCopy,
-		"favorites":       p.favoriteReadingsSnapshot(),
+		"favorites":       p.favoriteReadingsSnapshotForSource(profileID),
+		"sourceProfiles":  profiles,
 	}
 	if err := p.sd.SendToPropertyInspector(event.Action, event.Context, payload); err != nil {
 		log.Printf("derived PI SendToPropertyInspector: %v", err)
@@ -456,9 +468,11 @@ func (p *Plugin) handleDerivedPropertyInspectorConnected(event *streamdeck.EvSen
 }
 
 func (p *Plugin) sendDerivedReadings(action, ctx string, slotIdx int, sensorUID string, settings *derivedActionSettings) {
-	p.hwMu.RLock()
-	hw := p.hw
-	p.hwMu.RUnlock()
+	profileID := p.resolvedSourceProfileID(settings.SourceProfileID)
+	rt := p.runtimeForSource(profileID)
+	rt.mu.RLock()
+	hw := rt.hw
+	rt.mu.RUnlock()
 	if hw == nil {
 		return
 	}
@@ -523,7 +537,7 @@ func (p *Plugin) handleDerivedSlotReadingSelect(event *streamdeck.EvSendToPlugin
 	settings.Slots[slotIdx].ReadingID = rid
 	p.mu.Unlock()
 
-	r, _, err := p.getReading(settings.Slots[slotIdx].SensorUID, rid)
+	r, _, err := p.getReadingForSource(p.resolvedSourceProfileID(settings.SourceProfileID), settings.Slots[slotIdx].SensorUID, rid)
 	if err != nil {
 		log.Printf("derived readingSelect getReading: %v", err)
 		return

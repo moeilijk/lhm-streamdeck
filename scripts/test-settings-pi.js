@@ -17,6 +17,10 @@ class FakeElement {
     this.textContent = initial.textContent || "";
     this.style = initial.style || {};
     this.handlers = {};
+    this.children = [];
+    this.disabled = initial.disabled || false;
+    this.selected = initial.selected || false;
+    this._innerHTML = "";
   }
   addEventListener(evt, fn) {
     this.handlers[evt] = this.handlers[evt] || [];
@@ -25,6 +29,21 @@ class FakeElement {
   trigger(evt) {
     const fns = this.handlers[evt] || [];
     fns.forEach((fn) => fn({ target: this }));
+  }
+  appendChild(child) {
+    this.children.push(child);
+  }
+  get options() {
+    return this.children;
+  }
+  set innerHTML(value) {
+    this._innerHTML = value;
+    if (value === "") {
+      this.children = [];
+    }
+  }
+  get innerHTML() {
+    return this._innerHTML;
   }
 }
 
@@ -36,9 +55,15 @@ function loadSandbox(opts = {}) {
     tileTextColor: new FakeElement({ value: "#aabbcc" }),
     showLabel: new FakeElement({ checked: true }),
     connectionStatus: new FakeElement({ textContent: "", style: {} }),
+    sourceProfileSelect: new FakeElement(),
+    defaultProfileSelect: new FakeElement(),
+    deleteProfileBtn: new FakeElement(),
+    profileName: new FakeElement(),
+    lhmHost: new FakeElement({ value: "127.0.0.1" }),
+    lhmPort: new FakeElement({ value: "8085" }),
   };
   const sent = [];
-  let intervalFn = null;
+  const intervalFns = [];
 
   const sandbox = {
     console,
@@ -49,8 +74,8 @@ function loadSandbox(opts = {}) {
       return 1;
     },
     setInterval: (fn) => {
-      intervalFn = fn;
-      return 2;
+      intervalFns.push(fn);
+      return intervalFns.length;
     },
     clearInterval: () => {},
     window: null,
@@ -61,8 +86,12 @@ function loadSandbox(opts = {}) {
     document: {
       readyState: "complete",
       addEventListener() {},
+      activeElement: null,
       getElementById(id) {
         return elements[id] || null;
+      },
+      createElement() {
+        return new FakeElement();
       },
     },
   };
@@ -78,7 +107,7 @@ function loadSandbox(opts = {}) {
     },
   };
 
-  return { sandbox, elements, sent, getIntervalFn: () => intervalFn };
+  return { sandbox, elements, sent, getIntervalFns: () => intervalFns };
 }
 
 function testShowLabelPayload() {
@@ -169,7 +198,7 @@ function testMalformedInputsDoNotCrash() {
 }
 
 function testPollingFallbackSave() {
-  const { sandbox, elements, sent, getIntervalFn } = loadSandbox();
+  const { sandbox, elements, sent, getIntervalFns } = loadSandbox();
   sandbox.context = "ctx-settings";
   sandbox.uuid = "ctx-fallback";
 
@@ -191,12 +220,65 @@ function testPollingFallbackSave() {
   ws.onopen();
 
   elements.tileBackground.value = "#445566";
-  const tick = getIntervalFn();
+  const tick = getIntervalFns()[1];
   assert(typeof tick === "function", "interval fallback function missing");
   tick();
 
   const updates = sent.filter((m) => m.event === "sendToPlugin" && m.payload && m.payload.updateTileAppearance);
   assert(updates.length >= 1, "polling fallback did not send update");
+}
+
+function testStatusHeartbeatIsLightweight() {
+  const { sandbox, sent, getIntervalFns } = loadSandbox();
+  sandbox.context = "ctx-settings";
+  sandbox.uuid = "ctx-pi";
+
+  const ws = {
+    readyState: 1,
+    send(msg) {
+      sent.push(JSON.parse(msg));
+    },
+    onopen: null,
+    onmessage: null,
+  };
+  sandbox.WebSocket = function () {
+    return ws;
+  };
+  sandbox.connectElgatoStreamDeckSocket("12345", "uuid-x", "registerPropertyInspector", "{}", JSON.stringify({
+    action: "com.moeilijk.lhm.settings",
+    context: "ctx-settings",
+  }));
+  ws.onopen();
+
+  const statusTick = getIntervalFns()[0];
+  assert(typeof statusTick === "function", "status heartbeat function missing");
+  statusTick();
+
+  const statusMessages = sent.filter(
+    (m) => m.event === "sendToPlugin" && m.payload && (m.payload.settingsConnected || m.payload.requestSettingsStatus)
+  );
+  assert(statusMessages.length >= 2, "expected initial and heartbeat status messages");
+  assert(statusMessages[0].payload.settingsConnected === true, "initial message should request full settings state");
+  assert(statusMessages[statusMessages.length - 1].payload.requestSettingsStatus === true, "heartbeat should request lightweight status only");
+}
+
+function testFocusedProfileInputIsNotOverwritten() {
+  const { sandbox, elements } = loadSandbox();
+  sandbox.sourceProfiles = [
+    { id: "source-1", name: "Primary", host: "10.0.0.1", port: 9000 },
+  ];
+  sandbox.selectedProfileId = "source-1";
+
+  elements.profileName.value = "Primary";
+  elements.lhmHost.value = "editing-host";
+  elements.lhmPort.value = "8085";
+  sandbox.document.activeElement = elements.lhmHost;
+
+  sandbox.applySelectedProfileToUI();
+
+  assert(elements.profileName.value === "Primary", "name should still sync when not focused");
+  assert(elements.lhmHost.value === "editing-host", "focused host input should not be overwritten");
+  assert(elements.lhmPort.value === "9000", "port should sync when not focused");
 }
 
 function main() {
@@ -206,7 +288,9 @@ function main() {
   testDidReceiveSettingsAppliesUi();
   testMalformedInputsDoNotCrash();
   testPollingFallbackSave();
-  process.stdout.write("settings-pi tests ok (6 cases)\n");
+  testStatusHeartbeatIsLightweight();
+  testFocusedProfileInputIsNotOverwritten();
+  process.stdout.write("settings-pi tests ok (8 cases)\n");
 }
 
 main();

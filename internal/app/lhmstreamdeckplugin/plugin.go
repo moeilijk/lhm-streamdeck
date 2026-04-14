@@ -24,22 +24,31 @@ import (
 	"golang.org/x/image/math/fixed"
 )
 
+// sourceRuntime holds the bridge process and gRPC client for a single LHM source profile.
+// Poll time cache is protected by Plugin.mu; c/hw/peg are protected by the runtime's own mu.
+type sourceRuntime struct {
+	profile lhmSourceProfile
+	mu      sync.RWMutex
+	c       *plugin.Client
+	hw      hwsensorsservice.HardwareService
+	peg     winpeg.ProcessExitGroup
+	// poll time cache — accessed under Plugin.mu
+	cachedPollTime uint64
+	cachedAt       time.Time
+}
+
 // Plugin handles information between Libre Hardware Monitor and Stream Deck
 type Plugin struct {
-	mu   sync.RWMutex // protects maps and cached state below
-	hwMu sync.RWMutex // protects c and hw (bridge client references)
+	mu       sync.RWMutex // protects maps and cached state below
+	sourceMu sync.RWMutex // protects sources map
 
-	c      *plugin.Client
-	peg    winpeg.ProcessExitGroup
-	hw     hwsensorsservice.HardwareService
+	sources  map[string]*sourceRuntime
 	sd     *streamdeck.StreamDeck
 	am     *actionManager
 	graphs map[string]*graph.Graph
 
 	// Cached assets and state for performance
 	placeholderImage []byte            // cached startup chip placeholder image (set once at init, read-only after)
-	cachedPollTime   uint64            // cached PollTime value
-	cachedPollTimeAt time.Time         // when cachedPollTime was fetched
 	lastPollTime     map[string]uint64 // last processed PollTime per context
 	divisorCache     map[string]divisorCacheEntry
 	thresholdStates  map[string]map[string]*thresholdRuntimeState
@@ -96,10 +105,144 @@ func pollTimeCacheTTLForInterval(interval time.Duration) time.Duration {
 	return ttl
 }
 
-func (p *Plugin) sensorsWithTimeout(d time.Duration) ([]hwsensorsservice.Sensor, error) {
-	p.hwMu.RLock()
-	hw := p.hw
-	p.hwMu.RUnlock()
+// profileEndpoint builds the LHM endpoint URL for a source profile.
+func profileEndpoint(prof lhmSourceProfile) string {
+	host := prof.Host
+	port := prof.Port
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	if port <= 0 || port > 65535 {
+		port = 8085
+	}
+	return fmt.Sprintf("http://%s:%d/data.json", host, port)
+}
+
+// resolvedSourceProfileID returns the effective profile ID for a tile,
+// falling back to the default profile ID when the tile has none set.
+// Caller must not hold p.mu.
+func (p *Plugin) resolvedSourceProfileID(tileProfileID string) string {
+	if tileProfileID != "" {
+		return tileProfileID
+	}
+	p.mu.RLock()
+	id := p.globalSettings.DefaultSourceProfileID
+	p.mu.RUnlock()
+	return id
+}
+
+// migrateSourceProfiles synthesises a Default profile from legacy LhmHost/LhmPort
+// when SourceProfiles is empty. Must be called under p.mu write lock.
+// Returns true if migration happened and global settings should be persisted.
+func (p *Plugin) migrateSourceProfiles() bool {
+	if len(p.globalSettings.SourceProfiles) > 0 {
+		return false
+	}
+	host := p.globalSettings.LhmHost
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	port := p.globalSettings.LhmPort
+	if port <= 0 || port > 65535 {
+		port = 8085
+	}
+	p.globalSettings.SourceProfiles = []lhmSourceProfile{
+		{ID: "default", Name: "Default", Host: host, Port: port},
+	}
+	p.globalSettings.DefaultSourceProfileID = "default"
+	// Drop legacy fields after migration
+	p.globalSettings.LhmHost = ""
+	p.globalSettings.LhmPort = 0
+	// Migrate favorites that have no SourceProfileID to the default profile
+	for i := range p.globalSettings.FavoriteReadings {
+		if p.globalSettings.FavoriteReadings[i].SourceProfileID == "" {
+			p.globalSettings.FavoriteReadings[i].SourceProfileID = "default"
+		}
+	}
+	return true
+}
+
+// runtimeForSource returns the sourceRuntime for a profile ID, creating it if absent.
+// Caller must not hold sourceMu.
+func (p *Plugin) runtimeForSource(profileID string) *sourceRuntime {
+	p.sourceMu.RLock()
+	rt := p.sources[profileID]
+	p.sourceMu.RUnlock()
+	if rt != nil {
+		return rt
+	}
+
+	p.mu.RLock()
+	var prof lhmSourceProfile
+	for _, sp := range p.globalSettings.SourceProfiles {
+		if sp.ID == profileID {
+			prof = sp
+			break
+		}
+	}
+	p.mu.RUnlock()
+
+	p.sourceMu.Lock()
+	// double-check after acquiring write lock
+	if rt = p.sources[profileID]; rt == nil {
+		rt = &sourceRuntime{profile: prof}
+		p.sources[profileID] = rt
+	}
+	p.sourceMu.Unlock()
+	return rt
+}
+
+// startSourceClientLocked starts the bridge for rt. Caller must hold rt.mu write lock.
+func (p *Plugin) startSourceClientLocked(rt *sourceRuntime) error {
+	cmd := exec.Command("./lhm-bridge.exe")
+	cmd.Env = append(os.Environ(), "LHM_ENDPOINT="+profileEndpoint(rt.profile))
+
+	client := plugin.NewClient(&plugin.ClientConfig{
+		HandshakeConfig:  hwsensorsservice.Handshake,
+		Plugins:          hwsensorsservice.PluginMap,
+		Cmd:              cmd,
+		AllowedProtocols: []plugin.Protocol{plugin.ProtocolGRPC},
+		AutoMTLS:         true,
+	})
+
+	rpcClient, err := client.Client()
+	if err != nil {
+		return err
+	}
+
+	g, err := winpeg.NewProcessExitGroup()
+	if err == nil {
+		if attachProcessToJob(g, cmd.Process) == nil {
+			rt.peg = g
+		}
+	}
+
+	raw, err := rpcClient.Dispense("lhmplugin")
+	if err != nil {
+		return err
+	}
+
+	rt.c = client
+	rt.hw = raw.(hwsensorsservice.HardwareService)
+	return nil
+}
+
+// restartSource kills and restarts the bridge for a profile.
+func (p *Plugin) restartSource(rt *sourceRuntime) {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	if rt.c != nil {
+		rt.c.Kill()
+	}
+	_ = p.startSourceClientLocked(rt)
+}
+
+// sensorsWithTimeoutForSource fetches sensors from the given profile's bridge.
+func (p *Plugin) sensorsWithTimeoutForSource(profileID string, d time.Duration) ([]hwsensorsservice.Sensor, error) {
+	rt := p.runtimeForSource(profileID)
+	rt.mu.RLock()
+	hw := rt.hw
+	rt.mu.RUnlock()
 	if hw == nil {
 		return nil, fmt.Errorf("LHM bridge not ready")
 	}
@@ -118,80 +261,89 @@ func (p *Plugin) sensorsWithTimeout(d time.Duration) ([]hwsensorsservice.Sensor,
 	}
 }
 
-func (p *Plugin) restartBridge() {
-	p.hwMu.Lock()
-	defer p.hwMu.Unlock()
-	if p.c != nil {
-		p.c.Kill()
-	}
-	_ = p.startClientLocked()
+// sensorsWithTimeout fetches sensors from the default source profile.
+func (p *Plugin) sensorsWithTimeout(d time.Duration) ([]hwsensorsservice.Sensor, error) {
+	return p.sensorsWithTimeoutForSource(p.resolvedSourceProfileID(""), d)
 }
 
-// startClient acquires hwMu and starts the bridge client.
-func (p *Plugin) startClient() error {
-	p.hwMu.Lock()
-	defer p.hwMu.Unlock()
-	return p.startClientLocked()
-}
-
-// lhmEndpoint builds the LHM endpoint URL from global settings, falling back to defaults.
-func (p *Plugin) lhmEndpoint() string {
-	p.mu.RLock()
-	host := p.globalSettings.LhmHost
-	port := p.globalSettings.LhmPort
-	p.mu.RUnlock()
-	if host == "" {
-		host = "127.0.0.1"
+// getReadingForSource fetches a reading from the given profile's bridge.
+func (p *Plugin) getReadingForSource(profileID, suid string, rid int32) (hwsensorsservice.Reading, []hwsensorsservice.Reading, error) {
+	rt := p.runtimeForSource(profileID)
+	rt.mu.RLock()
+	hw := rt.hw
+	rt.mu.RUnlock()
+	if hw == nil {
+		return nil, nil, fmt.Errorf("LHM bridge not ready")
 	}
-	if port <= 0 || port > 65535 {
-		port = 8085
-	}
-	return fmt.Sprintf("http://%s:%d/data.json", host, port)
-}
-
-// startClientLocked starts the bridge client. Caller must hold hwMu write lock.
-func (p *Plugin) startClientLocked() error {
-	cmd := exec.Command("./lhm-bridge.exe")
-	cmd.Env = append(os.Environ(), "LHM_ENDPOINT="+p.lhmEndpoint())
-
-	// We're a host. Start by launching the plugin process.
-	client := plugin.NewClient(&plugin.ClientConfig{
-		HandshakeConfig:  hwsensorsservice.Handshake,
-		Plugins:          hwsensorsservice.PluginMap,
-		Cmd:              cmd,
-		AllowedProtocols: []plugin.Protocol{plugin.ProtocolGRPC},
-		AutoMTLS:         true,
-	})
-
-	// Connect via RPC
-	rpcClient, err := client.Client()
+	rbs, err := hw.ReadingsForSensorID(suid)
 	if err != nil {
-		return err
+		return nil, nil, fmt.Errorf("getReading ReadingsBySensor failed: %v", err)
 	}
-
-	g, err := winpeg.NewProcessExitGroup()
-	if err == nil {
-		if attachProcessToJob(g, cmd.Process) == nil {
-			p.peg = g
+	for _, r := range rbs {
+		if r.ID() == rid {
+			return r, rbs, nil
 		}
 	}
+	return nil, rbs, fmt.Errorf("ReadingID does not exist: %s", suid)
+}
 
-	// Request the plugin
-	raw, err := rpcClient.Dispense("lhmplugin")
-	if err != nil {
-		return err
+// getCachedPollTimeForSource returns the cached poll time for a profile.
+func (p *Plugin) getCachedPollTimeForSource(profileID string) (uint64, error) {
+	rt := p.runtimeForSource(profileID)
+	rt.mu.RLock()
+	hw := rt.hw
+	rt.mu.RUnlock()
+	if hw == nil {
+		return 0, fmt.Errorf("LHM bridge not ready")
 	}
 
-	p.c = client
-	p.hw = raw.(hwsensorsservice.HardwareService)
+	p.mu.RLock()
+	cacheTTL := p.pollTimeCacheTTL
+	if cacheTTL == 0 {
+		cacheTTL = defaultPollInterval
+	}
+	if !rt.cachedAt.IsZero() && time.Since(rt.cachedAt) < cacheTTL {
+		pt := rt.cachedPollTime
+		p.mu.RUnlock()
+		return pt, nil
+	}
+	p.mu.RUnlock()
 
-	return nil
+	pollTime, err := hw.PollTime()
+
+	p.mu.Lock()
+	if err != nil {
+		rt.cachedPollTime = 0
+		rt.cachedAt = time.Now()
+		p.mu.Unlock()
+		return 0, err
+	}
+	rt.cachedPollTime = pollTime
+	rt.cachedAt = time.Now()
+	p.mu.Unlock()
+
+	return pollTime, nil
+}
+
+// invalidatePollCacheForSource clears the poll time cache for a profile.
+// Caller must hold p.mu write lock.
+func invalidatePollCacheForRuntime(rt *sourceRuntime) {
+	rt.cachedPollTime = 0
+	rt.cachedAt = time.Time{}
+}
+
+// startSourceClient acquires rt.mu and starts the bridge for the given runtime.
+func (p *Plugin) startSourceClient(rt *sourceRuntime) error {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	return p.startSourceClientLocked(rt)
 }
 
 // NewPlugin creates an instance and initializes the plugin
 func NewPlugin(port, uuid, event, info string) (*Plugin, error) {
 	p := &Plugin{
 		am:                newActionManager(defaultPollInterval),
+		sources:           make(map[string]*sourceRuntime),
 		graphs:            make(map[string]*graph.Graph),
 		lastPollTime:      make(map[string]uint64),
 		divisorCache:      make(map[string]divisorCacheEntry),
@@ -219,7 +371,8 @@ func NewPlugin(port, uuid, event, info string) (*Plugin, error) {
 		log.Printf("Warning: could not cache placeholder image\n")
 	}
 
-	p.startClient()
+	// Bridge starts are deferred until global settings arrive (OnDidReceiveGlobalSettings).
+	// NewPlugin does not start any bridge here.
 	p.sd = streamdeck.NewStreamDeck(port, uuid, event, info)
 	return p, nil
 }
@@ -227,31 +380,47 @@ func NewPlugin(port, uuid, event, info string) (*Plugin, error) {
 // RunForever starts the plugin and waits for events, indefinitely
 func (p *Plugin) RunForever() error {
 	defer func() {
-		if p.c != nil {
-			p.c.Kill()
+		p.sourceMu.RLock()
+		rts := make([]*sourceRuntime, 0, len(p.sources))
+		for _, rt := range p.sources {
+			rts = append(rts, rt)
 		}
-		if p.peg != 0 {
-			_ = p.peg.Dispose()
+		p.sourceMu.RUnlock()
+		for _, rt := range rts {
+			rt.mu.Lock()
+			if rt.c != nil {
+				rt.c.Kill()
+			}
+			if rt.peg != 0 {
+				_ = rt.peg.Dispose()
+			}
+			rt.mu.Unlock()
 		}
 	}()
 
 	p.sd.SetDelegate(p)
 	p.am.Run(p.updateTiles, p.updateAuxTiles)
 
+	// Watch-dog: restart any bridge that has exited.
 	go func() {
 		for {
-			p.hwMu.RLock()
-			needsStart := p.c == nil
-			needsRestart := !needsStart && p.c.Exited()
-			p.hwMu.RUnlock()
+			p.sourceMu.RLock()
+			rts := make([]*sourceRuntime, 0, len(p.sources))
+			for _, rt := range p.sources {
+				rts = append(rts, rt)
+			}
+			p.sourceMu.RUnlock()
 
-			if needsStart {
-				if err := p.startClient(); err != nil {
-					log.Printf("startClient failed: %v\n", err)
-				}
-			} else if needsRestart {
-				if err := p.startClient(); err != nil {
-					log.Printf("restartClient failed: %v\n", err)
+			for _, rt := range rts {
+				rt.mu.RLock()
+				needsStart := rt.c == nil
+				needsRestart := !needsStart && rt.c.Exited()
+				rt.mu.RUnlock()
+
+				if needsStart || needsRestart {
+					if err := p.startSourceClient(rt); err != nil {
+						log.Printf("startSourceClient %s failed: %v\n", rt.profile.ID, err)
+					}
 				}
 			}
 			time.Sleep(1 * time.Second)
@@ -268,22 +437,7 @@ func (p *Plugin) RunForever() error {
 }
 
 func (p *Plugin) getReading(suid string, rid int32) (hwsensorsservice.Reading, []hwsensorsservice.Reading, error) {
-	p.hwMu.RLock()
-	hw := p.hw
-	p.hwMu.RUnlock()
-	if hw == nil {
-		return nil, nil, fmt.Errorf("LHM bridge not ready")
-	}
-	rbs, err := hw.ReadingsForSensorID(suid)
-	if err != nil {
-		return nil, nil, fmt.Errorf("getReading ReadingsBySensor failed: %v", err)
-	}
-	for _, r := range rbs {
-		if r.ID() == rid {
-			return r, rbs, nil
-		}
-	}
-	return nil, rbs, fmt.Errorf("ReadingID does not exist: %s", suid)
+	return p.getReadingForSource(p.resolvedSourceProfileID(""), suid, rid)
 }
 
 func (p *Plugin) applyDefaultFormatValueOnly(v float64, t hwsensorsservice.ReadingType) string {
@@ -354,39 +508,7 @@ func (p *Plugin) normalizeForGraph(value float64, sourceUnit string, targetUnit 
 }
 
 func (p *Plugin) getCachedPollTime() (uint64, error) {
-	p.hwMu.RLock()
-	hw := p.hw
-	p.hwMu.RUnlock()
-	if hw == nil {
-		return 0, fmt.Errorf("LHM bridge not ready")
-	}
-
-	p.mu.RLock()
-	cacheTTL := p.pollTimeCacheTTL
-	if cacheTTL == 0 {
-		cacheTTL = defaultPollInterval
-	}
-	if !p.cachedPollTimeAt.IsZero() && time.Since(p.cachedPollTimeAt) < cacheTTL {
-		pt := p.cachedPollTime
-		p.mu.RUnlock()
-		return pt, nil
-	}
-	p.mu.RUnlock()
-
-	pollTime, err := hw.PollTime()
-
-	p.mu.Lock()
-	if err != nil {
-		p.cachedPollTime = 0
-		p.cachedPollTimeAt = time.Now()
-		p.mu.Unlock()
-		return 0, err
-	}
-	p.cachedPollTime = pollTime
-	p.cachedPollTimeAt = time.Now()
-	p.mu.Unlock()
-
-	return pollTime, nil
+	return p.getCachedPollTimeForSource(p.resolvedSourceProfileID(""))
 }
 
 // formatDisplayValue formats a numeric value and unit into display strings.
@@ -487,9 +609,10 @@ func (p *Plugin) updateTiles(data *actionData) {
 	}
 
 	s := data.settings
+	profileID := p.resolvedSourceProfileID(s.SourceProfileID)
 	forceUpdate := p.consumeThresholdDirty(data.context)
 
-	pollTime, err := p.getCachedPollTime()
+	pollTime, err := p.getCachedPollTimeForSource(profileID)
 	if err != nil {
 		log.Printf("PollTime failed: %v\n", err)
 		showUnavailable()
@@ -508,7 +631,7 @@ func (p *Plugin) updateTiles(data *actionData) {
 			return
 		}
 	}
-	r, readings, err := p.getReading(s.SensorUID, s.ReadingID)
+	r, readings, err := p.getReadingForSource(profileID, s.SensorUID, s.ReadingID)
 	if err != nil {
 		if s.ReadingLabel != "" {
 			for _, candidate := range readings {
@@ -820,7 +943,7 @@ func (p *Plugin) updateAllSettingsTiles() {
 	}
 }
 
-// setLhmEndpoint updates the LHM host/port and restarts the bridge
+// setLhmEndpoint updates host/port on the default source profile and restarts its bridge.
 func (p *Plugin) setLhmEndpoint(host string, port int) {
 	if host == "" {
 		host = "127.0.0.1"
@@ -830,37 +953,47 @@ func (p *Plugin) setLhmEndpoint(host string, port int) {
 	}
 
 	p.mu.Lock()
-	changed := host != p.globalSettings.LhmHost || port != p.globalSettings.LhmPort
-	p.globalSettings.LhmHost = host
-	p.globalSettings.LhmPort = port
-	gs := p.globalSettings
-	if changed {
-		// Invalidate cached poll time so status checks hit the new endpoint
-		p.cachedPollTime = 0
-		p.cachedPollTimeAt = time.Time{}
+	defaultID := p.globalSettings.DefaultSourceProfileID
+	changed := false
+	for i := range p.globalSettings.SourceProfiles {
+		sp := &p.globalSettings.SourceProfiles[i]
+		if sp.ID == defaultID {
+			if sp.Host != host || sp.Port != port {
+				sp.Host = host
+				sp.Port = port
+				changed = true
+			}
+			break
+		}
 	}
+	gs := p.globalSettings
 	p.mu.Unlock()
 
 	if !changed {
 		return
 	}
 
-	// Persist global settings
 	if err := p.sd.SetGlobalSettings(gs); err != nil {
 		log.Printf("SetGlobalSettings failed: %v\n", err)
 	}
 
-	// Clear bridge client immediately so status checks return "Disconnected"
-	p.hwMu.Lock()
-	if p.c != nil {
-		p.c.Kill()
+	rt := p.runtimeForSource(defaultID)
+	rt.mu.Lock()
+	rt.profile.Host = host
+	rt.profile.Port = port
+	if rt.c != nil {
+		rt.c.Kill()
 	}
-	p.c = nil
-	p.hw = nil
-	p.hwMu.Unlock()
+	rt.c = nil
+	rt.hw = nil
+	rt.mu.Unlock()
 
-	log.Printf("LHM endpoint changed to %s, restarting bridge\n", p.lhmEndpoint())
-	go p.startClient()
+	p.mu.Lock()
+	invalidatePollCacheForRuntime(rt)
+	p.mu.Unlock()
+
+	log.Printf("LHM endpoint changed to %s for source %s, restarting bridge\n", profileEndpoint(rt.profile), defaultID)
+	go p.startSourceClient(rt)
 }
 
 // setPollInterval changes the polling interval dynamically
