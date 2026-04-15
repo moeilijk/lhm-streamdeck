@@ -2,7 +2,6 @@ package lhmstreamdeckplugin
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"time"
 )
@@ -43,7 +42,6 @@ func (tm *actionManager) Run(updateTiles func(*actionData), onTick func()) {
 				tm.updateInterval = newInterval
 				tm.mux.Unlock()
 				ticker = time.NewTicker(newInterval)
-				log.Printf("Ticker updated to %v", newInterval)
 
 			case <-ticker.C:
 				now := time.Now()

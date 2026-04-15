@@ -299,15 +299,15 @@ function addReadings(el, readings, settings) {
   }
   el.add(option);
 
-  var sortByLabel = sortBy("label");
+  var sortedReadings = readings.slice().sort(compareReadings);
   var maxL = 0;
-  readings.sort(sortByLabel).forEach((r) => {
+  sortedReadings.forEach((r) => {
     var l = r.prefix.length;
     if (l > maxL) {
       maxL = l;
     }
   });
-  readings.sort(sortByLabel).forEach((r) => {
+  sortedReadings.forEach((r) => {
     var option = document.createElement("option");
     option.style = "white-space: pre";
     var padLen = Math.max(0, maxL - r.prefix.length + 1);
@@ -634,30 +634,6 @@ window.addEventListener("beforeunload", function (e) {
   // Don't set a returnValue to the event, otherwise Chromium with throw an error.  // e.returnValue = '';
 });
 
-/** the pagehide event is fired, when the view disappears */
-/*
-window.addEventListener('pagehide', function (event) {
-    console.log('%c%s','background: green; font-size: 22px; font-weight: bold;','window --->> pagehide.');
-    sendValueToPlugin('propertyInspectorPagehide', 'property_inspector');
-
-});
-*/
-
-/** the unload event is fired, when the PI will finally disappear */
-/*
-window.addEventListener('unload', function (event) {
-    console.log('%c%s','background: orange; font-size: 22px; font-weight: bold;','window --->> onunload.');
-    sendValueToPlugin('propertyInspectorDisconnected', 'property_inspector');
-});
-*/
-
-/** if you prefer, you can apply these listeners to PI's body, like so:
- *
- * <body onpagehide="sendValueToPlugin('propertyInspectorPagehide', 'property_inspector');">
- *
- * <body onunload="sendValueToPlugin('propertyInspectorDisconnected', 'property_inspector');">
- */
-
 /** CREATE INTERACTIVE HTML-DOM
  * where elements can be clicked or act on their 'change' event.
  * Messages are then processed using the 'handleSdpiItemClick' method below.
@@ -680,7 +656,6 @@ function prepareDOMElements(baseElement) {
         "CANVAS",
       ].includes(el.tagName);
       const evt = elementsToClick ? "onclick" : onchangeevt || "onchange";
-      // console.log(el.type, el.tagName, elementsToClick, el, evt);
 
       /** Look for <input><span> combinations, where we consider the span as label for the input
        * we don't use `labels` for that, because a range could have 2 labels.

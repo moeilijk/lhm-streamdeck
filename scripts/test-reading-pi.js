@@ -13,6 +13,8 @@ function assert(condition, msg) {
 class FakeElement {
   constructor(initial = {}) {
     this.value = initial.value || "";
+    this.text = initial.text || "";
+    this.textContent = initial.textContent || "";
     this.checked = initial.checked === true;
     this.disabled = initial.disabled === true;
     this.dataset = initial.dataset || {};
@@ -48,6 +50,31 @@ class FakeElement {
   trigger(evt) {
     const fns = this.handlers[evt] || [];
     fns.forEach((fn) => fn({ target: this }));
+  }
+}
+
+class FakeOption extends FakeElement {
+  constructor() {
+    super();
+    this.selected = false;
+  }
+}
+
+class FakeSelect extends FakeElement {
+  constructor() {
+    super({ disabled: true });
+    this.options = [];
+  }
+  add(option) {
+    this.options.push(option);
+  }
+  remove(index) {
+    this.options.splice(index, 1);
+  }
+  removeAttribute(name) {
+    if (name === "disabled") {
+      this.disabled = false;
+    }
   }
 }
 
@@ -123,6 +150,79 @@ function loadSandbox() {
   return { sandbox, sent, snoozeButtons };
 }
 
+function loadScriptSandbox(scriptPath, extra = {}) {
+  const graphUnitContainer = new FakeElement({ style: {} });
+  const elementsById = extra.elementsById || {};
+  const querySelectors = Object.assign({
+    "#graphUnitContainer": graphUnitContainer,
+  }, extra.querySelectors || {});
+
+  const sandbox = {
+    console,
+    JSON,
+    setTimeout: (fn) => {
+      fn();
+      return 1;
+    },
+    clearTimeout: () => {},
+    navigator: {
+      appVersion: "QtWebEngine",
+    },
+    document: {
+      querySelector(selector) {
+        return querySelectors[selector] || null;
+      },
+      querySelectorAll() {
+        return [];
+      },
+      getElementById(id) {
+        return elementsById[id] || null;
+      },
+      createElement(tag) {
+        if (tag === "option") {
+          return new FakeOption();
+        }
+        return new FakeElement();
+      },
+      addEventListener() {},
+      body: {
+        appendChild() {},
+      },
+    },
+    window: null,
+    websocket: null,
+    uuid: "ctx-reading",
+    actionInfo: {
+      action: "com.moeilijk.lhm.reading",
+    },
+    Event: function Event(type) {
+      this.type = type;
+    },
+  };
+  sandbox.window = sandbox;
+  sandbox.addEventListener = () => {};
+
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync("com.moeilijk.lhm.sdPlugin/pi_utils.js", "utf8"), sandbox);
+  vm.runInContext(fs.readFileSync(scriptPath, "utf8"), sandbox);
+  return sandbox;
+}
+
+function sampleReadings() {
+  return [
+    { id: 10, prefix: "%", unit: "%", type: "Load", label: "CPU Core #10" },
+    { id: 2, prefix: "%", unit: "%", type: "Load", label: "CPU Core #2" },
+    { id: 1, prefix: "%", unit: "%", type: "Load", label: "CPU Core #1" },
+    { id: 20, prefix: "MHz", unit: "MHz", type: "Clock", label: "Core #10" },
+    { id: 12, prefix: "MHz", unit: "MHz", type: "Clock", label: "Core #2" },
+    { id: 11, prefix: "MHz", unit: "MHz", type: "Clock", label: "Core #1" },
+  ];
+}
+
+function optionTexts(select) {
+  return select.options.slice(1).map((option) => option.textContent || option.text);
+}
+
 function testNormalizeSnoozeDurations() {
   const { sandbox } = loadSandbox();
   const result = sandbox.normalizeSnoozeDurations([900000, 123, 0, 300000, 900000, 3600000]);
@@ -172,12 +272,138 @@ function testBindSnoozeControlsSendsPayload() {
   );
 }
 
+function testIndexReadingSortGroupsByPrefixAndNaturalLabel() {
+  const select = new FakeSelect();
+  const sandbox = loadScriptSandbox("com.moeilijk.lhm.sdPlugin/index_pi.js", {
+    querySelectors: {
+      "#graphUnitContainer": new FakeElement({ style: {} }),
+    },
+  });
+  sandbox.renderFavoriteControls = () => {};
+  sandbox.updateGraphUnitVisibility = () => {};
+
+  sandbox.addReadings(select, sampleReadings(), { isValid: false });
+
+  const got = optionTexts(select);
+  const want = [
+    "%   CPU Core #1",
+    "%   CPU Core #2",
+    "%   CPU Core #10",
+    "MHz Core #1",
+    "MHz Core #2",
+    "MHz Core #10",
+  ];
+  assert(got.join("|") === want.join("|"), `unexpected index reading order: ${got.join("|")}`);
+}
+
+function testCompositeReadingSortUsesNaturalLabelOrder() {
+  const select = new FakeSelect();
+  const sandbox = loadScriptSandbox("com.moeilijk.lhm.sdPlugin/composite_pi.js", {
+    elementsById: {
+      slot0_readingSelect: select,
+    },
+  });
+  sandbox.currentSettings = {
+    slots: [{ readingId: 0, isValid: false }],
+  };
+
+  sandbox.populateReadingSelect(0, sampleReadings());
+
+  const got = optionTexts(select);
+  const want = [
+    "CPU Core #1 (%)",
+    "CPU Core #2 (%)",
+    "CPU Core #10 (%)",
+    "Core #1 (MHz)",
+    "Core #2 (MHz)",
+    "Core #10 (MHz)",
+  ];
+  assert(got.join("|") === want.join("|"), `unexpected composite reading order: ${got.join("|")}`);
+}
+
+function testDerivedReadingSortUsesNaturalLabelOrder() {
+  const select = new FakeSelect();
+  const sandbox = loadScriptSandbox("com.moeilijk.lhm.sdPlugin/derived_pi.js", {
+    elementsById: {
+      slot0_readingSelect: select,
+    },
+  });
+  sandbox.currentSettings = {
+    slots: [{ readingId: 0, isValid: false }],
+  };
+
+  sandbox.populateReadingSelect(0, sampleReadings());
+
+  const got = optionTexts(select);
+  const want = [
+    "CPU Core #1 (%)",
+    "CPU Core #2 (%)",
+    "CPU Core #10 (%)",
+    "Core #1 (MHz)",
+    "Core #2 (MHz)",
+    "Core #10 (MHz)",
+  ];
+  assert(got.join("|") === want.join("|"), `unexpected derived reading order: ${got.join("|")}`);
+}
+
+function testCompositeApplySettingsClearsStaleBoundsAndKeepsZero() {
+  const slot0Min = new FakeElement({ value: "stale" });
+  const slot0Max = new FakeElement({ value: "stale" });
+  const slot1Min = new FakeElement({ value: "stale" });
+  const slot1Max = new FakeElement({ value: "stale" });
+  const sandbox = loadScriptSandbox("com.moeilijk.lhm.sdPlugin/composite_pi.js", {
+    elementsById: {
+      slot0_min: slot0Min,
+      slot0_max: slot0Max,
+      slot1_min: slot1Min,
+      slot1_max: slot1Max,
+    },
+  });
+
+  sandbox.applySettingsToUI({
+    slotCount: 2,
+    slots: [{ min: 0, max: 0 }, {}],
+  });
+
+  assert(String(slot0Min.value) === "0", `expected slot0 min to keep zero, got ${slot0Min.value}`);
+  assert(String(slot0Max.value) === "0", `expected slot0 max to keep zero, got ${slot0Max.value}`);
+  assert(slot1Min.value === "", `expected slot1 min to clear stale value, got ${slot1Min.value}`);
+  assert(slot1Max.value === "", `expected slot1 max to clear stale value, got ${slot1Max.value}`);
+}
+
+function testDerivedApplySettingsClearsStaleBoundsAndKeepsZero() {
+  const derivedMin = new FakeElement({ value: "stale" });
+  const derivedMax = new FakeElement({ value: "stale" });
+  const sandbox = loadScriptSandbox("com.moeilijk.lhm.sdPlugin/derived_pi.js", {
+    elementsById: {
+      derived_min: derivedMin,
+      derived_max: derivedMax,
+    },
+  });
+
+  sandbox.applySettingsToUI({
+    formula: "sum",
+    slotCount: 2,
+    min: 0,
+    max: 0,
+    slots: [],
+  });
+
+  assert(String(derivedMin.value) === "0", `expected derived min to keep zero, got ${derivedMin.value}`);
+  assert(String(derivedMax.value) === "0", `expected derived max to keep zero, got ${derivedMax.value}`);
+}
+
 function main() {
   testNormalizeSnoozeDurations();
   testApplySnoozeDurationsToUI();
   testReadSnoozeDurationsFromUI();
   testBindSnoozeControlsSendsPayload();
-  process.stdout.write("reading-pi tests ok (4 cases)\n");
+  testIndexReadingSortGroupsByPrefixAndNaturalLabel();
+  testCompositeReadingSortUsesNaturalLabelOrder();
+  testDerivedReadingSortUsesNaturalLabelOrder();
+  testCompositeApplySettingsClearsStaleBoundsAndKeepsZero();
+  testDerivedApplySettingsClearsStaleBoundsAndKeepsZero();
+  process.stdout.write("reading-pi tests ok (9 cases)\n");
 }
 
 main();
