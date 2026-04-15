@@ -116,7 +116,8 @@ func (p *Plugin) applyReadingSettings(context string, settings *actionSettings) 
 		return fmt.Errorf("settings are required")
 	}
 
-	r, _, err := p.getReading(settings.SensorUID, settings.ReadingID)
+	profileID := p.resolvedSourceProfileID(settings.SourceProfileID)
+	r, _, err := p.getReadingForSource(profileID, settings.SensorUID, settings.ReadingID)
 	if err != nil {
 		return fmt.Errorf("getReading: %v", err)
 	}
