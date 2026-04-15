@@ -76,7 +76,7 @@ function sendSdpi(key, value) {
 }
 
 function rebuildSourceProfileDropdown(selectedId) {
-  var sel = document.getElementById("sourceProfileSelect");
+  var sel = byId("sourceProfileSelect");
   if (!sel) return;
   sel.innerHTML = "";
   for (var i = 0; i < sourceProfiles.length; i++) {
@@ -98,7 +98,7 @@ function rebuildSourceProfileDropdown(selectedId) {
 // --- sensor / reading dropdowns ---
 
 function populateSensorSelect(slotIdx, sensors) {
-  var el = document.getElementById("slot" + slotIdx + "_sensorSelect");
+  var el = byId("slot" + slotIdx + "_sensorSelect");
   if (!el) return;
   var currentUid = (currentSettings.slots && currentSettings.slots[slotIdx])
     ? currentSettings.slots[slotIdx].sensorUid : "";
@@ -124,7 +124,7 @@ function populateSensorSelect(slotIdx, sensors) {
 }
 
 function populateReadingSelect(slotIdx, readings) {
-  var el = document.getElementById("slot" + slotIdx + "_readingSelect");
+  var el = byId("slot" + slotIdx + "_readingSelect");
   if (!el) return;
   var slot = currentSettings.slots ? currentSettings.slots[slotIdx] : null;
   var currentRid = slot ? String(slot.readingId) : "";
@@ -136,7 +136,7 @@ function populateReadingSelect(slotIdx, readings) {
   if (!slot || !slot.isValid) ph.selected = true;
   el.add(ph);
 
-  readings.forEach(function (r) {
+  readings.slice().sort(compareReadings).forEach(function (r) {
     var opt = document.createElement("option");
     opt.text = r.label + (r.unit ? " (" + r.unit + ")" : "");
     opt.value = String(r.id);
@@ -149,9 +149,10 @@ function populateReadingSelect(slotIdx, readings) {
 // --- populate all UI fields from settings ---
 
 function applySettingsToUI(s) {
+  var slotCount = s.slotCount || 2;
   setSelectValue("composite_mode", s.mode || "both");
-  setSelectValue("composite_slotCount", String(s.slotCount || 2));
-  updateSlotVisibility(s.slotCount || 2);
+  setSelectValue("composite_slotCount", String(slotCount));
+  updateSlotVisibility(slotCount);
 
   var slots = s.slots || [];
   for (var i = 0; i < 4; i++) {
@@ -163,53 +164,16 @@ function applySettingsToUI(s) {
     setColorValue("slot" + i + "_titleColor", slot.titleColor);
     setColorValue("slot" + i + "_backgroundColor", slot.backgroundColor);
     setInputValue("slot" + i + "_fillAlpha", slot.fillAlpha != null ? slot.fillAlpha : 55);
-    if (slot.min || slot.max) {
-      setInputValue("slot" + i + "_min", slot.min || "");
-      setInputValue("slot" + i + "_max", slot.max || "");
-    }
+    setInputValue("slot" + i + "_min", slot.min != null ? slot.min : "");
+    setInputValue("slot" + i + "_max", slot.max != null ? slot.max : "");
     setInputValue("slot" + i + "_titleFontSize", slot.titleFontSize || 9);
     setInputValue("slot" + i + "_valueFontSize", slot.valueFontSize || 10.5);
     setInputValue("slot" + i + "_format", slot.format || "");
     setInputValue("slot" + i + "_divisor", slot.divisor || "");
     setSelectValue("slot" + i + "_graphUnit", slot.graphUnit || "");
 
-    // Re-populate sensor dropdown selection if sensors already loaded
-    if (allSensors.length > 0 && slot.sensorUid) {
-      var sensorSel = document.getElementById("slot" + i + "_sensorSelect");
-      if (sensorSel) {
-        for (var j = 0; j < sensorSel.options.length; j++) {
-          if (sensorSel.options[j].value === slot.sensorUid) {
-            sensorSel.selectedIndex = j;
-            break;
-          }
-        }
-      }
-    }
-  }
-}
-
-function setInputValue(id, val) {
-  var el = document.getElementById(id);
-  if (el && val != null) el.value = val;
-}
-
-function setColorValue(id, hex) {
-  if (!hex) return;
-  // Ensure 6-digit hex for color inputs
-  if (hex.length === 4) {
-    hex = "#" + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
-  }
-  var el = document.getElementById(id);
-  if (el) el.value = hex;
-}
-
-function setSelectValue(id, val) {
-  var el = document.getElementById(id);
-  if (!el || val == null) return;
-  for (var i = 0; i < el.options.length; i++) {
-    if (el.options[i].value === String(val)) {
-      el.selectedIndex = i;
-      return;
+    if (allSensors.length > 0) {
+      setSelectValue("slot" + i + "_sensorSelect", slot.sensorUid || "");
     }
   }
 }
@@ -226,79 +190,39 @@ function updateSlotVisibility(count) {
 // --- wire up all events after DOM ready ---
 
 document.addEventListener("DOMContentLoaded", function () {
-  // Tile-wide
-  wireSelect("composite_mode");
-  wireSelect("composite_slotCount", function (val) {
+  bindSdpiValue("composite_mode", sendSdpi, onchangeevt);
+  bindSdpiValue("composite_slotCount", sendSdpi, onchangeevt, function (val) {
     updateSlotVisibility(parseInt(val, 10));
   });
 
   for (var i = 0; i < 4; i++) {
     wireSensorSelect(i);
     wireReadingSelect(i);
-    wireText("slot" + i + "_title");
-    wireColor("slot" + i + "_highlightColor");
-    wireColor("slot" + i + "_foregroundColor");
-    wireColor("slot" + i + "_valueTextColor");
-    wireColor("slot" + i + "_titleColor");
-    wireColor("slot" + i + "_backgroundColor");
-    wireRange("slot" + i + "_fillAlpha");
-    wireNumber("slot" + i + "_min");
-    wireNumber("slot" + i + "_max");
-    wireRange("slot" + i + "_titleFontSize");
-    wireRange("slot" + i + "_valueFontSize");
-    wireText("slot" + i + "_format");
-    wireText("slot" + i + "_divisor");
-    wireSelect("slot" + i + "_graphUnit");
+    bindSdpiValue("slot" + i + "_title", sendSdpi, "onchange");
+    bindSdpiValue("slot" + i + "_highlightColor", sendSdpi, onchangeevt);
+    bindSdpiValue("slot" + i + "_foregroundColor", sendSdpi, onchangeevt);
+    bindSdpiValue("slot" + i + "_valueTextColor", sendSdpi, onchangeevt);
+    bindSdpiValue("slot" + i + "_titleColor", sendSdpi, onchangeevt);
+    bindSdpiValue("slot" + i + "_backgroundColor", sendSdpi, onchangeevt);
+    bindSdpiValue("slot" + i + "_fillAlpha", sendSdpi, onchangeevt);
+    bindSdpiValue("slot" + i + "_min", sendSdpi, "onchange");
+    bindSdpiValue("slot" + i + "_max", sendSdpi, "onchange");
+    bindSdpiValue("slot" + i + "_titleFontSize", sendSdpi, onchangeevt);
+    bindSdpiValue("slot" + i + "_valueFontSize", sendSdpi, onchangeevt);
+    bindSdpiValue("slot" + i + "_format", sendSdpi, "onchange");
+    bindSdpiValue("slot" + i + "_divisor", sendSdpi, "onchange");
+    bindSdpiValue("slot" + i + "_graphUnit", sendSdpi, onchangeevt);
   }
 });
 
-function wireSelect(id, extra) {
-  var el = document.getElementById(id);
-  if (!el) return;
-  el[onchangeevt] = function () {
-    sendSdpi(id, el.value);
-    if (extra) extra(el.value);
-  };
-}
-
 function wireSensorSelect(slotIdx) {
-  var id = "slot" + slotIdx + "_sensorSelect";
-  var el = document.getElementById(id);
-  if (!el) return;
-  el[onchangeevt] = function () {
-    sendSdpi("slot" + slotIdx + "_sensorSelect", el.value);
-  };
+  bindValueChange("slot" + slotIdx + "_sensorSelect", onchangeevt, function (value) {
+    sendSdpi("slot" + slotIdx + "_sensorSelect", value);
+  });
 }
 
 function wireReadingSelect(slotIdx) {
-  var id = "slot" + slotIdx + "_readingSelect";
-  var el = document.getElementById(id);
-  if (!el) return;
-  el[onchangeevt] = function () {
-    sendSdpi("slot" + slotIdx + "_readingSelect", el.value);
-  };
-}
-
-function wireText(id) {
-  var el = document.getElementById(id);
-  if (!el) return;
-  el.onchange = function () { sendSdpi(id, el.value); };
-}
-
-function wireColor(id) {
-  var el = document.getElementById(id);
-  if (!el) return;
-  el[onchangeevt] = function () { sendSdpi(id, el.value); };
-}
-
-function wireRange(id) {
-  var el = document.getElementById(id);
-  if (!el) return;
-  el[onchangeevt] = function () { sendSdpi(id, el.value); };
-}
-
-function wireNumber(id) {
-  var el = document.getElementById(id);
-  if (!el) return;
-  el.onchange = function () { sendSdpi(id, el.value); };
+  bindValueChange("slot" + slotIdx + "_readingSelect", onchangeevt, function (value) {
+    sendSdpi("slot" + slotIdx + "_readingSelect", value);
+  });
 }

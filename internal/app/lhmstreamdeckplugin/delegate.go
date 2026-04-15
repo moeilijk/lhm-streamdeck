@@ -100,7 +100,6 @@ func (p *Plugin) sendSettingsStatus(action, context string, includeProfiles bool
 
 // OnConnected event
 func (p *Plugin) OnConnected(c *websocket.Conn) {
-	log.Println("OnConnected")
 	// Request global settings on connect
 	if err := p.sd.GetGlobalSettings(); err != nil {
 		log.Printf("GetGlobalSettings failed: %v\n", err)
@@ -462,7 +461,6 @@ func (p *Plugin) OnTitleParametersDidChange(event *streamdeck.EvTitleParametersD
 // OnPropertyInspectorConnected event
 func (p *Plugin) OnPropertyInspectorConnected(event *streamdeck.EvSendToPlugin) {
 	if p.isSettingsAction(event.Action, event.Context) {
-		log.Printf("OnPropertyInspectorConnected settings context=%s action=%s\n", event.Context, event.Action)
 		p.sendSettingsStatus("com.moeilijk.lhm.settings", event.Context, true)
 		return
 	}
@@ -1110,8 +1108,6 @@ func (p *Plugin) OnDidReceiveGlobalSettings(event *streamdeck.EvDidReceiveGlobal
 		return
 	}
 
-	log.Printf("Received global settings: pollInterval=%d profiles=%d favorites=%d\n", gs.PollInterval, len(gs.SourceProfiles), len(gs.FavoriteReadings))
-
 	if gs.PollInterval <= 0 {
 		gs.PollInterval = int(defaultPollInterval.Milliseconds())
 	}
@@ -1166,7 +1162,6 @@ func (p *Plugin) OnDidReceiveGlobalSettings(event *streamdeck.EvDidReceiveGlobal
 	if intervalChanged {
 		interval := time.Duration(gs.PollInterval) * time.Millisecond
 		p.am.SetInterval(interval)
-		log.Printf("Applied global settings: interval=%v\n", interval)
 	}
 
 	// Restart bridges whose endpoint changed.

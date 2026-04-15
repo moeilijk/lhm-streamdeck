@@ -97,7 +97,7 @@ function sendSdpi(key, value) {
 }
 
 function rebuildSourceProfileDropdown(selectedId) {
-  var sel = document.getElementById("sourceProfileSelect");
+  var sel = byId("sourceProfileSelect");
   if (!sel) return;
   sel.innerHTML = "";
   for (var i = 0; i < sourceProfiles.length; i++) {
@@ -119,7 +119,7 @@ function rebuildSourceProfileDropdown(selectedId) {
 // --- favorites ---
 
 function populateFavoriteSelect(slotIdx, favorites) {
-  var el = document.getElementById("slot" + slotIdx + "_favoriteSelect");
+  var el = byId("slot" + slotIdx + "_favoriteSelect");
   if (!el) return;
   while (el.options.length) el.remove(0);
   var ph = document.createElement("option");
@@ -140,7 +140,7 @@ function populateFavoriteSelect(slotIdx, favorites) {
 // --- sensor / reading dropdowns ---
 
 function populateSensorSelect(slotIdx, sensors) {
-  var el = document.getElementById("slot" + slotIdx + "_sensorSelect");
+  var el = byId("slot" + slotIdx + "_sensorSelect");
   if (!el) return;
   var currentUid = (currentSettings.slots && currentSettings.slots[slotIdx])
     ? currentSettings.slots[slotIdx].sensorUid : "";
@@ -166,7 +166,7 @@ function populateSensorSelect(slotIdx, sensors) {
 }
 
 function populateAllSlotsSensorSelect(sensors) {
-  var el = document.getElementById("allSlots_sensorSelect");
+  var el = byId("allSlots_sensorSelect");
   if (!el) return;
   var sorted = sensors.slice().sort(function (a, b) {
     return a.name > b.name ? 1 : a.name < b.name ? -1 : 0;
@@ -190,7 +190,7 @@ function populateAllSlotsSensorSelect(sensors) {
 }
 
 function populateReadingSelect(slotIdx, readings) {
-  var el = document.getElementById("slot" + slotIdx + "_readingSelect");
+  var el = byId("slot" + slotIdx + "_readingSelect");
   if (!el) return;
   var slot = currentSettings.slots ? currentSettings.slots[slotIdx] : null;
   var currentRid = slot ? String(slot.readingId) : "";
@@ -202,7 +202,7 @@ function populateReadingSelect(slotIdx, readings) {
   if (!slot || !slot.isValid) ph.selected = true;
   el.add(ph);
 
-  readings.forEach(function (r) {
+  readings.slice().sort(compareReadings).forEach(function (r) {
     var opt = document.createElement("option");
     opt.text = r.label + (r.unit ? " (" + r.unit + ")" : "");
     opt.value = String(r.id);
@@ -215,7 +215,7 @@ function populateReadingSelect(slotIdx, readings) {
 // --- presets ---
 
 function populatePresetSelect(presets) {
-  var el = document.getElementById("preset_load");
+  var el = byId("preset_load");
   if (!el) return;
   while (el.options.length) el.remove(0);
   var ph = document.createElement("option");
@@ -281,27 +281,29 @@ function loadPresetByName(name) {
     slots:     preset.slots
   }, "loadDerivedPreset");
   // Reset the load select back to placeholder
-  var el = document.getElementById("preset_load");
+  var el = byId("preset_load");
   if (el) el.selectedIndex = 0;
 }
 
 // --- populate all UI fields from settings ---
 
 function applySettingsToUI(s) {
-  setInputValue("titleFontSize", s.titleFontSize || 10.5);
-  setInputValue("valueFontSize", s.valueFontSize || 10.5);
-  setSelectValue("derived_formula", s.formula || "sum");
-  setSelectValue("derived_slotCount", String(s.slotCount || 2));
-  updateSlotCountForFormula(s.formula || "sum");
-  updateSlotVisibility(s.slotCount || 2);
+  var formula = s.formula || "sum";
+  var slotCount = s.slotCount || 2;
+  setInputValue("titleFontSize", s.titleFontSize != null ? s.titleFontSize : 10.5);
+  setInputValue("valueFontSize", s.valueFontSize != null ? s.valueFontSize : 10.5);
+  setSelectValue("derived_formula", formula);
+  setSelectValue("derived_slotCount", String(slotCount));
+  updateSlotCountForFormula(formula);
+  updateSlotVisibility(slotCount);
 
   setColorValue("derived_highlightColor", s.highlightColor);
   setColorValue("derived_foregroundColor", s.foregroundColor);
   setColorValue("derived_backgroundColor", s.backgroundColor);
   setColorValue("derived_valueTextColor", s.valueTextColor);
   setColorValue("derived_titleColor", s.titleColor);
-  setInputValue("derived_min", s.min || "");
-  setInputValue("derived_max", s.max || "");
+  setInputValue("derived_min", s.min != null ? s.min : "");
+  setInputValue("derived_max", s.max != null ? s.max : "");
   setInputValue("derived_format", s.format || "");
   setInputValue("derived_divisor", s.divisor || "");
   setSelectValue("derived_graphUnit", s.graphUnit || "");
@@ -312,41 +314,8 @@ function applySettingsToUI(s) {
     setInputValue("slot" + i + "_divisor", slot.divisor || "");
     setSelectValue("slot" + i + "_graphUnit", slot.graphUnit || "");
 
-    if (allSensors.length > 0 && slot.sensorUid) {
-      var sensorSel = document.getElementById("slot" + i + "_sensorSelect");
-      if (sensorSel) {
-        for (var j = 0; j < sensorSel.options.length; j++) {
-          if (sensorSel.options[j].value === slot.sensorUid) {
-            sensorSel.selectedIndex = j;
-            break;
-          }
-        }
-      }
-    }
-  }
-}
-
-function setInputValue(id, val) {
-  var el = document.getElementById(id);
-  if (el && val != null) el.value = val;
-}
-
-function setColorValue(id, hex) {
-  if (!hex) return;
-  if (hex.length === 4) {
-    hex = "#" + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
-  }
-  var el = document.getElementById(id);
-  if (el) el.value = hex;
-}
-
-function setSelectValue(id, val) {
-  var el = document.getElementById(id);
-  if (!el || val == null) return;
-  for (var i = 0; i < el.options.length; i++) {
-    if (el.options[i].value === String(val)) {
-      el.selectedIndex = i;
-      return;
+    if (allSensors.length > 0) {
+      setSelectValue("slot" + i + "_sensorSelect", slot.sensorUid || "");
     }
   }
 }
@@ -354,7 +323,7 @@ function setSelectValue(id, val) {
 // --- slot count locking ---
 
 function updateSlotCountForFormula(formula) {
-  var el = document.getElementById("derived_slotCount");
+  var el = byId("derived_slotCount");
   if (!el) return;
   if (formula === "delta") {
     el.value = "2";
@@ -381,13 +350,13 @@ function updateSlotVisibility(count) {
 
 document.addEventListener("DOMContentLoaded", function () {
   // Presets
-  var presetLoad = document.getElementById("preset_load");
+  var presetLoad = byId("preset_load");
   if (presetLoad) {
     presetLoad[onchangeevt] = function () {
       if (presetLoad.value) loadPresetByName(presetLoad.value);
     };
   }
-  var presetSaveas = document.getElementById("preset_saveas");
+  var presetSaveas = byId("preset_saveas");
   if (presetSaveas) {
     presetSaveas.onchange = function () {
       var name = presetSaveas.value.trim();
@@ -399,7 +368,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // All-slots sensor select
-  var allSlotsSel = document.getElementById("allSlots_sensorSelect");
+  var allSlotsSel = byId("allSlots_sensorSelect");
   if (allSlotsSel) {
     allSlotsSel[onchangeevt] = function () {
       if (!allSlotsSel.value) return;
@@ -410,91 +379,50 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // Tile-wide
-  wireRange("titleFontSize");
-  wireRange("valueFontSize");
-  wireSelect("derived_formula", function (val) {
+  bindSdpiValue("titleFontSize", sendSdpi, onchangeevt);
+  bindSdpiValue("valueFontSize", sendSdpi, onchangeevt);
+  bindSdpiValue("derived_formula", sendSdpi, onchangeevt, function (val) {
     updateSlotCountForFormula(val);
   });
-  wireSelect("derived_slotCount", function (val) {
+  bindSdpiValue("derived_slotCount", sendSdpi, onchangeevt, function (val) {
     updateSlotVisibility(parseInt(val, 10));
   });
-  wireColor("derived_highlightColor");
-  wireColor("derived_foregroundColor");
-  wireColor("derived_backgroundColor");
-  wireColor("derived_valueTextColor");
-  wireColor("derived_titleColor");
-  wireNumber("derived_min");
-  wireNumber("derived_max");
-  wireText("derived_format");
-  wireText("derived_divisor");
-  wireSelect("derived_graphUnit");
+  bindSdpiValue("derived_highlightColor", sendSdpi, onchangeevt);
+  bindSdpiValue("derived_foregroundColor", sendSdpi, onchangeevt);
+  bindSdpiValue("derived_backgroundColor", sendSdpi, onchangeevt);
+  bindSdpiValue("derived_valueTextColor", sendSdpi, onchangeevt);
+  bindSdpiValue("derived_titleColor", sendSdpi, onchangeevt);
+  bindSdpiValue("derived_min", sendSdpi, "onchange");
+  bindSdpiValue("derived_max", sendSdpi, "onchange");
+  bindSdpiValue("derived_format", sendSdpi, "onchange");
+  bindSdpiValue("derived_divisor", sendSdpi, "onchange");
+  bindSdpiValue("derived_graphUnit", sendSdpi, onchangeevt);
 
   for (var i = 0; i < 8; i++) {
     wireFavoriteSelect(i);
     wireSensorSelect(i);
     wireReadingSelect(i);
-    wireText("slot" + i + "_divisor");
-    wireSelect("slot" + i + "_graphUnit");
+    bindSdpiValue("slot" + i + "_divisor", sendSdpi, "onchange");
+    bindSdpiValue("slot" + i + "_graphUnit", sendSdpi, onchangeevt);
   }
 });
 
-function wireSelect(id, extra) {
-  var el = document.getElementById(id);
-  if (!el) return;
-  el[onchangeevt] = function () {
-    sendSdpi(id, el.value);
-    if (extra) extra(el.value);
-  };
-}
-
 function wireFavoriteSelect(slotIdx) {
-  var el = document.getElementById("slot" + slotIdx + "_favoriteSelect");
-  if (!el) return;
-  el[onchangeevt] = function () {
-    if (!el.value) return;
-    sendSdpi("slot" + slotIdx + "_applyFavorite", el.value);
+  bindValueChange("slot" + slotIdx + "_favoriteSelect", onchangeevt, function (value, el) {
+    if (!value) return;
+    sendSdpi("slot" + slotIdx + "_applyFavorite", value);
     el.selectedIndex = 0;
-  };
+  });
 }
 
 function wireSensorSelect(slotIdx) {
-  var id = "slot" + slotIdx + "_sensorSelect";
-  var el = document.getElementById(id);
-  if (!el) return;
-  el[onchangeevt] = function () {
-    sendSdpi("slot" + slotIdx + "_sensorSelect", el.value);
-  };
+  bindValueChange("slot" + slotIdx + "_sensorSelect", onchangeevt, function (value) {
+    sendSdpi("slot" + slotIdx + "_sensorSelect", value);
+  });
 }
 
 function wireReadingSelect(slotIdx) {
-  var id = "slot" + slotIdx + "_readingSelect";
-  var el = document.getElementById(id);
-  if (!el) return;
-  el[onchangeevt] = function () {
-    sendSdpi("slot" + slotIdx + "_readingSelect", el.value);
-  };
-}
-
-function wireText(id) {
-  var el = document.getElementById(id);
-  if (!el) return;
-  el.onchange = function () { sendSdpi(id, el.value); };
-}
-
-function wireColor(id) {
-  var el = document.getElementById(id);
-  if (!el) return;
-  el[onchangeevt] = function () { sendSdpi(id, el.value); };
-}
-
-function wireRange(id) {
-  var el = document.getElementById(id);
-  if (!el) return;
-  el[onchangeevt] = function () { sendSdpi(id, el.value); };
-}
-
-function wireNumber(id) {
-  var el = document.getElementById(id);
-  if (!el) return;
-  el.onchange = function () { sendSdpi(id, el.value); };
+  bindValueChange("slot" + slotIdx + "_readingSelect", onchangeevt, function (value) {
+    sendSdpi("slot" + slotIdx + "_readingSelect", value);
+  });
 }

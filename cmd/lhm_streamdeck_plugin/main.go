@@ -2,11 +2,10 @@ package main
 
 import (
 	"flag"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
-	"time"
 
 	plugin "github.com/moeilijk/lhm-streamdeck/internal/app/lhmstreamdeckplugin"
 )
@@ -29,9 +28,8 @@ func main() {
 	if err == nil {
 		log.SetOutput(f)
 		log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
-		log.Println("BOOT", time.Now().Format(time.RFC3339Nano))
 	} else {
-		log.SetOutput(ioutil.Discard)
+		log.SetOutput(io.Discard)
 	}
 
 	flag.Parse()
