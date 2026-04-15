@@ -8,7 +8,7 @@
 
 ## Motivation
 
-I wanted a local, open replacement for Stream Deck hardware monitoring without leaning on commercial tooling that did not fit my constraints. This fork keeps Shayne's original hwinfo plugin workflow while swapping the backend for Libre Hardware Monitor and documenting the refreshed setup.
+I wanted a local, open replacement for Stream Deck hardware monitoring without leaning on commercial tooling that did not fit my constraints. This fork keeps Shayne's original hwinfo plugin workflow while swapping the backend for Libre Hardware Monitor, adding multi-machine monitoring, and documenting the refreshed setup.
 
 ## Configuring Libre Hardware Monitor
 
@@ -31,11 +31,11 @@ I wanted a local, open replacement for Stream Deck hardware monitoring without l
 6. Check the top 4 options to set lhm to autorun on startup.
 
     ![alt text](images/run-on-startup.gif "LibreHardwareMonitor startup")
-6. Verify things are working by opening [http://127.0.0.1:8085/data.json](http://127.0.0.1:8085/data.json). If you chose
+7. Verify things are working by opening [http://127.0.0.1:8085/data.json](http://127.0.0.1:8085/data.json). If you chose
    a specific local IP, you can also use that IP in the URL. Keep Libre Hardware Monitor running while you use the Stream
    Deck action.
 
-7. Keep **LHM -> Options -> Update Interval** in sync with the plugin settings tile.
+8. Keep **LHM -> Options -> Update Interval** in sync with the plugin settings tile.
    The plugin does not change LHM's update interval automatically.
    Default in both places is **1s**.
 
@@ -51,7 +51,7 @@ I wanted a local, open replacement for Stream Deck hardware monitoring without l
 
 2. Double-click to install the plugin
 
-3. Choose "Install" went prompted by Stream Deck
+3. Choose "Install" when prompted by Stream Deck
 
     ![alt text](images/streamdeckinstall.png "Stream Deck Plugin Installation")
 
@@ -59,11 +59,17 @@ I wanted a local, open replacement for Stream Deck hardware monitoring without l
 
     ![alt text](images/streamdeckactionlist.png "Stream Deck Action List")
 
-5. Drag the "Libre Hardware Monitor" action from the list to a tile in the canvas area
+5. The plugin includes four actions:
+   - **Libre Hardware Monitor** for a single reading tile
+   - **LHM Composite Dashboard** for 2–4 readings on one key
+   - **LHM Derived Metric** for formulas across 2–8 readings
+   - **LHM Settings** for source profiles, polling, and default tile appearance
+
+6. Drag the action you want from the list to a tile in the canvas area
 
     ![alt text](images/dragaction.gif "Drag Action")
 
-6. Configure the action to display the sensor reading you wish
+7. Configure the action to display the sensor reading you wish
 
     ![alt text](images/configureaction.gif "Configure Action")
 
@@ -71,6 +77,16 @@ I wanted a local, open replacement for Stream Deck hardware monitoring without l
    - Use the search field to filter sensors by name.
    - Use the category dropdown to narrow down to a specific sensor group.
    - Save frequently used sensor/reading combinations as favorites with **Save Current**, then reload them from the favorites dropdown.
+
+### Multi-machine source profiles
+
+The plugin can monitor more than one Libre Hardware Monitor endpoint at the same time.
+
+- Use the **LHM Settings** action to create a source profile for each machine you want to monitor.
+- Give each profile a name plus host/port so you can switch between local and remote systems cleanly.
+- Set a **default source** for new tiles, then override the **Profile** per reading, composite, or derived tile as needed.
+
+This is the main workflow for multi-machine Libre Hardware Monitor setups. It also pairs well with the separate `lhm-companion` project when you want remote Linux monitoring or server dashboards to fit into the same Stream Deck layout.
 
 ### Composite Dashboard tile
 
@@ -92,18 +108,44 @@ In its Property Inspector:
 
 Graphs are composited with lighten blending so overlapping areas remain readable. Text is drawn as an overlay on top.
 
+### Derived Metric tile
+
+The **LHM Derived Metric** action combines 2–8 sensor readings into one computed value on a single key.
+
+In its Property Inspector:
+
+- **Profile** – choose which source profile this tile reads from.
+- **Formula** – select **sum**, **average**, **max**, **min**, **delta**, or **pct**.
+- **Slots** – choose how many readings participate in the formula (2–8; `delta` uses 2).
+- Per slot:
+  - **Favorite / Sensor / Reading** – choose the input reading directly or apply a saved favorite.
+  - **Divisor** – divide the raw slot value before the formula runs.
+  - **Graph unit** – normalize the slot reading before aggregation when needed.
+- Tile-wide:
+  - **Title / Value size** – font sizes for the title and value.
+  - **Highlight / Fill / Value text / Title text / Background** – tile colors.
+  - **Min / Max** – fixed graph scale; leave blank to auto-scale.
+  - **Format** – printf-style format string for the computed value.
+  - **Divisor** – divide the final computed value after the formula runs.
+  - **Graph unit** – output unit for the graph/value display.
+- **Presets** – save and reload derived metric setups so common formulas can be reused quickly.
+
 ### Plugin Settings tile
 
 The **LHM Settings** action (found under "Libre Hardware Monitor" in the action list) provides a dedicated tile for plugin-wide configuration. Drag it to any free tile on the canvas.
 
 In its Property Inspector you can set:
 
-- **Host** – the IP address or hostname where LHM is running (default: `127.0.0.1`). Change this if LHM runs on another machine on your network.
-- **Port** – the port LHM's web server listens on (default: `8085`). Change this if you configured a different port in LHM's Remote Web Server settings.
+- **Profile** – select which source profile you are editing.
+- **Add / Delete** – manage multiple source profiles for different machines.
+- **Name** – choose a friendly label for the selected source profile.
+- **Host** – the IP address or hostname where that profile's endpoint is running.
+- **Port** – the port the selected source profile listens on (default: `8085`).
+- **Default Source** – choose which profile new tiles should use by default.
 - **Interval** – how often the plugin polls LHM for new data (default: `1s`).
 - **Tile Appearance** – default background and text colors for all sensor tiles.
 
-Changes to Host and Port take effect immediately; all sensor tiles reconnect to the new address automatically.
+Changes to a profile's Host and Port take effect immediately; tiles that target that source reconnect automatically.
 
 ### Title behavior
 
