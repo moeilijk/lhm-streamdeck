@@ -86,7 +86,11 @@ The plugin can monitor more than one Libre Hardware Monitor endpoint at the same
 - Give each profile a name plus host/port so you can switch between local and remote systems cleanly.
 - Set a **default source** for new tiles, then override the **Profile** per reading, composite, or derived tile as needed.
 
-This is the main workflow for multi-machine Libre Hardware Monitor setups. It also pairs well with the separate `lhm-companion` project when you want remote Linux monitoring or server dashboards to fit into the same Stream Deck layout.
+This is the main workflow for multi-machine Libre Hardware Monitor setups.
+
+### lhm-companion (Linux)
+
+For Linux machines, use [lhm-companion](https://github.com/moeilijk/lhm-companion) — a lightweight bridge that exposes Linux sensor data (`/sys/class/hwmon`, CPU load, memory, network, storage, NVIDIA GPU) as a `data.json` endpoint in the exact format Libre Hardware Monitor produces. Add a source profile in the plugin settings pointing to the Linux machine's IP and port; all sensor tiles work without any plugin modifications.
 
 ### Composite Dashboard tile
 
