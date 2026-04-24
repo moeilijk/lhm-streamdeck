@@ -151,12 +151,13 @@ body,
 }
 
 /* Use a native checkbox for show-label-row items to avoid hidden/custom toggle issues. */
-.show-label-checkbox {
+.show-label-checkbox,
+#showLabel {
   display: inline-block !important;
-  appearance: auto;
-  -webkit-appearance: checkbox;
-  width: 18px;
-  height: 18px;
+  appearance: checkbox !important;
+  -webkit-appearance: checkbox !important;
+  width: 18px !important;
+  height: 18px !important;
   margin: 0;
 }
 
