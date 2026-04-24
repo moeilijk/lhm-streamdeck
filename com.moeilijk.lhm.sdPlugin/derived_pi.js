@@ -9,6 +9,16 @@ var websocket = null,
 
 var onchangeevt = "onchange";
 
+function updateRangeVal(id) {
+  var inp = document.getElementById(id) || document.querySelector("#" + id + " input[type=range]");
+  if (inp) positionRangeVal(inp);
+}
+
+function wireRangeVal(id) {
+  var inp = document.getElementById(id) || document.querySelector("#" + id + " input[type=range]");
+  if (inp) inp.oninput = function() { positionRangeVal(this); };
+}
+
 function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
   uuid = inUUID;
   actionInfo = JSON.parse(inActionInfo);
@@ -291,7 +301,9 @@ function applySettingsToUI(s) {
   var formula = s.formula || "sum";
   var slotCount = s.slotCount || 2;
   setInputValue("titleFontSize", s.titleFontSize != null ? s.titleFontSize : 10.5);
+  updateRangeVal("titleFontSize");
   setInputValue("valueFontSize", s.valueFontSize != null ? s.valueFontSize : 10.5);
+  updateRangeVal("valueFontSize");
   setSelectValue("derived_formula", formula);
   setSelectValue("derived_slotCount", String(slotCount));
   updateSlotCountForFormula(formula);
@@ -380,7 +392,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Tile-wide
   bindSdpiValue("titleFontSize", sendSdpi, onchangeevt);
+  wireRangeVal("titleFontSize");
   bindSdpiValue("valueFontSize", sendSdpi, onchangeevt);
+  wireRangeVal("valueFontSize");
   bindSdpiValue("derived_formula", sendSdpi, onchangeevt, function (val) {
     updateSlotCountForFormula(val);
   });

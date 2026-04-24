@@ -150,8 +150,8 @@ body,
   color: #fff;
 }
 
-/* Use a native checkbox for settings PI showLabel to avoid hidden/custom toggle issues. */
-#showLabel {
+/* Use a native checkbox for show-label-row items to avoid hidden/custom toggle issues. */
+.show-label-checkbox {
   display: inline-block !important;
   appearance: auto;
   -webkit-appearance: checkbox;
@@ -190,6 +190,47 @@ select.disabled,
 select option:disabled {
   color: #888 !important;
   font-style: normal !important;
+}
+
+.range-wrap {
+  flex: 1;
+  position: relative;
+  display: flex;
+}
+
+.range-wrap input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  max-width: none !important;
+  transform: translateY(2px);
+}
+
+.sdpi-item:has(.range-wrap),
+.sdpi-item-value:has(.range-wrap),
+details:has(.range-wrap) {
+  overflow: visible;
+}
+
+details .sdpi-item:has(.range-wrap) {
+  margin-top: 8px;
+}
+
+.range-val {
+  position: absolute;
+  top: -0.4em;
+  left: 0;
+  transform: translateX(-50%);
+  font-size: 9pt;
+  font-weight: normal;
+  line-height: 1;
+  color: #ccc;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  white-space: nowrap;
+  margin-top: 0 !important;
 }
 
 /* Restore spin buttons for port number input */

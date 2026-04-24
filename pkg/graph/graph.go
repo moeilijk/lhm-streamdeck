@@ -289,6 +289,18 @@ func (g *Graph) EncodePNG() ([]byte, error) {
 	return bts, nil
 }
 
+// Clear fills the canvas with the background color and resets graph history.
+func (g *Graph) Clear() {
+	for i := 0; i < len(g.img.Pix); i += 4 {
+		g.img.Pix[i] = g.bgColor.R
+		g.img.Pix[i+1] = g.bgColor.G
+		g.img.Pix[i+2] = g.bgColor.B
+		g.img.Pix[i+3] = g.bgColor.A
+	}
+	g.drawn = false
+	g.yvals = g.yvals[:0]
+}
+
 func vAsY(maxY int, v float64, minV, maxV int) int {
 	r := maxV - minV
 	v1 := v - float64(minV)

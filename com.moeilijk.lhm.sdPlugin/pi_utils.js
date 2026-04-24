@@ -90,6 +90,17 @@ function bindValueChange(id, eventName, handler) {
   return el;
 }
 
+function positionRangeVal(inp) {
+  var wrap = inp.parentElement;
+  var span = wrap && wrap.querySelector(".range-val");
+  if (!span) return;
+  span.textContent = inp.value;
+  requestAnimationFrame(function() {
+    var pct = (parseFloat(inp.value) - parseFloat(inp.min)) / (parseFloat(inp.max) - parseFloat(inp.min));
+    span.style.left = (pct * (inp.offsetWidth - 14) + 7) + "px";
+  });
+}
+
 function bindSdpiValue(id, sendSdpi, eventName, extra) {
   return bindValueChange(id, eventName, function (value, el) {
     sendSdpi(id, value);

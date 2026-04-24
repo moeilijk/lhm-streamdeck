@@ -165,13 +165,14 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
         document.querySelector("#valuetext").value = settings.valueTextColor;
       }
       if (settings.titleFontSize !== "") {
-        document.querySelector("#titleFontSize input").value =
-          settings.titleFontSize || 10.5;
+        var tfsInp = document.querySelector("#titleFontSize input[type=range]");
+        if (tfsInp) { tfsInp.value = settings.titleFontSize || 10.5; positionRangeVal(tfsInp); }
       }
       if (settings.valueFontSize !== "") {
-        document.querySelector("#valueFontSize input").value =
-          settings.valueFontSize || 10.5;
+        var vfsInp = document.querySelector("#valueFontSize input[type=range]");
+        if (vfsInp) { vfsInp.value = settings.valueFontSize || 10.5; positionRangeVal(vfsInp); }
       }
+      setSelectValue("graphMode", settings.graphMode || "both");
       if (settings.graphUnit !== undefined) {
         document.querySelector("#graphUnit").value = settings.graphUnit;
       }
@@ -352,7 +353,18 @@ function updateGraphUnitVisibility(unit) {
 function initPropertyInspector(initDelay) {
   setupCatalogControls();
   bindSnoozeControls();
+  wireRangeDisplays();
   prepareDOMElements(document);
+}
+
+function wireRangeDisplays() {
+  ["titleFontSize", "valueFontSize"].forEach(function(id) {
+    var inp = document.querySelector("#" + id + " input[type=range]");
+    if (inp) {
+      positionRangeVal(inp);
+      inp.oninput = function() { positionRangeVal(this); };
+    }
+  });
 }
 
 function setupCatalogControls() {
