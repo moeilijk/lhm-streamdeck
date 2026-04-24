@@ -7,6 +7,16 @@ var websocket = null,
 
 var onchangeevt = "onchange";
 
+function updateRangeDisplay(id) {
+  var inp = document.getElementById(id);
+  if (inp) positionRangeVal(inp);
+}
+
+function wireRangeOninput(id) {
+  var inp = document.getElementById(id);
+  if (inp) inp.oninput = function() { positionRangeVal(this); };
+}
+
 function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
   uuid = inUUID;
   actionInfo = JSON.parse(inActionInfo);
@@ -164,10 +174,13 @@ function applySettingsToUI(s) {
     setColorValue("slot" + i + "_titleColor", slot.titleColor);
     setColorValue("slot" + i + "_backgroundColor", slot.backgroundColor);
     setInputValue("slot" + i + "_fillAlpha", slot.fillAlpha != null ? slot.fillAlpha : 55);
+    updateRangeDisplay("slot" + i + "_fillAlpha");
     setInputValue("slot" + i + "_min", slot.min != null ? slot.min : "");
     setInputValue("slot" + i + "_max", slot.max != null ? slot.max : "");
     setInputValue("slot" + i + "_titleFontSize", slot.titleFontSize || 9);
+    updateRangeDisplay("slot" + i + "_titleFontSize");
     setInputValue("slot" + i + "_valueFontSize", slot.valueFontSize || 10.5);
+    updateRangeDisplay("slot" + i + "_valueFontSize");
     setInputValue("slot" + i + "_format", slot.format || "");
     setInputValue("slot" + i + "_divisor", slot.divisor || "");
     setSelectValue("slot" + i + "_graphUnit", slot.graphUnit || "");
@@ -205,10 +218,13 @@ document.addEventListener("DOMContentLoaded", function () {
     bindSdpiValue("slot" + i + "_titleColor", sendSdpi, onchangeevt);
     bindSdpiValue("slot" + i + "_backgroundColor", sendSdpi, onchangeevt);
     bindSdpiValue("slot" + i + "_fillAlpha", sendSdpi, onchangeevt);
+    wireRangeOninput("slot" + i + "_fillAlpha");
     bindSdpiValue("slot" + i + "_min", sendSdpi, "onchange");
     bindSdpiValue("slot" + i + "_max", sendSdpi, "onchange");
     bindSdpiValue("slot" + i + "_titleFontSize", sendSdpi, onchangeevt);
+    wireRangeOninput("slot" + i + "_titleFontSize");
     bindSdpiValue("slot" + i + "_valueFontSize", sendSdpi, onchangeevt);
+    wireRangeOninput("slot" + i + "_valueFontSize");
     bindSdpiValue("slot" + i + "_format", sendSdpi, "onchange");
     bindSdpiValue("slot" + i + "_divisor", sendSdpi, "onchange");
     bindSdpiValue("slot" + i + "_graphUnit", sendSdpi, onchangeevt);

@@ -948,6 +948,18 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			if err != nil {
 				log.Println("handleSnoozeDurations", err)
 			}
+		case "graphMode":
+			settings, getErr := p.am.getSettings(event.Context)
+			if getErr != nil {
+				log.Println("graphMode getSettings", getErr)
+				break
+			}
+			settings.GraphMode = sdpi.Value
+			if err2 := p.sd.SetSettings(event.Context, &settings); err2 != nil {
+				log.Println("graphMode SetSettings", err2)
+				break
+			}
+			p.am.SetAction(event.Action, event.Context, &settings)
 		case "foreground", "background", "highlight", "valuetext":
 			err := p.handleColorChange(event, sdpi.Key, &sdpi)
 			if err != nil {

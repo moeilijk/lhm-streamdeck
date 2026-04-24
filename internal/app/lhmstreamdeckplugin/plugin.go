@@ -738,15 +738,30 @@ func (p *Plugin) updateTiles(data *actionData) {
 		renderGraphValue = graphValue
 		freezeGraph = false
 	}
-	if !freezeGraph {
-		g.Update(renderGraphValue)
+	switch s.GraphMode {
+	case "text":
+		g.Clear()
+	default: // "both" or ""
+		if !freezeGraph {
+			g.Update(renderGraphValue)
+		}
+	case "graph":
+		if !freezeGraph {
+			g.Update(renderGraphValue)
+		}
 	}
 
-	g.SetLabelText(1, renderDisplayText)
-	if renderAlertText != "" {
-		g.SetLabelText(2, renderAlertText)
-	} else {
+	if s.GraphMode == "graph" {
+		g.SetLabelText(0, "")
+		g.SetLabelText(1, "")
 		g.SetLabelText(2, "")
+	} else {
+		g.SetLabelText(1, renderDisplayText)
+		if renderAlertText != "" {
+			g.SetLabelText(2, renderAlertText)
+		} else {
+			g.SetLabelText(2, "")
+		}
 	}
 
 	b, err := g.EncodePNG()

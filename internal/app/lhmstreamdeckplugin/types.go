@@ -70,6 +70,7 @@ type actionSettings struct {
 	BackgroundColor  string  `json:"backgroundColor"`
 	HighlightColor   string  `json:"highlightColor"`
 	ValueTextColor   string  `json:"valueTextColor"`
+	GraphMode        string  `json:"graphMode"` // "both" (default), "graph", "text"
 	InErrorState     bool    `json:"inErrorState"`
 
 	// Dynamic threshold system
