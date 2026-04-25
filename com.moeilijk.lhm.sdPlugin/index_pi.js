@@ -181,6 +181,7 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       if (tsEl) { tsEl.checked = settings.textStroke === true; }
       var tscEl = document.querySelector("#textStrokeColor");
       if (tscEl && settings.textStrokeColor) { tscEl.value = settings.textStrokeColor; }
+      setSelectValue("updateIntervalOverrideMs", String(settings.updateIntervalOverrideMs || 0));
       if (settings.graphUnit !== undefined) {
         document.querySelector("#graphUnit").value = settings.graphUnit;
       }

@@ -185,6 +185,15 @@ func (p *Plugin) updateDerivedTile(ctx string) {
 		return
 	}
 
+	if override := settings.UpdateIntervalOverrideMs; override > 0 {
+		p.mu.RLock()
+		lastRender := p.lastRenderTime[ctx]
+		p.mu.RUnlock()
+		if time.Since(lastRender) < time.Duration(override)*time.Millisecond {
+			return
+		}
+	}
+
 	var values []float64
 	var displayUnit string
 	var readingType hwsensorsservice.ReadingType
@@ -367,6 +376,9 @@ func (p *Plugin) updateDerivedTile(ctx string) {
 	p.mu.Lock()
 	if st, ok := p.derivedStates[ctx]; ok {
 		st.lastPollTime = pollTime
+	}
+	if settings.UpdateIntervalOverrideMs > 0 {
+		p.lastRenderTime[ctx] = time.Now()
 	}
 	p.mu.Unlock()
 }
@@ -695,6 +707,10 @@ func (p *Plugin) handleDerivedGlobalField(event *streamdeck.EvSendToPlugin, sdpi
 			} else {
 				state.graph.SetTextStrokeColor(nil)
 			}
+		}
+	case "derived_updateIntervalOverrideMs":
+		if v, err := strconv.Atoi(sdpi.Value); err == nil {
+			settings.UpdateIntervalOverrideMs = v
 		}
 	}
 	needsRebuild := sdpi.Key == "derived_foregroundColor" || sdpi.Key == "derived_backgroundColor" || sdpi.Key == "derived_highlightColor"

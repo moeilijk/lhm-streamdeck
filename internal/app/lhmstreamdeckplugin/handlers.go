@@ -633,6 +633,10 @@ func (p *Plugin) handleGraphVisuals(event *streamdeck.EvSendToPlugin, sdpi *evSd
 		} else {
 			g.SetTextStrokeColor(nil)
 		}
+	case "updateIntervalOverrideMs":
+		if v, err2 := strconv.Atoi(sdpi.Value); err2 == nil {
+			settings.UpdateIntervalOverrideMs = v
+		}
 	}
 	if err = p.sd.SetSettings(event.Context, &settings); err != nil {
 		return fmt.Errorf("handleGraphVisuals SetSettings: %w", err)

@@ -73,9 +73,10 @@ type actionSettings struct {
 	GraphMode             string `json:"graphMode"`             // "both" (default), "graph", "text"
 	GraphHeightPct        int    `json:"graphHeightPct"`        // 10–100; 0 = 100
 	GraphLineThickness    int    `json:"graphLineThickness"`    // 1–4; 0 = 1
-	TextStroke            bool   `json:"textStroke"`            // outline around labels
-	TextStrokeColor       string `json:"textStrokeColor"`       // hex; empty = use background color
-	InErrorState          bool   `json:"inErrorState"`
+	TextStroke                bool   `json:"textStroke"`                // outline around labels
+	TextStrokeColor           string `json:"textStrokeColor"`           // hex; empty = use background color
+	UpdateIntervalOverrideMs  int    `json:"updateIntervalOverrideMs"`  // 0 = follow global
+	InErrorState              bool   `json:"inErrorState"`
 
 	// Dynamic threshold system
 	Thresholds         []Threshold `json:"thresholds"`
@@ -191,10 +192,11 @@ type compositeSlotSettings struct {
 }
 
 type compositeActionSettings struct {
-	SourceProfileID string                   `json:"sourceProfileId,omitempty"`
-	SlotCount       int                      `json:"slotCount"`
-	Mode            string                   `json:"mode"`
-	Slots           [4]compositeSlotSettings `json:"slots"`
+	SourceProfileID          string                   `json:"sourceProfileId,omitempty"`
+	SlotCount                int                      `json:"slotCount"`
+	Mode                     string                   `json:"mode"`
+	Slots                    [4]compositeSlotSettings `json:"slots"`
+	UpdateIntervalOverrideMs int                      `json:"updateIntervalOverrideMs"` // 0 = follow global
 }
 
 type derivedSlotSettings struct {
@@ -229,9 +231,10 @@ type derivedActionSettings struct {
 	ValueTextColor     string      `json:"valueTextColor"`
 	GraphHeightPct     int         `json:"graphHeightPct"`
 	GraphLineThickness int         `json:"graphLineThickness"`
-	TextStroke         bool        `json:"textStroke"`
-	TextStrokeColor    string      `json:"textStrokeColor"`
-	Thresholds         []Threshold `json:"thresholds"`
+	TextStroke               bool        `json:"textStroke"`
+	TextStrokeColor          string      `json:"textStrokeColor"`
+	UpdateIntervalOverrideMs int         `json:"updateIntervalOverrideMs"` // 0 = follow global
+	Thresholds               []Threshold `json:"thresholds"`
 	CurrentThresholdID string      `json:"currentThresholdId"`
 	SnoozeDurations    []int       `json:"snoozeDurations,omitempty"`
 }

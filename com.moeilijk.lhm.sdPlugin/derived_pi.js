@@ -325,6 +325,7 @@ function applySettingsToUI(s) {
   var tsDerived = byId("derived_textStroke");
   if (tsDerived) tsDerived.checked = s.textStroke === true;
   setColorValue("derived_textStrokeColor", s.textStrokeColor || "#000000");
+  setSelectValue("derived_updateIntervalOverrideMs", String(s.updateIntervalOverrideMs || 0));
   setInputValue("derived_min", s.min != null ? s.min : "");
   setInputValue("derived_max", s.max != null ? s.max : "");
   setInputValue("derived_format", s.format || "");
@@ -429,6 +430,7 @@ document.addEventListener("DOMContentLoaded", function () {
   var tsDerivedEl = byId("derived_textStroke");
   if (tsDerivedEl) tsDerivedEl.onchange = function() { sendSdpiChecked("derived_textStroke", this.checked); };
   bindSdpiValue("derived_textStrokeColor", sendSdpi, onchangeevt);
+  bindSdpiValue("derived_updateIntervalOverrideMs", sendSdpi, onchangeevt);
 
   for (var i = 0; i < 8; i++) {
     wireFavoriteSelect(i);
