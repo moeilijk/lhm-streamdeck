@@ -601,6 +601,46 @@ func evaluateThreshold(value, threshold float64, operator string) bool {
 	}
 }
 
+func (p *Plugin) handleGraphVisuals(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection) error {
+	settings, err := p.am.getSettings(event.Context)
+	if err != nil {
+		return fmt.Errorf("handleGraphVisuals getSettings: %w", err)
+	}
+	p.mu.RLock()
+	g, ok := p.graphs[event.Context]
+	p.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("handleGraphVisuals no graph for context: %s", event.Context)
+	}
+	switch sdpi.Key {
+	case "graphHeightPct":
+		if v, err2 := strconv.Atoi(sdpi.Value); err2 == nil && v >= 10 && v <= 100 {
+			settings.GraphHeightPct = v
+			g.SetHeightPct(v)
+		}
+	case "graphLineThickness":
+		if v, err2 := strconv.Atoi(sdpi.Value); err2 == nil && v >= 1 && v <= 4 {
+			settings.GraphLineThickness = v
+			g.SetLineThickness(v)
+		}
+	case "textStroke":
+		settings.TextStroke = sdpi.Checked
+		g.SetTextStroke(sdpi.Checked)
+	case "textStrokeColor":
+		settings.TextStrokeColor = sdpi.Value
+		if sdpi.Value != "" {
+			g.SetTextStrokeColor(hexToRGBA(sdpi.Value))
+		} else {
+			g.SetTextStrokeColor(nil)
+		}
+	}
+	if err = p.sd.SetSettings(event.Context, &settings); err != nil {
+		return fmt.Errorf("handleGraphVisuals SetSettings: %w", err)
+	}
+	p.am.SetAction(event.Action, event.Context, &settings)
+	return nil
+}
+
 // applyNormalColors applies normal (non-alert) colors to the graph
 func (p *Plugin) applyNormalColors(g *graph.Graph, s *actionSettings) {
 	if s.ForegroundColor != "" {

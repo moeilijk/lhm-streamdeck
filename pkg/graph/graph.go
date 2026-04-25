@@ -42,9 +42,13 @@ type Graph struct {
 	bgColor *color.RGBA
 	hlColor *color.RGBA
 
-	labels map[int]*Label
-	drawn  bool
-	redraw bool
+	labels          map[int]*Label
+	drawn           bool
+	redraw          bool
+	heightPct       int         // 10–100; 0 means 100
+	lineThickness   int         // 1–4; 0 means 1
+	textStroke      bool        // draw outline around labels
+	textStrokeColor *color.RGBA // nil = use bgColor
 }
 
 // FontFaceManager builds and caches fonts based on size
@@ -153,6 +157,28 @@ func (g *Graph) SetHighlightColor(clr *color.RGBA) {
 	g.redraw = true
 }
 
+// SetHeightPct sets the fraction of tile height used by the graph (10–100).
+func (g *Graph) SetHeightPct(pct int) {
+	g.heightPct = pct
+	g.redraw = true
+}
+
+// SetLineThickness sets the highlight-line thickness in pixels (1–4).
+func (g *Graph) SetLineThickness(t int) {
+	g.lineThickness = t
+	g.redraw = true
+}
+
+// SetTextStroke enables or disables an outline around labels.
+func (g *Graph) SetTextStroke(b bool) {
+	g.textStroke = b
+}
+
+// SetTextStrokeColor sets the outline color. Pass nil to fall back to the background color.
+func (g *Graph) SetTextStrokeColor(clr *color.RGBA) {
+	g.textStrokeColor = clr
+}
+
 // SetMin sets the min value for the graph scale
 func (g *Graph) SetMin(min int) {
 	g.min = min
@@ -199,11 +225,32 @@ func (g *Graph) SetLabelColor(key int, clr *color.RGBA) error {
 	return nil
 }
 
+func (g *Graph) effectiveHeight() int {
+	if g.heightPct > 0 && g.heightPct < 100 {
+		h := g.height * g.heightPct / 100
+		if h < 1 {
+			return 1
+		}
+		return h
+	}
+	return g.height
+}
+
 func (g *Graph) drawGraph(x, vay, maxx int) {
+	lt := g.lineThickness
+	if lt < 1 {
+		lt = 1
+	}
+	effectiveH := g.effectiveHeight()
 	var clr *color.RGBA
 	for ; x <= maxx; x++ {
 		for y := 0; y < g.height; y++ {
-			if y == vay {
+			if y >= effectiveH {
+				clr = g.bgColor
+			} else if y == vay {
+				clr = g.hlColor
+			} else if y > vay && y < vay+lt {
+				// extended highlight line for thickness > 1
 				clr = g.hlColor
 			} else if g.lvay != -1 && vay > g.lvay && vay >= y && y >= g.lvay {
 				clr = g.hlColor
@@ -226,7 +273,7 @@ func (g *Graph) drawGraph(x, vay, maxx int) {
 
 // Update given a value draws the graph, shifting contents left. Call EncodePNG to get a rendered PNG
 func (g *Graph) Update(value float64) {
-	vay := vAsY(g.height-1, value, g.min, g.max)
+	vay := vAsY(g.effectiveHeight()-1, value, g.min, g.max)
 
 	if len(g.yvals) >= g.width {
 		_, a := g.yvals[0], g.yvals[1:]
@@ -324,9 +371,9 @@ func unfix(x fixed.Int26_6) float64 {
 var newlineRegex = regexp.MustCompile("(\n|\\\\n)+")
 
 func (g *Graph) drawLabel(l *Label) {
-	shared := shared()
+	sh := shared()
 	lines := newlineRegex.Split(l.text, -1)
-	face, err := shared.fontFaceManager.GetFaceOfSize(l.fontSize)
+	face, err := sh.fontFaceManager.GetFaceOfSize(l.fontSize)
 	if err != nil {
 		log.Printf("drawLabel font: %v", err)
 		return
@@ -337,7 +384,7 @@ func (g *Graph) drawLabel(l *Label) {
 		var lwidth float64
 		for _, x := range line {
 			awidth, ok := face.GlyphAdvance(rune(x))
-			if ok != true {
+			if !ok {
 				log.Println("drawLabel: Failed to GlyphAdvance")
 				return
 			}
@@ -352,6 +399,28 @@ func (g *Graph) drawLabel(l *Label) {
 			Src:  image.NewUniform(l.clr),
 			Face: face,
 			Dot:  point,
+		}
+		if g.textStroke {
+			strokeClr := g.bgColor
+			if g.textStrokeColor != nil {
+				strokeClr = g.textStrokeColor
+			}
+			strokeSrc := image.NewUniform(strokeClr)
+			for dy := -1; dy <= 1; dy++ {
+				for dx := -1; dx <= 1; dx++ {
+					if dx == 0 && dy == 0 {
+						continue
+					}
+					d.Src = strokeSrc
+					d.Dot = fixed.Point26_6{
+						X: point.X + fixed.Int26_6(dx*64),
+						Y: point.Y + fixed.Int26_6(dy*64),
+					}
+					d.DrawString(line)
+				}
+			}
+			d.Src = image.NewUniform(l.clr)
+			d.Dot = point
 		}
 		d.DrawString(line)
 		curY += 12

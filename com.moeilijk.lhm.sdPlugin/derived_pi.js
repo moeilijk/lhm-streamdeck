@@ -106,6 +106,10 @@ function sendSdpi(key, value) {
   sendValueToPlugin({ key: key, value: String(value) }, "sdpi_collection");
 }
 
+function sendSdpiChecked(key, checked) {
+  sendValueToPlugin({ key: key, value: "", checked: checked }, "sdpi_collection");
+}
+
 function rebuildSourceProfileDropdown(selectedId) {
   var sel = byId("sourceProfileSelect");
   if (!sel) return;
@@ -314,6 +318,13 @@ function applySettingsToUI(s) {
   setColorValue("derived_backgroundColor", s.backgroundColor);
   setColorValue("derived_valueTextColor", s.valueTextColor);
   setColorValue("derived_titleColor", s.titleColor);
+  setInputValue("derived_graphHeightPct", s.graphHeightPct || 100);
+  updateRangeVal("derived_graphHeightPct");
+  setInputValue("derived_graphLineThickness", s.graphLineThickness || 1);
+  updateRangeVal("derived_graphLineThickness");
+  var tsDerived = byId("derived_textStroke");
+  if (tsDerived) tsDerived.checked = s.textStroke === true;
+  setColorValue("derived_textStrokeColor", s.textStrokeColor || "#000000");
   setInputValue("derived_min", s.min != null ? s.min : "");
   setInputValue("derived_max", s.max != null ? s.max : "");
   setInputValue("derived_format", s.format || "");
@@ -411,6 +422,13 @@ document.addEventListener("DOMContentLoaded", function () {
   bindSdpiValue("derived_format", sendSdpi, "onchange");
   bindSdpiValue("derived_divisor", sendSdpi, "onchange");
   bindSdpiValue("derived_graphUnit", sendSdpi, onchangeevt);
+  bindSdpiValue("derived_graphHeightPct", sendSdpi, onchangeevt);
+  wireRangeVal("derived_graphHeightPct");
+  bindSdpiValue("derived_graphLineThickness", sendSdpi, onchangeevt);
+  wireRangeVal("derived_graphLineThickness");
+  var tsDerivedEl = byId("derived_textStroke");
+  if (tsDerivedEl) tsDerivedEl.onchange = function() { sendSdpiChecked("derived_textStroke", this.checked); };
+  bindSdpiValue("derived_textStrokeColor", sendSdpi, onchangeevt);
 
   for (var i = 0; i < 8; i++) {
     wireFavoriteSelect(i);

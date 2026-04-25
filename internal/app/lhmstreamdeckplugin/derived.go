@@ -87,6 +87,16 @@ func initDerivedGraph(s *derivedActionSettings) *graph.Graph {
 	g.SetLabelFontSize(1, vfSize)
 	g.SetLabel(2, "", 56, vc)
 	g.SetLabelFontSize(2, vfSize)
+	if s.GraphHeightPct > 0 {
+		g.SetHeightPct(s.GraphHeightPct)
+	}
+	if s.GraphLineThickness > 0 {
+		g.SetLineThickness(s.GraphLineThickness)
+	}
+	g.SetTextStroke(s.TextStroke)
+	if s.TextStrokeColor != "" {
+		g.SetTextStrokeColor(hexToRGBA(s.TextStrokeColor))
+	}
 	return g
 }
 
@@ -656,6 +666,34 @@ func (p *Plugin) handleDerivedGlobalField(event *streamdeck.EvSendToPlugin, sdpi
 			}
 			if state != nil {
 				state.lastPollTime = 0
+			}
+		}
+	case "derived_graphHeightPct":
+		if v, err := strconv.Atoi(sdpi.Value); err == nil && v >= 10 && v <= 100 {
+			settings.GraphHeightPct = v
+			if state != nil && state.graph != nil {
+				state.graph.SetHeightPct(v)
+			}
+		}
+	case "derived_graphLineThickness":
+		if v, err := strconv.Atoi(sdpi.Value); err == nil && v >= 1 && v <= 4 {
+			settings.GraphLineThickness = v
+			if state != nil && state.graph != nil {
+				state.graph.SetLineThickness(v)
+			}
+		}
+	case "derived_textStroke":
+		settings.TextStroke = sdpi.Checked
+		if state != nil && state.graph != nil {
+			state.graph.SetTextStroke(sdpi.Checked)
+		}
+	case "derived_textStrokeColor":
+		settings.TextStrokeColor = sdpi.Value
+		if state != nil && state.graph != nil {
+			if sdpi.Value != "" {
+				state.graph.SetTextStrokeColor(hexToRGBA(sdpi.Value))
+			} else {
+				state.graph.SetTextStrokeColor(nil)
 			}
 		}
 	}

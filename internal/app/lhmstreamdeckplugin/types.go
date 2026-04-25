@@ -70,8 +70,12 @@ type actionSettings struct {
 	BackgroundColor  string  `json:"backgroundColor"`
 	HighlightColor   string  `json:"highlightColor"`
 	ValueTextColor   string  `json:"valueTextColor"`
-	GraphMode        string  `json:"graphMode"` // "both" (default), "graph", "text"
-	InErrorState     bool    `json:"inErrorState"`
+	GraphMode             string `json:"graphMode"`             // "both" (default), "graph", "text"
+	GraphHeightPct        int    `json:"graphHeightPct"`        // 10–100; 0 = 100
+	GraphLineThickness    int    `json:"graphLineThickness"`    // 1–4; 0 = 1
+	TextStroke            bool   `json:"textStroke"`            // outline around labels
+	TextStrokeColor       string `json:"textStrokeColor"`       // hex; empty = use background color
+	InErrorState          bool   `json:"inErrorState"`
 
 	// Dynamic threshold system
 	Thresholds         []Threshold `json:"thresholds"`
@@ -177,9 +181,13 @@ type compositeSlotSettings struct {
 	FillAlpha       int     `json:"fillAlpha"`
 	Min             int     `json:"min"`
 	Max             int     `json:"max"`
-	Format          string  `json:"format"`
-	Divisor         string  `json:"divisor"`
-	GraphUnit       string  `json:"graphUnit"`
+	Format             string `json:"format"`
+	Divisor            string `json:"divisor"`
+	GraphUnit          string `json:"graphUnit"`
+	GraphHeightPct     int    `json:"graphHeightPct"`
+	GraphLineThickness int    `json:"graphLineThickness"`
+	TextStroke         bool   `json:"textStroke"`
+	TextStrokeColor    string `json:"textStrokeColor"`
 }
 
 type compositeActionSettings struct {
@@ -219,6 +227,10 @@ type derivedActionSettings struct {
 	BackgroundColor    string      `json:"backgroundColor"`
 	HighlightColor     string      `json:"highlightColor"`
 	ValueTextColor     string      `json:"valueTextColor"`
+	GraphHeightPct     int         `json:"graphHeightPct"`
+	GraphLineThickness int         `json:"graphLineThickness"`
+	TextStroke         bool        `json:"textStroke"`
+	TextStrokeColor    string      `json:"textStrokeColor"`
 	Thresholds         []Threshold `json:"thresholds"`
 	CurrentThresholdID string      `json:"currentThresholdId"`
 	SnoozeDurations    []int       `json:"snoozeDurations,omitempty"`

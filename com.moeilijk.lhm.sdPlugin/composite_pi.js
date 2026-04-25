@@ -85,6 +85,10 @@ function sendSdpi(key, value) {
   sendValueToPlugin({ key: key, value: String(value) }, "sdpi_collection");
 }
 
+function sendSdpiChecked(key, checked) {
+  sendValueToPlugin({ key: key, value: "", checked: checked }, "sdpi_collection");
+}
+
 function rebuildSourceProfileDropdown(selectedId) {
   var sel = byId("sourceProfileSelect");
   if (!sel) return;
@@ -181,6 +185,13 @@ function applySettingsToUI(s) {
     updateRangeDisplay("slot" + i + "_titleFontSize");
     setInputValue("slot" + i + "_valueFontSize", slot.valueFontSize || 10.5);
     updateRangeDisplay("slot" + i + "_valueFontSize");
+    setInputValue("slot" + i + "_graphHeightPct", slot.graphHeightPct || 100);
+    updateRangeDisplay("slot" + i + "_graphHeightPct");
+    setInputValue("slot" + i + "_graphLineThickness", slot.graphLineThickness || 1);
+    updateRangeDisplay("slot" + i + "_graphLineThickness");
+    var tsEl = byId("slot" + i + "_textStroke");
+    if (tsEl) tsEl.checked = slot.textStroke === true;
+    setColorValue("slot" + i + "_textStrokeColor", slot.textStrokeColor || "#000000");
     setInputValue("slot" + i + "_format", slot.format || "");
     setInputValue("slot" + i + "_divisor", slot.divisor || "");
     setSelectValue("slot" + i + "_graphUnit", slot.graphUnit || "");
@@ -225,6 +236,15 @@ document.addEventListener("DOMContentLoaded", function () {
     wireRangeOninput("slot" + i + "_titleFontSize");
     bindSdpiValue("slot" + i + "_valueFontSize", sendSdpi, onchangeevt);
     wireRangeOninput("slot" + i + "_valueFontSize");
+    bindSdpiValue("slot" + i + "_graphHeightPct", sendSdpi, onchangeevt);
+    wireRangeOninput("slot" + i + "_graphHeightPct");
+    bindSdpiValue("slot" + i + "_graphLineThickness", sendSdpi, onchangeevt);
+    wireRangeOninput("slot" + i + "_graphLineThickness");
+    (function(idx) {
+      var cb = byId("slot" + idx + "_textStroke");
+      if (cb) cb.onchange = function() { sendSdpiChecked("slot" + idx + "_textStroke", this.checked); };
+    })(i);
+    bindSdpiValue("slot" + i + "_textStrokeColor", sendSdpi, onchangeevt);
     bindSdpiValue("slot" + i + "_format", sendSdpi, "onchange");
     bindSdpiValue("slot" + i + "_divisor", sendSdpi, "onchange");
     bindSdpiValue("slot" + i + "_graphUnit", sendSdpi, onchangeevt);
