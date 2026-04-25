@@ -833,7 +833,7 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 				"derived_foregroundColor", "derived_backgroundColor", "derived_highlightColor",
 				"derived_valueTextColor", "derived_titleColor", "derived_title",
 				"derived_graphHeightPct", "derived_graphLineThickness", "derived_textStroke", "derived_textStrokeColor",
-				"titleFontSize", "valueFontSize":
+				"derived_updateIntervalOverrideMs", "titleFontSize", "valueFontSize":
 				p.handleDerivedGlobalField(event, &sdpi)
 			case "allSlots_sensorSelect":
 				p.handleDerivedAllSlotsSensor(event, &sdpi)
@@ -866,7 +866,7 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 				return
 			}
 			switch sdpi.Key {
-			case "composite_mode", "composite_slotCount":
+			case "composite_mode", "composite_slotCount", "updateIntervalOverrideMs":
 				p.handleCompositeGlobalField(event, &sdpi)
 			default:
 				slotIdx, field := parseCompositeSlotKey(sdpi.Key)
@@ -981,7 +981,7 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			if err != nil {
 				log.Println("handleSetTitleFontSize", err)
 			}
-		case "graphHeightPct", "graphLineThickness", "textStroke", "textStrokeColor":
+		case "graphHeightPct", "graphLineThickness", "textStroke", "textStrokeColor", "updateIntervalOverrideMs":
 			err := p.handleGraphVisuals(event, &sdpi)
 			if err != nil {
 				log.Println("handleGraphVisuals", err)

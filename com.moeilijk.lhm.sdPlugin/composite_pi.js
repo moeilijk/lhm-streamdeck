@@ -166,6 +166,7 @@ function applySettingsToUI(s) {
   var slotCount = s.slotCount || 2;
   setSelectValue("composite_mode", s.mode || "both");
   setSelectValue("composite_slotCount", String(slotCount));
+  setSelectValue("updateIntervalOverrideMs", String(s.updateIntervalOverrideMs || 0));
   updateSlotVisibility(slotCount);
 
   var slots = s.slots || [];
@@ -218,6 +219,7 @@ document.addEventListener("DOMContentLoaded", function () {
   bindSdpiValue("composite_slotCount", sendSdpi, onchangeevt, function (val) {
     updateSlotVisibility(parseInt(val, 10));
   });
+  bindSdpiValue("updateIntervalOverrideMs", sendSdpi, onchangeevt);
 
   for (var i = 0; i < 4; i++) {
     wireSensorSelect(i);

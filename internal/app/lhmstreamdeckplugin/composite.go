@@ -334,6 +334,15 @@ func (p *Plugin) updateCompositeTile(ctx string) {
 		return
 	}
 
+	if override := settings.UpdateIntervalOverrideMs; override > 0 {
+		p.mu.RLock()
+		lastRender := p.lastRenderTime[ctx]
+		p.mu.RUnlock()
+		if time.Since(lastRender) < time.Duration(override)*time.Millisecond {
+			return
+		}
+	}
+
 	var displayTexts [4]string
 	n := settings.SlotCount
 
@@ -404,6 +413,9 @@ func (p *Plugin) updateCompositeTile(ctx string) {
 	p.mu.Lock()
 	if st, ok5 := p.compositeStates[ctx]; ok5 {
 		st.lastPollTime = pollTime
+	}
+	if settings.UpdateIntervalOverrideMs > 0 {
+		p.lastRenderTime[ctx] = time.Now()
 	}
 	p.mu.Unlock()
 }
@@ -691,6 +703,10 @@ func (p *Plugin) handleCompositeGlobalField(event *streamdeck.EvSendToPlugin, sd
 	case "composite_slotCount":
 		if v, err := strconv.Atoi(sdpi.Value); err == nil && v >= 2 && v <= 4 {
 			settings.SlotCount = v
+		}
+	case "updateIntervalOverrideMs":
+		if v, err := strconv.Atoi(sdpi.Value); err == nil {
+			settings.UpdateIntervalOverrideMs = v
 		}
 	}
 	p.mu.Unlock()

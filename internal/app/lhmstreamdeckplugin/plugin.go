@@ -49,7 +49,8 @@ type Plugin struct {
 
 	// Cached assets and state for performance
 	placeholderImage []byte            // cached startup chip placeholder image (set once at init, read-only after)
-	lastPollTime     map[string]uint64 // last processed PollTime per context
+	lastPollTime     map[string]uint64    // last processed PollTime per context
+	lastRenderTime   map[string]time.Time // wall-time of last render per context (for per-tile interval override)
 	divisorCache     map[string]divisorCacheEntry
 	thresholdStates  map[string]map[string]*thresholdRuntimeState
 	thresholdSnoozes map[string]*thresholdSnoozeState
@@ -346,6 +347,7 @@ func NewPlugin(port, uuid, event, info string) (*Plugin, error) {
 		sources:           make(map[string]*sourceRuntime),
 		graphs:            make(map[string]*graph.Graph),
 		lastPollTime:      make(map[string]uint64),
+		lastRenderTime:    make(map[string]time.Time),
 		divisorCache:      make(map[string]divisorCacheEntry),
 		thresholdStates:   make(map[string]map[string]*thresholdRuntimeState),
 		thresholdSnoozes:  make(map[string]*thresholdSnoozeState),
@@ -631,6 +633,16 @@ func (p *Plugin) updateTiles(data *actionData) {
 			return
 		}
 	}
+
+	if override := s.UpdateIntervalOverrideMs; override > 0 && !forceUpdate {
+		p.mu.RLock()
+		lastRender := p.lastRenderTime[data.context]
+		p.mu.RUnlock()
+		if time.Since(lastRender) < time.Duration(override)*time.Millisecond {
+			return
+		}
+	}
+
 	r, readings, err := p.getReadingForSource(profileID, s.SensorUID, s.ReadingID)
 	if err != nil {
 		if s.ReadingLabel != "" {
@@ -778,6 +790,9 @@ func (p *Plugin) updateTiles(data *actionData) {
 
 	p.mu.Lock()
 	p.lastPollTime[data.context] = pollTime
+	if data.settings.UpdateIntervalOverrideMs > 0 {
+		p.lastRenderTime[data.context] = time.Now()
+	}
 	p.mu.Unlock()
 }
 
