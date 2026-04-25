@@ -56,7 +56,18 @@ func newCompositeGraph(slot *compositeSlotSettings) *graph.Graph {
 		}
 	}
 
-	return graph.NewGraph(tileWidth, tileHeight, slot.Min, slot.Max, fgColor, bgColor, hlColor)
+	g := graph.NewGraph(tileWidth, tileHeight, slot.Min, slot.Max, fgColor, bgColor, hlColor)
+	if slot.GraphHeightPct > 0 {
+		g.SetHeightPct(slot.GraphHeightPct)
+	}
+	if slot.GraphLineThickness > 0 {
+		g.SetLineThickness(slot.GraphLineThickness)
+	}
+	g.SetTextStroke(slot.TextStroke)
+	if slot.TextStrokeColor != "" {
+		g.SetTextStrokeColor(hexToRGBA(slot.TextStrokeColor))
+	}
+	return g
 }
 
 // initCompositeGraphs creates fresh graph.Graph instances for all slots.
@@ -173,7 +184,8 @@ func decodePNGToRGBA(b []byte) (*image.RGBA, error) {
 }
 
 // drawCompositeCenteredText draws txt centred horizontally on img at baselineY.
-func drawCompositeCenteredText(img *image.RGBA, txt string, baselineY int, size float64, clr *color.RGBA) {
+// When strokeClr is non-nil, a 1 px outline is drawn in that color first.
+func drawCompositeCenteredText(img *image.RGBA, txt string, baselineY int, size float64, clr *color.RGBA, strokeClr *color.RGBA) {
 	if txt == "" || clr == nil {
 		return
 	}
@@ -190,15 +202,29 @@ func drawCompositeCenteredText(img *image.RGBA, txt string, baselineY int, size 
 		}
 	}
 	cx := float64(tileWidth)/2 - w/2
-	(&font.Drawer{
-		Dst:  img,
-		Src:  image.NewUniform(clr),
-		Face: f,
-		Dot: fixed.Point26_6{
-			X: fixed.Int26_6(cx * 64),
-			Y: fixed.Int26_6(float64(baselineY) * 64),
-		},
-	}).DrawString(txt)
+	pt := fixed.Point26_6{
+		X: fixed.Int26_6(cx * 64),
+		Y: fixed.Int26_6(float64(baselineY) * 64),
+	}
+	d := &font.Drawer{Dst: img, Face: f}
+	if strokeClr != nil {
+		d.Src = image.NewUniform(strokeClr)
+		for dy := -1; dy <= 1; dy++ {
+			for dx := -1; dx <= 1; dx++ {
+				if dx == 0 && dy == 0 {
+					continue
+				}
+				d.Dot = fixed.Point26_6{
+					X: pt.X + fixed.Int26_6(dx*64),
+					Y: pt.Y + fixed.Int26_6(dy*64),
+				}
+				d.DrawString(txt)
+			}
+		}
+	}
+	d.Src = image.NewUniform(clr)
+	d.Dot = pt
+	d.DrawString(txt)
 }
 
 // renderCompositeTile blends the per-slot graph.Graph renders additively,
@@ -246,8 +272,12 @@ func renderCompositeTile(settings *compositeActionSettings, state *compositeStat
 			if label == "" {
 				label = slot.ReadingLabel
 			}
-			drawCompositeCenteredText(canvas, label, labelY, titleSz, hexToRGBA(slot.TitleColor))
-			drawCompositeCenteredText(canvas, displayTexts[i], valueY, valueSz, hexToRGBA(slot.ValueTextColor))
+			var strokeClr *color.RGBA
+			if slot.TextStroke && slot.TextStrokeColor != "" {
+				strokeClr = hexToRGBA(slot.TextStrokeColor)
+			}
+			drawCompositeCenteredText(canvas, label, labelY, titleSz, hexToRGBA(slot.TitleColor), strokeClr)
+			drawCompositeCenteredText(canvas, displayTexts[i], valueY, valueSz, hexToRGBA(slot.ValueTextColor), strokeClr)
 		}
 	}
 
@@ -607,6 +637,34 @@ func (p *Plugin) handleCompositeSlotField(event *streamdeck.EvSendToPlugin, sdpi
 		slot.Divisor = sdpi.Value
 	case "graphUnit":
 		slot.GraphUnit = sdpi.Value
+	case "graphHeightPct":
+		if v, err := strconv.Atoi(sdpi.Value); err == nil && v >= 10 && v <= 100 {
+			slot.GraphHeightPct = v
+			if state, ok2 := p.compositeStates[event.Context]; ok2 && state.graphs[slotIdx] != nil {
+				state.graphs[slotIdx].SetHeightPct(v)
+			}
+		}
+	case "graphLineThickness":
+		if v, err := strconv.Atoi(sdpi.Value); err == nil && v >= 1 && v <= 4 {
+			slot.GraphLineThickness = v
+			if state, ok2 := p.compositeStates[event.Context]; ok2 && state.graphs[slotIdx] != nil {
+				state.graphs[slotIdx].SetLineThickness(v)
+			}
+		}
+	case "textStroke":
+		slot.TextStroke = sdpi.Checked
+		if state, ok2 := p.compositeStates[event.Context]; ok2 && state.graphs[slotIdx] != nil {
+			state.graphs[slotIdx].SetTextStroke(sdpi.Checked)
+		}
+	case "textStrokeColor":
+		slot.TextStrokeColor = sdpi.Value
+		if state, ok2 := p.compositeStates[event.Context]; ok2 && state.graphs[slotIdx] != nil {
+			if sdpi.Value != "" {
+				state.graphs[slotIdx].SetTextStrokeColor(hexToRGBA(sdpi.Value))
+			} else {
+				state.graphs[slotIdx].SetTextStrokeColor(nil)
+			}
+		}
 	}
 	p.mu.Unlock()
 

@@ -237,6 +237,16 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 	g.SetLabelFontSize(1, vfSize)
 	g.SetLabel(2, "", 56, vtColor)
 	g.SetLabelFontSize(2, vfSize)
+	if settings.GraphHeightPct > 0 {
+		g.SetHeightPct(settings.GraphHeightPct)
+	}
+	if settings.GraphLineThickness > 0 {
+		g.SetLineThickness(settings.GraphLineThickness)
+	}
+	g.SetTextStroke(settings.TextStroke)
+	if settings.TextStrokeColor != "" {
+		g.SetTextStrokeColor(hexToRGBA(settings.TextStrokeColor))
+	}
 	if drawTitle {
 		g.SetLabelText(0, settings.Title)
 	}
@@ -822,6 +832,7 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 				"derived_graphUnit", "derived_min", "derived_max",
 				"derived_foregroundColor", "derived_backgroundColor", "derived_highlightColor",
 				"derived_valueTextColor", "derived_titleColor", "derived_title",
+				"derived_graphHeightPct", "derived_graphLineThickness", "derived_textStroke", "derived_textStrokeColor",
 				"titleFontSize", "valueFontSize":
 				p.handleDerivedGlobalField(event, &sdpi)
 			case "allSlots_sensorSelect":
@@ -969,6 +980,11 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			err := p.handleSetFontSize(event, sdpi.Key, &sdpi)
 			if err != nil {
 				log.Println("handleSetTitleFontSize", err)
+			}
+		case "graphHeightPct", "graphLineThickness", "textStroke", "textStrokeColor":
+			err := p.handleGraphVisuals(event, &sdpi)
+			if err != nil {
+				log.Println("handleGraphVisuals", err)
 			}
 		case "warningEnabled":
 			err := p.handleWarningEnabled(event, &sdpi)

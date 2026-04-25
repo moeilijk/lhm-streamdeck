@@ -157,6 +157,40 @@
         <div class="sdpi-item-label">Title text</div>
         <input class="sdpi-item-value" type="color" id="derived_titleColor" value="#b7b7b7" />
       </div>
+      <div type="range" class="sdpi-item">
+        <div class="sdpi-item-label">Graph height</div>
+        <div class="sdpi-item-value">
+          <span value="10">10</span>
+          <div class="range-wrap">
+            <span class="range-val">100</span>
+            <input type="range" min="10" max="100" step="5" value="100" id="derived_graphHeightPct" />
+          </div>
+          <span value="100">100%</span>
+        </div>
+      </div>
+      <div type="range" class="sdpi-item">
+        <div class="sdpi-item-label">Line thickness</div>
+        <div class="sdpi-item-value">
+          <span value="1">1</span>
+          <div class="range-wrap">
+            <span class="range-val">1</span>
+            <input type="range" min="1" max="4" step="1" value="1" id="derived_graphLineThickness" />
+          </div>
+          <span value="4">4</span>
+        </div>
+      </div>
+      <div class="sdpi-item show-label-row">
+        <div class="sdpi-item-label">Text stroke</div>
+        <div class="show-label-cell">
+          <input type="checkbox" class="show-label-checkbox" id="derived_textStroke" />
+        </div>
+        <div class="sdpi-item-label empty"></div>
+        <div class="show-label-cell show-label-cell-spacer" aria-hidden="true"></div>
+      </div>
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Stroke color</div>
+        <input class="sdpi-item-value" type="color" id="derived_textStrokeColor" value="#000000" />
+      </div>
     </details>
 
     <details>

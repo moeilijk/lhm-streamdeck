@@ -173,6 +173,14 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
         if (vfsInp) { vfsInp.value = settings.valueFontSize || 10.5; positionRangeVal(vfsInp); }
       }
       setSelectValue("graphMode", settings.graphMode || "both");
+      var ghpInp = document.querySelector("#graphHeightPct input[type=range]");
+      if (ghpInp) { ghpInp.value = settings.graphHeightPct || 100; positionRangeVal(ghpInp); }
+      var gltInp = document.querySelector("#graphLineThickness input[type=range]");
+      if (gltInp) { gltInp.value = settings.graphLineThickness || 1; positionRangeVal(gltInp); }
+      var tsEl = document.querySelector("#textStroke");
+      if (tsEl) { tsEl.checked = settings.textStroke === true; }
+      var tscEl = document.querySelector("#textStrokeColor");
+      if (tscEl && settings.textStrokeColor) { tscEl.value = settings.textStrokeColor; }
       if (settings.graphUnit !== undefined) {
         document.querySelector("#graphUnit").value = settings.graphUnit;
       }
@@ -358,13 +366,19 @@ function initPropertyInspector(initDelay) {
 }
 
 function wireRangeDisplays() {
-  ["titleFontSize", "valueFontSize"].forEach(function(id) {
+  ["titleFontSize", "valueFontSize", "graphHeightPct", "graphLineThickness"].forEach(function(id) {
     var inp = document.querySelector("#" + id + " input[type=range]");
     if (inp) {
       positionRangeVal(inp);
       inp.oninput = function() { positionRangeVal(this); };
     }
   });
+  var textStrokeEl = document.querySelector("#textStroke");
+  if (textStrokeEl) {
+    textStrokeEl.onchange = function() {
+      sendValueToPlugin({ key: "textStroke", value: "", checked: this.checked }, "sdpi_collection");
+    };
+  }
 }
 
 function setupCatalogControls() {
