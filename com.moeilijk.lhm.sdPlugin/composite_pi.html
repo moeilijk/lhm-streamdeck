@@ -70,6 +70,18 @@
       </select>
     </div>
 
+    <div type="range" class="sdpi-item" id="smoothingAlpha">
+      <div class="sdpi-item-label">Smoothing</div>
+      <div class="sdpi-item-value">
+        <span value="0.1">0.1</span>
+        <div class="range-wrap">
+          <span class="range-val">1</span>
+          <input type="range" min="0.1" max="1" step="0.1" value="1" />
+        </div>
+        <span value="1">1</span>
+      </div>
+    </div>
+
     <!-- Slot 0 -->
     <div class="slot-section" id="slot-section-0">
       <div class="sdpi-heading">Slot 1</div>
@@ -209,6 +221,17 @@
             <option value="GB">GB</option>
             <option value="TB">TB</option>
           </select>
+        </div>
+      </details>
+      <details>
+        <summary>Thresholds</summary>
+        <div id="slot0_thresholdsContainer"></div>
+        <div class="sdpi-item">
+          <div class="sdpi-item-label">Add New</div>
+          <div class="sdpi-item-value" style="display: flex; align-items: center; gap: 4px;">
+            <input type="text" id="slot0_newThresholdName" placeholder="Name" style="width: 100px;" />
+            <button id="slot0_addThresholdBtn" style="width: 60px;">Add</button>
+          </div>
         </div>
       </details>
     </div>
@@ -354,6 +377,17 @@
           </select>
         </div>
       </details>
+      <details>
+        <summary>Thresholds</summary>
+        <div id="slot1_thresholdsContainer"></div>
+        <div class="sdpi-item">
+          <div class="sdpi-item-label">Add New</div>
+          <div class="sdpi-item-value" style="display: flex; align-items: center; gap: 4px;">
+            <input type="text" id="slot1_newThresholdName" placeholder="Name" style="width: 100px;" />
+            <button id="slot1_addThresholdBtn" style="width: 60px;">Add</button>
+          </div>
+        </div>
+      </details>
     </div>
 
     <!-- Slot 2 -->
@@ -495,6 +529,17 @@
             <option value="GB">GB</option>
             <option value="TB">TB</option>
           </select>
+        </div>
+      </details>
+      <details>
+        <summary>Thresholds</summary>
+        <div id="slot2_thresholdsContainer"></div>
+        <div class="sdpi-item">
+          <div class="sdpi-item-label">Add New</div>
+          <div class="sdpi-item-value" style="display: flex; align-items: center; gap: 4px;">
+            <input type="text" id="slot2_newThresholdName" placeholder="Name" style="width: 100px;" />
+            <button id="slot2_addThresholdBtn" style="width: 60px;">Add</button>
+          </div>
         </div>
       </details>
     </div>
@@ -640,7 +685,104 @@
           </select>
         </div>
       </details>
+      <details>
+        <summary>Thresholds</summary>
+        <div id="slot3_thresholdsContainer"></div>
+        <div class="sdpi-item">
+          <div class="sdpi-item-label">Add New</div>
+          <div class="sdpi-item-value" style="display: flex; align-items: center; gap: 4px;">
+            <input type="text" id="slot3_newThresholdName" placeholder="Name" style="width: 100px;" />
+            <button id="slot3_addThresholdBtn" style="width: 60px;">Add</button>
+          </div>
+        </div>
+      </details>
     </div>
+
+    <!-- Shared template for composite slot threshold items -->
+    <template id="compositeThresholdTemplate">
+      <div class="threshold-item" data-threshold-id="">
+        <div class="sdpi-item" style="margin-top: 8px;">
+          <div class="sdpi-item-label threshold-header-label">
+            <input type="text" class="threshold-name" placeholder="Name" style="width: 70px;" />
+          </div>
+          <div class="sdpi-item-value threshold-header-value" style="display: flex; align-items: center; gap: 4px;">
+            <button class="threshold-toggle" style="width: 26px; padding: 0;">on</button>
+            <span class="threshold-arrows">
+              <button class="threshold-move-up" style="width: 18px; padding: 0;" title="Move up">&uarr;</button>
+              <button class="threshold-move-down" style="width: 18px; padding: 0;" title="Move down">&darr;</button>
+            </span>
+            <button class="threshold-remove" style="width: 18px; padding: 0; background: #a33; color: white;" title="Remove">×</button>
+          </div>
+        </div>
+
+        <div class="threshold-settings" style="display: none;">
+          <div class="sdpi-item">
+            <div class="sdpi-item-label">Text</div>
+            <input type="text" class="sdpi-item-value threshold-text" placeholder="e.g. HOT or Hot {value}" />
+          </div>
+          <div class="sdpi-item">
+            <div class="sdpi-item-label">Condition</div>
+            <div class="sdpi-item-value" style="display: flex; align-items: center; gap: 4px;">
+              <select class="threshold-operator" style="width: 55px;">
+                <option value=">">&gt;</option>
+                <option value="<">&lt;</option>
+                <option value=">=" selected>&gt;=</option>
+                <option value="<=">&lt;=</option>
+                <option value="==">==</option>
+              </select>
+              <input type="number" class="threshold-value" step="any" style="width: 60px;" placeholder="Value" />
+            </div>
+          </div>
+
+          <div class="sdpi-item threshold-advanced-toggle-row">
+            <div class="sdpi-item-label threshold-empty-label"></div>
+            <div class="sdpi-item-value threshold-advanced-toggle-cell">
+              <button class="threshold-advanced-toggle" type="button">Advanced</button>
+            </div>
+          </div>
+
+          <div class="threshold-advanced-panel" style="display: none;">
+            <div class="sdpi-item threshold-compact-row">
+              <div class="sdpi-item-label">Hyst</div>
+              <input type="number" class="sdpi-item-value threshold-hysteresis threshold-input-compact" step="any" placeholder="1" />
+            </div>
+            <div class="sdpi-item threshold-compact-row">
+              <div class="sdpi-item-label">Dwell ms</div>
+              <input type="number" class="sdpi-item-value threshold-dwell threshold-input-compact" step="100" min="0" placeholder="1000" />
+            </div>
+            <div class="sdpi-item threshold-compact-row">
+              <div class="sdpi-item-label">Cooldown ms</div>
+              <input type="number" class="sdpi-item-value threshold-cooldown threshold-input-compact" step="100" min="0" placeholder="5000" />
+            </div>
+            <div class="sdpi-item threshold-sticky-row">
+              <div class="sdpi-item-label">Sticky</div>
+              <div class="sdpi-item-value threshold-sticky-cell">
+                <button class="threshold-sticky-toggle" type="button">off</button>
+              </div>
+            </div>
+          </div>
+
+          <div type="color" class="sdpi-item">
+            <div class="sdpi-item-label">Background</div>
+            <input type="color" class="sdpi-item-value threshold-bg" value="#333300" />
+            <div class="sdpi-item-label">Value Text</div>
+            <input type="color" class="sdpi-item-value threshold-vt" value="#ffff00" />
+          </div>
+
+          <div type="color" class="sdpi-item">
+            <div class="sdpi-item-label">Foreground</div>
+            <input type="color" class="sdpi-item-value threshold-fg" value="#999900" />
+            <div class="sdpi-item-label">Highlight</div>
+            <input type="color" class="sdpi-item-value threshold-hl" value="#ffff00" />
+          </div>
+
+          <div type="color" class="sdpi-item">
+            <div class="sdpi-item-label">Alert Text</div>
+            <input type="color" class="sdpi-item-value threshold-tc" value="#ffffff" />
+          </div>
+        </div>
+      </div>
+    </template>
 
   </div><!-- #ui -->
 

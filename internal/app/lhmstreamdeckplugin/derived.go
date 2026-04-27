@@ -19,6 +19,8 @@ type derivedState struct {
 	lastPollTime     uint64
 	divisorCache     [8]divisorCacheEntry
 	tileDivisorCache divisorCacheEntry
+	smoothedValue    float64
+	smoothedInit     bool
 }
 
 // decodeDerivedSettings decodes raw JSON and fills in defaults for missing fields.
@@ -281,7 +283,20 @@ func (p *Plugin) updateDerivedTile(ctx string) {
 		displayUnit = "%"
 	}
 
-	valueTextNoUnit, displayText := p.formatDisplayValue(aggregated, displayUnit, settings.Format, readingType)
+	// EMA smoothing — threshold eval uses raw aggregated; smoothing applies to display and graph
+	smoothedAggregated := aggregated
+	if alpha := settings.SmoothingAlpha; alpha > 0 && alpha < 1.0 {
+		p.mu.Lock()
+		if !state.smoothedInit {
+			state.smoothedValue = aggregated
+			state.smoothedInit = true
+		}
+		smoothedAggregated = alpha*aggregated + (1-alpha)*state.smoothedValue
+		state.smoothedValue = smoothedAggregated
+		p.mu.Unlock()
+	}
+
+	valueTextNoUnit, displayText := p.formatDisplayValue(smoothedAggregated, displayUnit, settings.Format, readingType)
 
 	now := time.Now()
 	activeThreshold := p.evaluateThresholds(ctx, aggregated, settings.Thresholds, now)
@@ -335,12 +350,12 @@ func (p *Plugin) updateDerivedTile(ctx string) {
 	}
 
 	renderDisplayText, renderAlertText, renderGraphValue, freezeGraph := p.resolveThresholdDisplay(
-		ctx, activeThreshold, aggregated, aggregated, displayText, alertText,
+		ctx, activeThreshold, smoothedAggregated, smoothedAggregated, displayText, alertText,
 	)
 	if snoozed {
 		renderDisplayText = displayText
 		renderAlertText = thresholdSnoozeText(snoozeState, now)
-		renderGraphValue = aggregated
+		renderGraphValue = smoothedAggregated
 		freezeGraph = false
 	}
 	if !freezeGraph {
@@ -711,6 +726,13 @@ func (p *Plugin) handleDerivedGlobalField(event *streamdeck.EvSendToPlugin, sdpi
 	case "derived_updateIntervalOverrideMs":
 		if v, err := strconv.Atoi(sdpi.Value); err == nil {
 			settings.UpdateIntervalOverrideMs = v
+		}
+	case "derived_smoothingAlpha":
+		if v, err := strconv.ParseFloat(sdpi.Value, 64); err == nil {
+			settings.SmoothingAlpha = v
+			if state != nil {
+				state.smoothedInit = false
+			}
 		}
 	}
 	needsRebuild := sdpi.Key == "derived_foregroundColor" || sdpi.Key == "derived_backgroundColor" || sdpi.Key == "derived_highlightColor"

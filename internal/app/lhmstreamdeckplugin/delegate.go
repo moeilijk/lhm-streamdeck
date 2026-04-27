@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image/color"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -313,6 +314,9 @@ func (p *Plugin) OnWillDisappear(event *streamdeck.EvWillDisappear) {
 		delete(p.compositeSettings, event.Context)
 		delete(p.compositeStates, event.Context)
 		p.mu.Unlock()
+		for i := 0; i < 4; i++ {
+			p.clearThresholdRuntimeState(event.Context + "|" + strconv.Itoa(i))
+		}
 		return
 	}
 
@@ -833,7 +837,7 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 				"derived_foregroundColor", "derived_backgroundColor", "derived_highlightColor",
 				"derived_valueTextColor", "derived_titleColor", "derived_title",
 				"derived_graphHeightPct", "derived_graphLineThickness", "derived_textStroke", "derived_textStrokeColor",
-				"derived_updateIntervalOverrideMs", "titleFontSize", "valueFontSize":
+				"derived_updateIntervalOverrideMs", "derived_smoothingAlpha", "titleFontSize", "valueFontSize":
 				p.handleDerivedGlobalField(event, &sdpi)
 			case "allSlots_sensorSelect":
 				p.handleDerivedAllSlotsSensor(event, &sdpi)
@@ -866,7 +870,7 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 				return
 			}
 			switch sdpi.Key {
-			case "composite_mode", "composite_slotCount", "updateIntervalOverrideMs":
+			case "composite_mode", "composite_slotCount", "updateIntervalOverrideMs", "smoothingAlpha":
 				p.handleCompositeGlobalField(event, &sdpi)
 			default:
 				slotIdx, field := parseCompositeSlotKey(sdpi.Key)
@@ -879,6 +883,18 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 					p.handleCompositeSlotSensorSelect(event, &sdpi, slotIdx)
 				case "readingSelect":
 					p.handleCompositeSlotReadingSelect(event, &sdpi, slotIdx)
+				case "addThreshold":
+					p.handleCompositeAddThreshold(event, &sdpi, slotIdx)
+				case "removeThreshold":
+					p.handleCompositeRemoveThreshold(event, &sdpi, slotIdx)
+				case "reorderThreshold":
+					p.handleCompositeReorderThreshold(event, &sdpi, slotIdx)
+				case "thresholdEnabled", "thresholdName",
+					"thresholdOperator", "thresholdValue", "thresholdHysteresis", "thresholdDwellMs",
+					"thresholdCooldownMs", "thresholdSticky", "thresholdText", "thresholdTextColor",
+					"thresholdBackgroundColor", "thresholdForegroundColor",
+					"thresholdHighlightColor", "thresholdValueTextColor":
+					p.handleCompositeThresholdUpdate(event, &sdpi, slotIdx)
 				default:
 					p.handleCompositeSlotField(event, &sdpi, slotIdx, field)
 				}
@@ -981,7 +997,7 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			if err != nil {
 				log.Println("handleSetTitleFontSize", err)
 			}
-		case "graphHeightPct", "graphLineThickness", "textStroke", "textStrokeColor", "updateIntervalOverrideMs":
+		case "graphHeightPct", "graphLineThickness", "textStroke", "textStrokeColor", "updateIntervalOverrideMs", "smoothingAlpha":
 			err := p.handleGraphVisuals(event, &sdpi)
 			if err != nil {
 				log.Println("handleGraphVisuals", err)
