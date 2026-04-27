@@ -182,6 +182,8 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       var tscEl = document.querySelector("#textStrokeColor");
       if (tscEl && settings.textStrokeColor) { tscEl.value = settings.textStrokeColor; }
       setSelectValue("updateIntervalOverrideMs", String(settings.updateIntervalOverrideMs || 0));
+      var saInp = document.querySelector("#smoothingAlpha input[type=range]");
+      if (saInp) { saInp.value = settings.smoothingAlpha > 0 ? settings.smoothingAlpha : 1; positionRangeVal(saInp); }
       if (settings.graphUnit !== undefined) {
         document.querySelector("#graphUnit").value = settings.graphUnit;
       }
@@ -367,7 +369,7 @@ function initPropertyInspector(initDelay) {
 }
 
 function wireRangeDisplays() {
-  ["titleFontSize", "valueFontSize", "graphHeightPct", "graphLineThickness"].forEach(function(id) {
+  ["titleFontSize", "valueFontSize", "graphHeightPct", "graphLineThickness", "smoothingAlpha"].forEach(function(id) {
     var inp = document.querySelector("#" + id + " input[type=range]");
     if (inp) {
       positionRangeVal(inp);

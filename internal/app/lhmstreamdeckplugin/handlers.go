@@ -637,6 +637,13 @@ func (p *Plugin) handleGraphVisuals(event *streamdeck.EvSendToPlugin, sdpi *evSd
 		if v, err2 := strconv.Atoi(sdpi.Value); err2 == nil {
 			settings.UpdateIntervalOverrideMs = v
 		}
+	case "smoothingAlpha":
+		if v, err2 := strconv.ParseFloat(sdpi.Value, 64); err2 == nil {
+			settings.SmoothingAlpha = v
+			p.mu.Lock()
+			delete(p.smoothedValues, event.Context)
+			p.mu.Unlock()
+		}
 	}
 	if err = p.sd.SetSettings(event.Context, &settings); err != nil {
 		return fmt.Errorf("handleGraphVisuals SetSettings: %w", err)

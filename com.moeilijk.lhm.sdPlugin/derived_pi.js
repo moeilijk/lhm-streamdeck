@@ -15,7 +15,8 @@ function updateRangeVal(id) {
 }
 
 function wireRangeVal(id) {
-  var inp = document.getElementById(id) || document.querySelector("#" + id + " input[type=range]");
+  var el = document.getElementById(id);
+  var inp = (el && el.type === "range") ? el : (el && el.querySelector("input[type=range]")) || document.querySelector("#" + id + " input[type=range]");
   if (inp) inp.oninput = function() { positionRangeVal(this); };
 }
 
@@ -326,6 +327,8 @@ function applySettingsToUI(s) {
   if (tsDerived) tsDerived.checked = s.textStroke === true;
   setColorValue("derived_textStrokeColor", s.textStrokeColor || "#000000");
   setSelectValue("derived_updateIntervalOverrideMs", String(s.updateIntervalOverrideMs || 0));
+  var saInp = byId("derived_smoothingAlpha") && byId("derived_smoothingAlpha").querySelector("input[type=range]");
+  if (saInp) { saInp.value = s.smoothingAlpha > 0 ? s.smoothingAlpha : 1; positionRangeVal(saInp); }
   setInputValue("derived_min", s.min != null ? s.min : "");
   setInputValue("derived_max", s.max != null ? s.max : "");
   setInputValue("derived_format", s.format || "");
@@ -431,6 +434,13 @@ document.addEventListener("DOMContentLoaded", function () {
   if (tsDerivedEl) tsDerivedEl.onchange = function() { sendSdpiChecked("derived_textStroke", this.checked); };
   bindSdpiValue("derived_textStrokeColor", sendSdpi, onchangeevt);
   bindSdpiValue("derived_updateIntervalOverrideMs", sendSdpi, onchangeevt);
+  (function() {
+    var inp = document.querySelector("#derived_smoothingAlpha input[type=range]");
+    if (inp) {
+      inp.oninput = function() { positionRangeVal(this); };
+      inp.onchange = function() { sendSdpi("derived_smoothingAlpha", this.value); };
+    }
+  })();
 
   for (var i = 0; i < 8; i++) {
     wireFavoriteSelect(i);

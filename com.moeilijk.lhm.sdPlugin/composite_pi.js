@@ -3,7 +3,8 @@ var websocket = null,
   actionInfo = {},
   allSensors = [],
   currentSettings = {},
-  sourceProfiles = [];
+  sourceProfiles = [],
+  slotThresholdAdvancedOpen = {};
 
 var onchangeevt = "onchange";
 
@@ -60,6 +61,13 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
     // Readings for a specific slot
     if (Array.isArray(payload.readings) && typeof payload.slotIndex === "number") {
       populateReadingSelect(payload.slotIndex, payload.readings);
+    }
+
+    // Per-slot threshold updates from plugin (after add/remove/reorder)
+    if (payload.slotThresholds && typeof payload.slotThresholds.slotIndex === "number") {
+      var st = payload.slotThresholds;
+      renderSlotThresholds(st.slotIndex, st.thresholds || []);
+      if (currentSettings.slots) currentSettings.slots[st.slotIndex].thresholds = st.thresholds || [];
     }
 
     // Full settings object
@@ -167,6 +175,8 @@ function applySettingsToUI(s) {
   setSelectValue("composite_mode", s.mode || "both");
   setSelectValue("composite_slotCount", String(slotCount));
   setSelectValue("updateIntervalOverrideMs", String(s.updateIntervalOverrideMs || 0));
+  var saInp = byId("smoothingAlpha") && byId("smoothingAlpha").querySelector("input[type=range]");
+  if (saInp) { saInp.value = s.smoothingAlpha > 0 ? s.smoothingAlpha : 1; positionRangeVal(saInp); }
   updateSlotVisibility(slotCount);
 
   var slots = s.slots || [];
@@ -200,6 +210,8 @@ function applySettingsToUI(s) {
     if (allSensors.length > 0) {
       setSelectValue("slot" + i + "_sensorSelect", slot.sensorUid || "");
     }
+
+    renderSlotThresholds(i, slot.thresholds || []);
   }
 }
 
@@ -220,6 +232,13 @@ document.addEventListener("DOMContentLoaded", function () {
     updateSlotVisibility(parseInt(val, 10));
   });
   bindSdpiValue("updateIntervalOverrideMs", sendSdpi, onchangeevt);
+  (function() {
+    var inp = document.querySelector("#smoothingAlpha input[type=range]");
+    if (inp) {
+      inp.oninput = function() { positionRangeVal(this); };
+      inp.onchange = function() { sendSdpi("smoothingAlpha", this.value); };
+    }
+  })();
 
   for (var i = 0; i < 4; i++) {
     wireSensorSelect(i);
@@ -250,6 +269,7 @@ document.addEventListener("DOMContentLoaded", function () {
     bindSdpiValue("slot" + i + "_format", sendSdpi, "onchange");
     bindSdpiValue("slot" + i + "_divisor", sendSdpi, "onchange");
     bindSdpiValue("slot" + i + "_graphUnit", sendSdpi, onchangeevt);
+    wireSlotAddThreshold(i);
   }
 });
 
@@ -263,4 +283,225 @@ function wireReadingSelect(slotIdx) {
   bindValueChange("slot" + slotIdx + "_readingSelect", onchangeevt, function (value) {
     sendSdpi("slot" + slotIdx + "_readingSelect", value);
   });
+}
+
+// --- composite slot threshold helpers ---
+
+function sendCompositeThresholdUpdate(slotIdx, key, thresholdId, value, checked) {
+  sendValueToPlugin({
+    key: "slot" + slotIdx + "_" + key,
+    thresholdId: thresholdId,
+    value: value !== undefined ? String(value) : "",
+    checked: checked !== undefined ? checked : false
+  }, "sdpi_collection");
+}
+
+function wireSlotAddThreshold(slotIdx) {
+  var btn = byId("slot" + slotIdx + "_addThresholdBtn");
+  var nameInput = byId("slot" + slotIdx + "_newThresholdName");
+  if (!btn || !nameInput) return;
+  btn.addEventListener("click", function() {
+    var name = nameInput.value.trim() || "New Threshold";
+    sendValueToPlugin({ key: "slot" + slotIdx + "_addThreshold", value: name }, "sdpi_collection");
+    nameInput.value = "";
+  });
+  nameInput.addEventListener("keypress", function(e) {
+    if (e.key === "Enter") btn.click();
+  });
+}
+
+function renderSlotThresholds(slotIdx, thresholds) {
+  var container = byId("slot" + slotIdx + "_thresholdsContainer");
+  if (!container) return;
+  while (container.firstChild) container.removeChild(container.firstChild);
+  if (!thresholds || !thresholds.length) return;
+  thresholds.forEach(function(threshold, index) {
+    var el = createSlotThresholdElement(slotIdx, threshold, index, thresholds.length);
+    container.appendChild(el);
+  });
+}
+
+function createSlotThresholdElement(slotIdx, threshold, index, total) {
+  var template = document.querySelector("#compositeThresholdTemplate");
+  var clone = template.content.cloneNode(true);
+  var wrapper = clone.querySelector(".threshold-item");
+  wrapper.dataset.thresholdId = threshold.id;
+
+  var nameInput = clone.querySelector(".threshold-name");
+  nameInput.value = threshold.name || "";
+  var textInput = clone.querySelector(".threshold-text");
+  textInput.value = threshold.text || "";
+  var operatorSelect = clone.querySelector(".threshold-operator");
+  operatorSelect.value = threshold.operator || ">=";
+  var valueInput = clone.querySelector(".threshold-value");
+  valueInput.value = threshold.value !== undefined && threshold.value !== null ? threshold.value : "";
+  var hysteresisInput = clone.querySelector(".threshold-hysteresis");
+  hysteresisInput.value = threshold.hysteresis !== undefined && threshold.hysteresis !== null ? threshold.hysteresis : "";
+  var dwellInput = clone.querySelector(".threshold-dwell");
+  dwellInput.value = threshold.dwellMs !== undefined && threshold.dwellMs !== null ? threshold.dwellMs : "";
+  var cooldownInput = clone.querySelector(".threshold-cooldown");
+  cooldownInput.value = threshold.cooldownMs !== undefined && threshold.cooldownMs !== null ? threshold.cooldownMs : "";
+
+  var stickyBtn = clone.querySelector(".threshold-sticky-toggle");
+  var advancedToggleBtn = clone.querySelector(".threshold-advanced-toggle");
+  var advancedPanel = clone.querySelector(".threshold-advanced-panel");
+
+  var bgInput = clone.querySelector(".threshold-bg");
+  bgInput.value = threshold.backgroundColor || "#333300";
+  var fgInput = clone.querySelector(".threshold-fg");
+  fgInput.value = threshold.foregroundColor || "#999900";
+  var hlInput = clone.querySelector(".threshold-hl");
+  hlInput.value = threshold.highlightColor || "#ffff00";
+  var vtInput = clone.querySelector(".threshold-vt");
+  vtInput.value = threshold.valueTextColor || "#ffff00";
+  var tcInput = clone.querySelector(".threshold-tc");
+  if (tcInput) tcInput.value = threshold.textColor || "#ffffff";
+
+  var moveUpBtn = clone.querySelector(".threshold-move-up");
+  var moveDownBtn = clone.querySelector(".threshold-move-down");
+  if (moveUpBtn) moveUpBtn.disabled = index === 0;
+  if (moveDownBtn) moveDownBtn.disabled = index === total - 1;
+
+  var toggleBtn = clone.querySelector(".threshold-toggle");
+  var settingsDiv = clone.querySelector(".threshold-settings");
+  var isEnabled = threshold.enabled;
+  var isSticky = threshold.sticky === true;
+  var advKey = slotIdx + ":" + threshold.id;
+  var isAdvancedOpen = slotThresholdAdvancedOpen[advKey] === true;
+
+  function updateToggleState() {
+    toggleBtn.textContent = isEnabled ? "on" : "off";
+    toggleBtn.style.background = isEnabled ? "#4a4" : "#a44";
+    settingsDiv.style.display = isEnabled ? "block" : "none";
+  }
+  function updateStickyState() {
+    if (!stickyBtn) return;
+    stickyBtn.textContent = isSticky ? "on" : "off";
+    stickyBtn.style.background = isSticky ? "#4a4" : "#a44";
+    stickyBtn.style.color = "#fff";
+  }
+  function updateAdvancedState() {
+    if (!advancedToggleBtn || !advancedPanel) return;
+    advancedToggleBtn.textContent = isAdvancedOpen ? "Advanced ▼" : "Advanced ►";
+    advancedPanel.style.display = isAdvancedOpen ? "block" : "none";
+  }
+
+  updateToggleState();
+  updateStickyState();
+  updateAdvancedState();
+
+  var thresholdId = threshold.id;
+
+  toggleBtn.addEventListener("click", function() {
+    isEnabled = !isEnabled;
+    updateToggleState();
+    sendCompositeThresholdUpdate(slotIdx, "thresholdEnabled", thresholdId, isEnabled ? "true" : "false", isEnabled);
+  });
+
+  var nameTimeout;
+  nameInput.addEventListener("input", function(e) {
+    clearTimeout(nameTimeout);
+    nameTimeout = setTimeout(function() {
+      sendCompositeThresholdUpdate(slotIdx, "thresholdName", thresholdId, e.target.value);
+    }, 300);
+  });
+
+  var textTimeout;
+  textInput.addEventListener("input", function(e) {
+    clearTimeout(textTimeout);
+    textTimeout = setTimeout(function() {
+      sendCompositeThresholdUpdate(slotIdx, "thresholdText", thresholdId, e.target.value);
+    }, 300);
+  });
+
+  operatorSelect.addEventListener("change", function(e) {
+    sendCompositeThresholdUpdate(slotIdx, "thresholdOperator", thresholdId, e.target.value);
+  });
+
+  var valueTimeout;
+  valueInput.addEventListener("input", function(e) {
+    clearTimeout(valueTimeout);
+    valueTimeout = setTimeout(function() {
+      sendCompositeThresholdUpdate(slotIdx, "thresholdValue", thresholdId, e.target.value);
+    }, 300);
+  });
+
+  var hystTimeout;
+  hysteresisInput.addEventListener("input", function(e) {
+    clearTimeout(hystTimeout);
+    hystTimeout = setTimeout(function() {
+      sendCompositeThresholdUpdate(slotIdx, "thresholdHysteresis", thresholdId, e.target.value);
+    }, 300);
+  });
+
+  var dwellTimeout;
+  dwellInput.addEventListener("input", function(e) {
+    clearTimeout(dwellTimeout);
+    dwellTimeout = setTimeout(function() {
+      sendCompositeThresholdUpdate(slotIdx, "thresholdDwellMs", thresholdId, e.target.value);
+    }, 300);
+  });
+
+  var cooldownTimeout;
+  cooldownInput.addEventListener("input", function(e) {
+    clearTimeout(cooldownTimeout);
+    cooldownTimeout = setTimeout(function() {
+      sendCompositeThresholdUpdate(slotIdx, "thresholdCooldownMs", thresholdId, e.target.value);
+    }, 300);
+  });
+
+  if (stickyBtn) {
+    stickyBtn.addEventListener("click", function() {
+      isSticky = !isSticky;
+      updateStickyState();
+      sendCompositeThresholdUpdate(slotIdx, "thresholdSticky", thresholdId, isSticky ? "true" : "false", isSticky);
+    });
+  }
+
+  if (advancedToggleBtn) {
+    advancedToggleBtn.addEventListener("click", function() {
+      isAdvancedOpen = !isAdvancedOpen;
+      slotThresholdAdvancedOpen[advKey] = isAdvancedOpen;
+      updateAdvancedState();
+    });
+  }
+
+  bgInput.addEventListener("change", function(e) {
+    sendCompositeThresholdUpdate(slotIdx, "thresholdBackgroundColor", thresholdId, e.target.value);
+  });
+  fgInput.addEventListener("change", function(e) {
+    sendCompositeThresholdUpdate(slotIdx, "thresholdForegroundColor", thresholdId, e.target.value);
+  });
+  hlInput.addEventListener("change", function(e) {
+    sendCompositeThresholdUpdate(slotIdx, "thresholdHighlightColor", thresholdId, e.target.value);
+  });
+  vtInput.addEventListener("change", function(e) {
+    sendCompositeThresholdUpdate(slotIdx, "thresholdValueTextColor", thresholdId, e.target.value);
+  });
+  if (tcInput) {
+    tcInput.addEventListener("change", function(e) {
+      sendCompositeThresholdUpdate(slotIdx, "thresholdTextColor", thresholdId, e.target.value);
+    });
+  }
+
+  if (moveUpBtn) {
+    moveUpBtn.addEventListener("click", function() {
+      sendValueToPlugin({ key: "slot" + slotIdx + "_reorderThreshold", thresholdId: thresholdId, value: "up" }, "sdpi_collection");
+    });
+  }
+  if (moveDownBtn) {
+    moveDownBtn.addEventListener("click", function() {
+      sendValueToPlugin({ key: "slot" + slotIdx + "_reorderThreshold", thresholdId: thresholdId, value: "down" }, "sdpi_collection");
+    });
+  }
+
+  var removeBtn = clone.querySelector(".threshold-remove");
+  removeBtn.addEventListener("click", function() {
+    delete slotThresholdAdvancedOpen[advKey];
+    sendValueToPlugin({ key: "slot" + slotIdx + "_removeThreshold", thresholdId: thresholdId }, "sdpi_collection");
+    var item = removeBtn.closest(".threshold-item");
+    if (item && item.parentNode) item.parentNode.removeChild(item);
+  });
+
+  return clone;
 }

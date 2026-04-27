@@ -75,8 +75,9 @@ type actionSettings struct {
 	GraphLineThickness    int    `json:"graphLineThickness"`    // 1–4; 0 = 1
 	TextStroke                bool   `json:"textStroke"`                // outline around labels
 	TextStrokeColor           string `json:"textStrokeColor"`           // hex; empty = use background color
-	UpdateIntervalOverrideMs  int    `json:"updateIntervalOverrideMs"`  // 0 = follow global
-	InErrorState              bool   `json:"inErrorState"`
+	UpdateIntervalOverrideMs  int     `json:"updateIntervalOverrideMs"`  // 0 = follow global
+	SmoothingAlpha            float64 `json:"smoothingAlpha"`            // 0.1–1.0; 0 = treat as 1.0 (no smoothing)
+	InErrorState              bool    `json:"inErrorState"`
 
 	// Dynamic threshold system
 	Thresholds         []Threshold `json:"thresholds"`
@@ -189,6 +190,9 @@ type compositeSlotSettings struct {
 	GraphLineThickness int    `json:"graphLineThickness"`
 	TextStroke         bool   `json:"textStroke"`
 	TextStrokeColor    string `json:"textStrokeColor"`
+
+	Thresholds         []Threshold `json:"thresholds,omitempty"`
+	CurrentThresholdID string      `json:"currentThresholdId,omitempty"`
 }
 
 type compositeActionSettings struct {
@@ -197,6 +201,7 @@ type compositeActionSettings struct {
 	Mode                     string                   `json:"mode"`
 	Slots                    [4]compositeSlotSettings `json:"slots"`
 	UpdateIntervalOverrideMs int                      `json:"updateIntervalOverrideMs"` // 0 = follow global
+	SmoothingAlpha           float64                  `json:"smoothingAlpha"`           // 0.1–1.0; 0 = 1.0 (no smoothing)
 }
 
 type derivedSlotSettings struct {
@@ -234,6 +239,7 @@ type derivedActionSettings struct {
 	TextStroke               bool        `json:"textStroke"`
 	TextStrokeColor          string      `json:"textStrokeColor"`
 	UpdateIntervalOverrideMs int         `json:"updateIntervalOverrideMs"` // 0 = follow global
+	SmoothingAlpha           float64     `json:"smoothingAlpha"`           // 0.1–1.0; 0 = 1.0 (no smoothing)
 	Thresholds               []Threshold `json:"thresholds"`
 	CurrentThresholdID string      `json:"currentThresholdId"`
 	SnoozeDurations    []int       `json:"snoozeDurations,omitempty"`

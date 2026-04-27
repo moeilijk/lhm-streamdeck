@@ -3,6 +3,7 @@ package lhmstreamdeckplugin
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -33,9 +34,11 @@ var compositeSlotDefaults = [4]compositeSlotSettings{
 // compositeState holds runtime state for one composite tile context.
 // One graph.Graph per slot — same object the original tile uses.
 type compositeState struct {
-	graphs       [4]*graph.Graph
-	lastPollTime uint64
-	divisorCache [4]divisorCacheEntry
+	graphs          [4]*graph.Graph
+	lastPollTime    uint64
+	divisorCache    [4]divisorCacheEntry
+	smoothedValues  [4]float64
+	smoothedInit    [4]bool
 }
 
 // newCompositeGraph creates a graph.Graph for one slot using its settings.
@@ -229,7 +232,7 @@ func drawCompositeCenteredText(img *image.RGBA, txt string, baselineY int, size 
 
 // renderCompositeTile blends the per-slot graph.Graph renders additively,
 // then draws text labels on top — matching the original tile's visual style.
-func renderCompositeTile(settings *compositeActionSettings, state *compositeState, displayTexts [4]string) ([]byte, error) {
+func renderCompositeTile(settings *compositeActionSettings, state *compositeState, displayTexts [4]string, activeThresholds [4]*Threshold) ([]byte, error) {
 	n := settings.SlotCount
 
 	// Start with a black canvas.
@@ -276,8 +279,18 @@ func renderCompositeTile(settings *compositeActionSettings, state *compositeStat
 			if slot.TextStroke && slot.TextStrokeColor != "" {
 				strokeClr = hexToRGBA(slot.TextStrokeColor)
 			}
-			drawCompositeCenteredText(canvas, label, labelY, titleSz, hexToRGBA(slot.TitleColor), strokeClr)
-			drawCompositeCenteredText(canvas, displayTexts[i], valueY, valueSz, hexToRGBA(slot.ValueTextColor), strokeClr)
+			titleClr := hexToRGBA(slot.TitleColor)
+			valueClr := hexToRGBA(slot.ValueTextColor)
+			if t := activeThresholds[i]; t != nil {
+				if t.TextColor != "" {
+					titleClr = hexToRGBA(t.TextColor)
+				}
+				if t.ValueTextColor != "" {
+					valueClr = hexToRGBA(t.ValueTextColor)
+				}
+			}
+			drawCompositeCenteredText(canvas, label, labelY, titleSz, titleClr, strokeClr)
+			drawCompositeCenteredText(canvas, displayTexts[i], valueY, valueSz, valueClr, strokeClr)
 		}
 	}
 
@@ -287,6 +300,22 @@ func renderCompositeTile(settings *compositeActionSettings, state *compositeStat
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// applyNormalCompositeColors resets a slot's graph to its configured (non-alert) colors.
+func applyNormalCompositeColors(g *graph.Graph, slot *compositeSlotSettings) {
+	if slot.ForegroundColor != "" {
+		g.SetForegroundColor(hexToRGBA(slot.ForegroundColor))
+	}
+	if slot.BackgroundColor != "" {
+		g.SetBackgroundColor(hexToRGBA(slot.BackgroundColor))
+	}
+	if slot.HighlightColor != "" {
+		g.SetHighlightColor(hexToRGBA(slot.HighlightColor))
+	}
+	if slot.ValueTextColor != "" {
+		g.SetLabelColor(1, hexToRGBA(slot.ValueTextColor))
+	}
 }
 
 // --- update logic ---
@@ -325,25 +354,31 @@ func (p *Plugin) updateCompositeTile(ctx string) {
 		return
 	}
 
+	forceUpdate := p.consumeThresholdDirty(ctx)
+
 	profileID := p.resolvedSourceProfileID(settings.SourceProfileID)
 	pollTime, err := p.getCachedPollTimeForSource(profileID)
 	if err != nil || pollTime == 0 || time.Since(time.Unix(0, int64(pollTime))) > 5*time.Second {
 		return
 	}
-	if pollTime == state.lastPollTime {
+	if !forceUpdate && pollTime == state.lastPollTime {
 		return
 	}
 
-	if override := settings.UpdateIntervalOverrideMs; override > 0 {
-		p.mu.RLock()
-		lastRender := p.lastRenderTime[ctx]
-		p.mu.RUnlock()
-		if time.Since(lastRender) < time.Duration(override)*time.Millisecond {
-			return
+	if !forceUpdate {
+		if override := settings.UpdateIntervalOverrideMs; override > 0 {
+			p.mu.RLock()
+			lastRender := p.lastRenderTime[ctx]
+			p.mu.RUnlock()
+			if time.Since(lastRender) < time.Duration(override)*time.Millisecond {
+				return
+			}
 		}
 	}
 
 	var displayTexts [4]string
+	var activeThresholds [4]*Threshold
+	now := time.Now()
 	n := settings.SlotCount
 
 	for i := 0; i < n; i++ {
@@ -373,14 +408,6 @@ func (p *Plugin) updateCompositeTile(ctx string) {
 			graphValue = graphValue / divisor
 		}
 
-		// Feed value into the graph.Graph — same as the original tile.
-		p.mu.RLock()
-		g := state.graphs[i]
-		p.mu.RUnlock()
-		if g != nil {
-			g.Update(graphValue)
-		}
-
 		// Format display text — same logic as updateTiles.
 		displayUnit := r.Unit()
 		displayV := v
@@ -388,6 +415,55 @@ func (p *Plugin) updateCompositeTile(ctx string) {
 			displayV = p.normalizeForGraph(v, r.Unit(), slot.GraphUnit)
 			displayUnit = slot.GraphUnit + "/s"
 		}
+
+		// EMA smoothing per slot
+		if alpha := settings.SmoothingAlpha; alpha > 0 && alpha < 1.0 {
+			p.mu.Lock()
+			if !state.smoothedInit[i] {
+				state.smoothedValues[i] = graphValue
+				state.smoothedInit[i] = true
+			}
+			smoothed := alpha*graphValue + (1-alpha)*state.smoothedValues[i]
+			state.smoothedValues[i] = smoothed
+			p.mu.Unlock()
+			if graphValue != 0 {
+				ratio := smoothed / graphValue
+				graphValue = smoothed
+				displayV *= ratio
+			}
+		}
+
+		// Threshold evaluation per slot — uses raw v, synthetic context key
+		slotCtx := ctx + "|" + strconv.Itoa(i)
+		active := p.evaluateThresholds(slotCtx, v, slot.Thresholds, now)
+		activeThresholds[i] = active
+
+		// Feed value into the graph.Graph — same as the original tile.
+		p.mu.RLock()
+		g := state.graphs[i]
+		p.mu.RUnlock()
+		if g != nil {
+			g.Update(graphValue)
+			if forceUpdate || active != nil != (slot.CurrentThresholdID != "") {
+				if active != nil {
+					p.applyThresholdColors(g, active)
+				} else {
+					applyNormalCompositeColors(g, slot)
+				}
+			}
+		}
+
+		// Update stored threshold ID
+		p.mu.Lock()
+		if cs, ok3 := p.compositeSettings[ctx]; ok3 {
+			newID := ""
+			if active != nil {
+				newID = active.ID
+			}
+			cs.Slots[i].CurrentThresholdID = newID
+		}
+		p.mu.Unlock()
+
 		_, txt := p.formatDisplayValue(displayV, displayUnit, slot.Format, hwsensorsservice.ReadingType(r.TypeI()))
 		displayTexts[i] = txt
 	}
@@ -400,7 +476,7 @@ func (p *Plugin) updateCompositeTile(ctx string) {
 		return
 	}
 
-	b, err := renderCompositeTile(latestSettings, latestState, displayTexts)
+	b, err := renderCompositeTile(latestSettings, latestState, displayTexts, activeThresholds)
 	if err != nil {
 		log.Printf("renderCompositeTile: %v", err)
 		return
@@ -708,11 +784,202 @@ func (p *Plugin) handleCompositeGlobalField(event *streamdeck.EvSendToPlugin, sd
 		if v, err := strconv.Atoi(sdpi.Value); err == nil {
 			settings.UpdateIntervalOverrideMs = v
 		}
+	case "smoothingAlpha":
+		if v, err := strconv.ParseFloat(sdpi.Value, 64); err == nil {
+			settings.SmoothingAlpha = v
+			if state, ok2 := p.compositeStates[event.Context]; ok2 {
+				state.smoothedInit = [4]bool{}
+			}
+		}
 	}
 	p.mu.Unlock()
 
 	if err := p.sd.SetSettings(event.Context, settings); err != nil {
 		log.Printf("composite global field SetSettings: %v", err)
+	}
+}
+
+// --- composite threshold handlers ---
+
+func (p *Plugin) handleCompositeAddThreshold(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection, slotIdx int) {
+	p.mu.Lock()
+	settings, ok := p.compositeSettings[event.Context]
+	if !ok {
+		p.mu.Unlock()
+		return
+	}
+	slot := &settings.Slots[slotIdx]
+	name := sdpi.Value
+	if name == "" {
+		name = "New"
+	}
+	newT := Threshold{
+		ID:              fmt.Sprintf("threshold_%d", time.Now().UnixNano()),
+		Name:            name,
+		Enabled:         true,
+		Operator:        ">=",
+		Value:           0,
+		Hysteresis:      defaultThresholdHysteresis,
+		DwellMs:         defaultThresholdDwellMs,
+		CooldownMs:      defaultThresholdCooldownMs,
+		BackgroundColor: defaultColor(slot.BackgroundColor, "#000000"),
+		ForegroundColor: defaultColor(slot.ForegroundColor, "#005128"),
+		HighlightColor:  defaultColor(slot.HighlightColor, "#009e00"),
+		ValueTextColor:  defaultColor(slot.ValueTextColor, "#ffffff"),
+		TextColor:       defaultColor(slot.ValueTextColor, "#ffffff"),
+	}
+	slot.Thresholds = append(slot.Thresholds, newT)
+	p.mu.Unlock()
+
+	p.markThresholdDirty(event.Context)
+	if err := p.sd.SetSettings(event.Context, settings); err != nil {
+		log.Printf("composite addThreshold SetSettings: %v", err)
+	}
+	p.sendCompositeSlotThresholdsToPI(event, slotIdx, settings.Slots[slotIdx].Thresholds)
+}
+
+func (p *Plugin) handleCompositeRemoveThreshold(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection, slotIdx int) {
+	p.mu.Lock()
+	settings, ok := p.compositeSettings[event.Context]
+	if !ok {
+		p.mu.Unlock()
+		return
+	}
+	slot := &settings.Slots[slotIdx]
+	id := sdpi.ThresholdID
+	for i, t := range slot.Thresholds {
+		if t.ID == id {
+			slot.Thresholds = append(slot.Thresholds[:i], slot.Thresholds[i+1:]...)
+			break
+		}
+	}
+	if slot.CurrentThresholdID == id {
+		slot.CurrentThresholdID = ""
+		if state, ok2 := p.compositeStates[event.Context]; ok2 && state.graphs[slotIdx] != nil {
+			applyNormalCompositeColors(state.graphs[slotIdx], slot)
+		}
+	}
+	p.mu.Unlock()
+
+	p.resetThresholdRuntimeState(event.Context+"|"+strconv.Itoa(slotIdx), id)
+	if err := p.sd.SetSettings(event.Context, settings); err != nil {
+		log.Printf("composite removeThreshold SetSettings: %v", err)
+	}
+	p.sendCompositeSlotThresholdsToPI(event, slotIdx, settings.Slots[slotIdx].Thresholds)
+}
+
+func (p *Plugin) handleCompositeReorderThreshold(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection, slotIdx int) {
+	p.mu.Lock()
+	settings, ok := p.compositeSettings[event.Context]
+	if !ok {
+		p.mu.Unlock()
+		return
+	}
+	slot := &settings.Slots[slotIdx]
+	pos := -1
+	for i, t := range slot.Thresholds {
+		if t.ID == sdpi.ThresholdID {
+			pos = i
+			break
+		}
+	}
+	if pos >= 0 {
+		switch sdpi.Value {
+		case "up":
+			if pos > 0 {
+				slot.Thresholds[pos-1], slot.Thresholds[pos] = slot.Thresholds[pos], slot.Thresholds[pos-1]
+			}
+		case "down":
+			if pos < len(slot.Thresholds)-1 {
+				slot.Thresholds[pos], slot.Thresholds[pos+1] = slot.Thresholds[pos+1], slot.Thresholds[pos]
+			}
+		}
+	}
+	p.mu.Unlock()
+
+	p.markThresholdDirty(event.Context)
+	if err := p.sd.SetSettings(event.Context, settings); err != nil {
+		log.Printf("composite reorderThreshold SetSettings: %v", err)
+	}
+	p.sendCompositeSlotThresholdsToPI(event, slotIdx, settings.Slots[slotIdx].Thresholds)
+}
+
+func (p *Plugin) handleCompositeThresholdUpdate(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection, slotIdx int) {
+	p.mu.Lock()
+	settings, ok := p.compositeSettings[event.Context]
+	if !ok {
+		p.mu.Unlock()
+		return
+	}
+	slot := &settings.Slots[slotIdx]
+	var t *Threshold
+	for i := range slot.Thresholds {
+		if slot.Thresholds[i].ID == sdpi.ThresholdID {
+			t = &slot.Thresholds[i]
+			break
+		}
+	}
+	if t == nil {
+		p.mu.Unlock()
+		return
+	}
+	_, field := parseCompositeSlotKey(sdpi.Key)
+	switch field {
+	case "thresholdEnabled":
+		t.Enabled = sdpi.Checked
+	case "thresholdName":
+		t.Name = sdpi.Value
+	case "thresholdOperator":
+		t.Operator = sdpi.Value
+	case "thresholdValue":
+		if v, err := strconv.ParseFloat(sdpi.Value, 64); err == nil {
+			t.Value = v
+		}
+	case "thresholdHysteresis":
+		if v, err := strconv.ParseFloat(sdpi.Value, 64); err == nil {
+			t.Hysteresis = v
+		}
+	case "thresholdDwellMs":
+		if v, err := strconv.Atoi(sdpi.Value); err == nil {
+			t.DwellMs = v
+		}
+	case "thresholdCooldownMs":
+		if v, err := strconv.Atoi(sdpi.Value); err == nil {
+			t.CooldownMs = v
+		}
+	case "thresholdSticky":
+		t.Sticky = sdpi.Checked
+	case "thresholdText":
+		t.Text = sdpi.Value
+	case "thresholdTextColor":
+		t.TextColor = sdpi.Value
+	case "thresholdBackgroundColor":
+		t.BackgroundColor = sdpi.Value
+	case "thresholdForegroundColor":
+		t.ForegroundColor = sdpi.Value
+	case "thresholdHighlightColor":
+		t.HighlightColor = sdpi.Value
+	case "thresholdValueTextColor":
+		t.ValueTextColor = sdpi.Value
+	}
+	p.mu.Unlock()
+
+	p.markThresholdDirty(event.Context)
+	p.resetThresholdRuntimeState(event.Context+"|"+strconv.Itoa(slotIdx), sdpi.ThresholdID)
+	if err := p.sd.SetSettings(event.Context, settings); err != nil {
+		log.Printf("composite thresholdUpdate SetSettings: %v", err)
+	}
+}
+
+func (p *Plugin) sendCompositeSlotThresholdsToPI(event *streamdeck.EvSendToPlugin, slotIdx int, thresholds []Threshold) {
+	payload := map[string]interface{}{
+		"slotThresholds": map[string]interface{}{
+			"slotIndex":  slotIdx,
+			"thresholds": thresholds,
+		},
+	}
+	if err := p.sd.SendToPropertyInspector(event.Action, event.Context, payload); err != nil {
+		log.Printf("sendCompositeSlotThresholdsToPI: %v", err)
 	}
 }
 

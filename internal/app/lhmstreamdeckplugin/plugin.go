@@ -51,6 +51,7 @@ type Plugin struct {
 	placeholderImage []byte            // cached startup chip placeholder image (set once at init, read-only after)
 	lastPollTime     map[string]uint64    // last processed PollTime per context
 	lastRenderTime   map[string]time.Time // wall-time of last render per context (for per-tile interval override)
+	smoothedValues   map[string]float64   // last smoothed graph value per context (for EMA)
 	divisorCache     map[string]divisorCacheEntry
 	thresholdStates  map[string]map[string]*thresholdRuntimeState
 	thresholdSnoozes map[string]*thresholdSnoozeState
@@ -348,6 +349,7 @@ func NewPlugin(port, uuid, event, info string) (*Plugin, error) {
 		graphs:            make(map[string]*graph.Graph),
 		lastPollTime:      make(map[string]uint64),
 		lastRenderTime:    make(map[string]time.Time),
+		smoothedValues:    make(map[string]float64),
 		divisorCache:      make(map[string]divisorCacheEntry),
 		thresholdStates:   make(map[string]map[string]*thresholdRuntimeState),
 		thresholdSnoozes:  make(map[string]*thresholdSnoozeState),
@@ -694,6 +696,23 @@ func (p *Plugin) updateTiles(data *actionData) {
 		// Convert display value to match GraphUnit
 		displayValue = p.normalizeForGraph(v, r.Unit(), s.GraphUnit)
 		displayUnit = s.GraphUnit + "/s"
+	}
+
+	// EMA smoothing — threshold eval uses raw v; smoothing applies to graph and display values
+	if alpha := s.SmoothingAlpha; alpha > 0 && alpha < 1.0 {
+		p.mu.Lock()
+		prev, ok := p.smoothedValues[data.context]
+		if !ok {
+			prev = graphValue
+		}
+		smoothed := alpha*graphValue + (1-alpha)*prev
+		p.smoothedValues[data.context] = smoothed
+		p.mu.Unlock()
+		if graphValue != 0 {
+			ratio := smoothed / graphValue
+			graphValue = smoothed
+			displayValue *= ratio
+		}
 	}
 
 	valueTextNoUnit, displayText := p.formatDisplayValue(displayValue, displayUnit, s.Format, hwsensorsservice.ReadingType(r.TypeI()))
