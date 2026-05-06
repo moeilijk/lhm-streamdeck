@@ -4,7 +4,8 @@ var websocket = null,
   allSensors = [],
   currentSettings = {},
   sourceProfiles = [],
-  slotThresholdAdvancedOpen = {};
+  slotThresholdAdvancedOpen = Object.create(null),
+  globalThresholds = [];
 
 var onchangeevt = "onchange";
 
@@ -70,12 +71,21 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       if (currentSettings.slots) currentSettings.slots[st.slotIndex].thresholds = st.thresholds || [];
     }
 
+    // Global threshold library updates
+    if (Array.isArray(payload.globalThresholds)) {
+      globalThresholds = payload.globalThresholds;
+      for (var gi = 0; gi < 4; gi++) {
+        renderSlotGlobalRefs(gi);
+      }
+    }
+
     // Full settings object
     if (payload.compositeSettings) {
       currentSettings = payload.compositeSettings;
       applySettingsToUI(currentSettings);
       rebuildSourceProfileDropdown(currentSettings.sourceProfileId || "");
     }
+
   };
 }
 
@@ -212,6 +222,7 @@ function applySettingsToUI(s) {
     }
 
     renderSlotThresholds(i, slot.thresholds || []);
+    renderSlotGlobalRefs(i);
   }
 }
 
@@ -504,4 +515,56 @@ function createSlotThresholdElement(slotIdx, threshold, index, total) {
   });
 
   return clone;
+}
+
+// --- global threshold refs per slot ---
+
+function renderSlotGlobalRefs(slotIdx) {
+  var container = byId("slot" + slotIdx + "_globalRefsContainer");
+  if (!container) return;
+  container.innerHTML = "";
+  if (!globalThresholds || globalThresholds.length === 0) return;
+  var slot = currentSettings.slots && currentSettings.slots[slotIdx];
+  var currentRefs = (slot && Array.isArray(slot.globalThresholdRefs)) ? slot.globalThresholdRefs : [];
+
+  globalThresholds.forEach(function(gt) {
+    var checked = currentRefs.indexOf(gt.id) !== -1;
+    var row = document.createElement("div");
+    row.className = "sdpi-item";
+    var label = document.createElement("div");
+    label.className = "sdpi-item-label";
+    label.textContent = gt.name || gt.id;
+    var valCell = document.createElement("div");
+    valCell.className = "sdpi-item-value";
+    valCell.style.cssText = "display:flex;align-items:center;gap:4px;";
+    var span = document.createElement("span");
+    span.style.color = "#888";
+    span.style.fontSize = "9pt";
+    span.textContent = (gt.operator || ">=") + " " + (gt.value != null ? gt.value : "");
+    var btn = document.createElement("button");
+    btn.style.cssText = "width:36px;padding:0;background:" + (checked ? "#4a4" : "#555") + ";color:#fff;";
+    btn.textContent = checked ? "on" : "off";
+    (function(gtId, slotI) {
+      btn.addEventListener("click", function() {
+        var sl = currentSettings.slots && currentSettings.slots[slotI];
+        var refs = (sl && Array.isArray(sl.globalThresholdRefs)) ? sl.globalThresholdRefs.slice() : [];
+        var idx = refs.indexOf(gtId);
+        if (idx !== -1) {
+          refs.splice(idx, 1);
+          sendValueToPlugin({ key: "slot" + slotI + "_removeGlobalRef", value: gtId }, "sdpi_collection");
+        } else {
+          refs.push(gtId);
+          sendValueToPlugin({ key: "slot" + slotI + "_addGlobalRef", value: gtId }, "sdpi_collection");
+        }
+        if (sl) sl.globalThresholdRefs = refs;
+        btn.style.background = refs.indexOf(gtId) !== -1 ? "#4a4" : "#555";
+        btn.textContent = refs.indexOf(gtId) !== -1 ? "on" : "off";
+      });
+    })(gt.id, slotIdx);
+    valCell.appendChild(span);
+    valCell.appendChild(btn);
+    row.appendChild(label);
+    row.appendChild(valCell);
+    container.appendChild(row);
+  });
 }
