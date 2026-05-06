@@ -15,6 +15,10 @@ plugin:
 	$(GOTARGETENV) $(GOBUILD) -o $(SDPLUGINDIR)/lhm-bridge.exe ./cmd/lhm-bridge
 	-@install-plugin.bat
 
+plugin-linux:
+	GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(SDPLUGINDIR)/lhm ./cmd/lhm_streamdeck_plugin
+	GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(SDPLUGINDIR)/lhm-bridge ./cmd/lhm-bridge
+
 proto: $(PROTOPB)
 
 $(PROTOPB): $(PROTOS)
@@ -45,6 +49,12 @@ verify:
 release: verify
 	-@rm build/com.moeilijk.lhm.streamDeckPlugin
 	streamdeck pack com.moeilijk.lhm.sdPlugin --output build --force
+
+release-linux: verify plugin-linux
+	-@rm build/com.moeilijk.lhm-linux.streamDeckPlugin
+	streamdeck pack com.moeilijk.lhm.sdPlugin --output build --force
+	mv build/com.moeilijk.lhm.streamDeckPlugin build/com.moeilijk.lhm-linux.streamDeckPlugin
+	$(MAKE) plugin
 
 # Version bumps are explicit. Commit/release paths must not mutate manifest.json.
 bump-version:

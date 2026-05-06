@@ -15,8 +15,9 @@ import (
 	"sync"
 	"time"
 
+	"runtime"
+
 	"github.com/hashicorp/go-plugin"
-	"github.com/shayne/go-winpeg"
 	"github.com/moeilijk/lhm-streamdeck/pkg/graph"
 	hwsensorsservice "github.com/moeilijk/lhm-streamdeck/pkg/service"
 	"github.com/moeilijk/lhm-streamdeck/pkg/streamdeck"
@@ -31,7 +32,7 @@ type sourceRuntime struct {
 	mu      sync.RWMutex
 	c       *plugin.Client
 	hw      hwsensorsservice.HardwareService
-	peg     winpeg.ProcessExitGroup
+	peg     processExitGroup
 	// poll time cache — accessed under Plugin.mu
 	cachedPollTime uint64
 	cachedAt       time.Time
@@ -194,9 +195,16 @@ func (p *Plugin) runtimeForSource(profileID string) *sourceRuntime {
 	return rt
 }
 
+func bridgeBinaryName() string {
+	if runtime.GOOS == "windows" {
+		return "./lhm-bridge.exe"
+	}
+	return "./lhm-bridge"
+}
+
 // startSourceClientLocked starts the bridge for rt. Caller must hold rt.mu write lock.
 func (p *Plugin) startSourceClientLocked(rt *sourceRuntime) error {
-	cmd := exec.Command("./lhm-bridge.exe")
+	cmd := exec.Command(bridgeBinaryName())
 	cmd.Env = append(os.Environ(), "LHM_ENDPOINT="+profileEndpoint(rt.profile))
 
 	client := plugin.NewClient(&plugin.ClientConfig{
@@ -212,7 +220,7 @@ func (p *Plugin) startSourceClientLocked(rt *sourceRuntime) error {
 		return err
 	}
 
-	g, err := winpeg.NewProcessExitGroup()
+	g, err := newProcessExitGroup()
 	if err == nil {
 		if attachProcessToJob(g, cmd.Process) == nil {
 			rt.peg = g
@@ -395,8 +403,8 @@ func (p *Plugin) RunForever() error {
 			if rt.c != nil {
 				rt.c.Kill()
 			}
-			if rt.peg != 0 {
-				_ = rt.peg.Dispose()
+			if rt.peg != nil {
+				_ = rt.peg.dispose()
 			}
 			rt.mu.Unlock()
 		}
