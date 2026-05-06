@@ -11,13 +11,29 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func attachProcessToJob(g winpeg.ProcessExitGroup, p *os.Process) error {
+type winJobGroup struct{ h winpeg.ProcessExitGroup }
+
+func (g *winJobGroup) dispose() error { return g.h.Dispose() }
+
+func newProcessExitGroup() (processExitGroup, error) {
+	h, err := winpeg.NewProcessExitGroup()
+	if err != nil {
+		return nil, err
+	}
+	return &winJobGroup{h}, nil
+}
+
+func attachProcessToJob(g processExitGroup, p *os.Process) error {
+	wg, ok := g.(*winJobGroup)
+	if !ok {
+		return errors.New("not a win job group")
+	}
 	if p == nil || p.Pid == 0 {
 		return errors.New("process not started")
 	}
 
 	// Try the existing winpeg path first.
-	if err := g.AddProcess(p); err == nil {
+	if err := wg.h.AddProcess(p); err == nil {
 		return nil
 	}
 
@@ -32,5 +48,5 @@ func attachProcessToJob(g winpeg.ProcessExitGroup, p *os.Process) error {
 	}
 	defer windows.CloseHandle(handle)
 
-	return windows.AssignProcessToJobObject(windows.Handle(g), handle)
+	return windows.AssignProcessToJobObject(windows.Handle(wg.h), handle)
 }

@@ -10,11 +10,14 @@ deckbridge_dir="$HOME/projects/GitHub/DeckBridge"
 log_file="/tmp/deckbridge.log"
 
 # ── build ──────────────────────────────────────────────────────────────────
-echo "build: $plugin_src/lhm.exe"
+echo "build: $plugin_src/lhm.exe + lhm (linux)"
 (
   cd "$root_dir"
-  GOOS=windows GOARCH=amd64 go build -o "$plugin_src/lhm.exe"          ./cmd/lhm_streamdeck_plugin
-  GOOS=windows GOARCH=amd64 go build -o "$plugin_src/lhm-bridge.exe"   ./cmd/lhm-bridge
+  GOOS=windows GOARCH=amd64 go build -o "$plugin_src/lhm.exe"        ./cmd/lhm_streamdeck_plugin
+  GOOS=windows GOARCH=amd64 go build -o "$plugin_src/lhm-bridge.exe" ./cmd/lhm-bridge
+  GOOS=linux   GOARCH=amd64 go build -o "$plugin_src/lhm"            ./cmd/lhm_streamdeck_plugin
+  GOOS=linux   GOARCH=amd64 go build -o "$plugin_src/lhm-bridge"     ./cmd/lhm-bridge
+  chmod +x "$plugin_src/lhm" "$plugin_src/lhm-bridge"
 )
 
 # ── stop existing DeckBridge daemon ────────────────────────────────────────
@@ -27,6 +30,17 @@ sleep 1
 echo "copy: $plugin_src -> $plugin_dst"
 mkdir -p "$plugin_dst"
 rsync -a --delete "$plugin_src/" "$plugin_dst/"
+
+# Inject CodePathLinux into the deployed manifest so DeckBridge runs lhm natively.
+python3 - "$plugin_dst/manifest.json" <<'PYEOF'
+import json, sys
+path = sys.argv[1]
+with open(path) as f:
+    m = json.load(f)
+m['CodePathLinux'] = 'lhm'
+with open(path, 'w') as f:
+    json.dump(m, f, indent=2)
+PYEOF
 
 # ── start DeckBridge daemon ─────────────────────────────────────────────────
 echo "start: DeckBridge"
