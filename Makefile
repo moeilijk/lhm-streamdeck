@@ -52,8 +52,10 @@ release: verify
 
 release-linux: verify plugin-linux
 	-@rm build/com.moeilijk.lhm-linux.streamDeckPlugin
-	streamdeck pack com.moeilijk.lhm.sdPlugin --output build --force
+	python3 -c "import json; f='$(SDPLUGINDIR)/manifest.json'; m=json.load(open(f)); m['CodePathLinux']='lhm'; open(f,'w').write(json.dumps(m,indent=2))"
+	streamdeck pack $(SDPLUGINDIR) --output build --force
 	mv build/com.moeilijk.lhm.streamDeckPlugin build/com.moeilijk.lhm-linux.streamDeckPlugin
+	python3 -c "import json; f='$(SDPLUGINDIR)/manifest.json'; m=json.load(open(f)); m.pop('CodePathLinux',None); open(f,'w').write(json.dumps(m,indent=2))"
 	$(MAKE) plugin
 
 # Version bumps are explicit. Commit/release paths must not mutate manifest.json.
