@@ -78,6 +78,10 @@ I wanted a local, open replacement for Stream Deck hardware monitoring without l
    - Use the category dropdown to narrow down to a specific sensor group.
    - Save frequently used sensor/reading combinations as favorites with **Save Current**, then reload them from the favorites dropdown.
 
+### Linux (OpenDeck)
+
+A separate `com.moeilijk.lhm-linux.streamDeckPlugin` is published alongside the Windows release for [OpenDeck](https://github.com/nickvdyck/openDeck) users. Install it the same way; configure a source profile pointing to an [lhm-companion](https://github.com/moeilijk/lhm-companion) endpoint.
+
 ### Multi-machine source profiles
 
 The plugin can monitor more than one Libre Hardware Monitor endpoint at the same time.
@@ -88,7 +92,7 @@ The plugin can monitor more than one Libre Hardware Monitor endpoint at the same
 
 This is the main workflow for multi-machine Libre Hardware Monitor setups.
 
-### lhm-companion (Linux)
+### lhm-companion (Linux sensors)
 
 For Linux machines, use [lhm-companion](https://github.com/moeilijk/lhm-companion) — a lightweight bridge that exposes Linux sensor data (`/sys/class/hwmon`, CPU load, memory, network, storage, NVIDIA GPU) as a `data.json` endpoint in the exact format Libre Hardware Monitor produces. Add a source profile in the plugin settings pointing to the Linux machine's IP and port; all sensor tiles work without any plugin modifications.
 
@@ -98,7 +102,10 @@ The **LHM Composite Dashboard** action displays 2–4 sensor readings on a singl
 
 In its Property Inspector:
 
+- **Mode** – choose what renders on the tile: `Text only`, `Graph only`, or `Graph + Text`.
 - **Slots** – choose how many readings to display (2, 3, or 4).
+- **Update every** – override the global poll interval for this tile only (`Use global`, `1s`, `2s`, `5s`, `10s`, `30s`, `60s`).
+- **Smoothing** – EMA factor α (0.1–1.0). `1.0` = no smoothing. Threshold evaluation always uses the raw value.
 - Per slot:
   - **Sensor / Reading** – select the sensor and reading to display.
   - **Label** – optional custom label; leave blank to use the reading name.
@@ -109,6 +116,10 @@ In its Property Inspector:
   - **Format** – printf-style format string (default: `%.0f`).
   - **Divisor** – divide the raw value before display (e.g. `1000` to convert MB → GB).
   - **Graph unit** – time axis scale for the graph.
+  - **Graph height** – render this slot's graph in the bottom N% of its area (10–100).
+  - **Line thickness** – width of the highlight stroke at the current value (1–4 px).
+  - **Text stroke** – outline around title/value labels, with a configurable stroke color.
+  - **Thresholds** – each slot has its own independent threshold list with the same full feature set as the standard tile (operator, value, colors, alert text, hysteresis, dwell, cooldown, sticky, snooze). Slot thresholds only affect that slot's graph area.
 
 Graphs are composited with lighten blending so overlapping areas remain readable. Text is drawn as an overlay on top.
 
@@ -121,6 +132,8 @@ In its Property Inspector:
 - **Profile** – choose which source profile this tile reads from.
 - **Formula** – select **sum**, **average**, **max**, **min**, **delta**, or **pct**.
 - **Slots** – choose how many readings participate in the formula (2–8; `delta` uses 2).
+- **Update every** – override the global poll interval for this tile only (`Use global`, `1s`, `2s`, `5s`, `10s`, `30s`, `60s`).
+- **Smoothing** – EMA factor α (0.1–1.0). `1.0` = no smoothing. Threshold evaluation always uses the raw value.
 - Per slot:
   - **Favorite / Sensor / Reading** – choose the input reading directly or apply a saved favorite.
   - **Divisor** – divide the raw slot value before the formula runs.
@@ -132,6 +145,9 @@ In its Property Inspector:
   - **Format** – printf-style format string for the computed value.
   - **Divisor** – divide the final computed value after the formula runs.
   - **Graph unit** – output unit for the graph/value display.
+  - **Graph height** – render the graph in the bottom N% of the tile (10–100).
+  - **Line thickness** – width of the highlight stroke at the current value (1–4 px).
+  - **Text stroke** – outline around title/value labels, with a configurable stroke color.
 - **Presets** – save and reload derived metric setups so common formulas can be reused quickly.
 
 ### Plugin Settings tile
@@ -150,6 +166,19 @@ In its Property Inspector you can set:
 - **Tile Appearance** – default background and text colors for all sensor tiles.
 
 Changes to a profile's Host and Port take effect immediately; tiles that target that source reconnect automatically.
+
+### Display options (standard tile)
+
+The standard **Libre Hardware Monitor** tile has a **Display** section in its Property Inspector:
+
+- **Display** – choose what renders on the tile: `Both` (graph + text), `Graph only`, or `Text only`.
+- **Graph height** – render the graph in the bottom N% of the tile (10–100). Leaves the top area clear for large text or a clean background.
+- **Line thickness** – width of the highlight stroke at the current value position (1–4 px).
+- **Text stroke** – draws a configurable-colour outline around the title and value labels.
+- **Update every** – override the global poll interval for this tile only (`Use global`, `1s`, `2s`, `5s`, `10s`, `30s`, `60s`).
+- **Smoothing** – EMA factor α (0.1–1.0). `1.0` = no smoothing. Threshold evaluation always uses the raw unsmoothed value, so alert accuracy is not affected.
+
+The composite and derived tiles have the same Update every and Smoothing controls at tile level, and Graph height / Line thickness / Text stroke in their appearance settings (per slot for composite).
 
 ### Title behavior
 
