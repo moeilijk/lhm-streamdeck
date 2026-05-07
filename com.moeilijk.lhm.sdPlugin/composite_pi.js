@@ -67,10 +67,11 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
     // Per-slot threshold updates from plugin (after add/remove/reorder)
     if (payload.slotThresholds && typeof payload.slotThresholds.slotIndex === "number") {
       var st = payload.slotThresholds;
-      var stIdx = st.slotIndex;
+      var stIdx = st.slotIndex | 0;
       renderSlotThresholds(stIdx, st.thresholds || []);
       if (currentSettings.slots && stIdx >= 0 && stIdx < currentSettings.slots.length) {
-        currentSettings.slots[stIdx].thresholds = st.thresholds || [];
+        var stSlot = currentSettings.slots[stIdx];
+        if (stSlot) stSlot.thresholds = st.thresholds || [];
       }
     }
 
