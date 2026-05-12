@@ -435,7 +435,10 @@ func (p *Plugin) updateCompositeTile(ctx string) {
 
 		// Threshold evaluation per slot — uses raw v, synthetic context key
 		slotCtx := ctx + "|" + strconv.Itoa(i)
-		active := p.evaluateThresholds(slotCtx, v, slot.Thresholds, now)
+		p.mu.RLock()
+		slotThresholds := p.resolveThresholdsForEval(slot.Thresholds, slot.GlobalThresholdRefs)
+		p.mu.RUnlock()
+		active := p.evaluateThresholds(slotCtx, v, slotThresholds, now)
 		activeThresholds[i] = active
 
 		// Feed value into the graph.Graph — same as the original tile.
@@ -545,10 +548,16 @@ func (p *Plugin) handleCompositePropertyInspectorConnected(event *streamdeck.EvS
 	copy(profiles, p.globalSettings.SourceProfiles)
 	p.mu.RUnlock()
 
+	p.mu.RLock()
+	globals := make([]Threshold, len(p.globalSettings.GlobalThresholds))
+	copy(globals, p.globalSettings.GlobalThresholds)
+	p.mu.RUnlock()
+
 	payload := map[string]interface{}{
 		"sensors":           evsensors,
 		"compositeSettings": settingsCopy,
 		"sourceProfiles":    profiles,
+		"globalThresholds":  globals,
 	}
 	if err := p.sd.SendToPropertyInspector(event.Action, event.Context, payload); err != nil {
 		log.Printf("composite PI SendToPropertyInspector: %v", err)

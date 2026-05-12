@@ -13,6 +13,8 @@ var allowedIntervals = [250, 500, 1000, 2000, 5000, 10000];
 var sourceProfiles = [];
 var selectedProfileId = "";
 var defaultProfileId = "";
+var globalThresholds = [];
+var globalThresholdAdvancedOpen = {};
 
 function parseJSONOrEmpty(raw) {
   if (!raw || typeof raw !== "string") {
@@ -219,7 +221,7 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
     var jsonObj = parseJSONOrEmpty(evt.data);
     var event = jsonObj["event"];
 
-    // Handle global settings received (poll interval + source profiles)
+    // Handle global settings received (poll interval + source profiles + global thresholds)
     if (event === "didReceiveGlobalSettings") {
       var settings = {};
       if (jsonObj.payload && jsonObj.payload.settings) {
@@ -244,6 +246,10 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
         rebuildProfileDropdowns();
         applySelectedProfileToUI();
       }
+      if (Array.isArray(settings.globalThresholds)) {
+        globalThresholds = settings.globalThresholds;
+        renderGlobalThresholds(globalThresholds);
+      }
     }
 
     // Handle action settings received (tile appearance)
@@ -258,6 +264,10 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
     // Handle status updates from plugin
     if (event === "sendToPropertyInspector") {
       var payload = jsonObj.payload || {};
+      if (Array.isArray(payload.globalThresholds)) {
+        globalThresholds = payload.globalThresholds;
+        renderGlobalThresholds(globalThresholds);
+      }
       if (payload.connectionStatus !== undefined) {
         var statusEl = byId("connectionStatus");
         if (statusEl) {
@@ -574,3 +584,228 @@ if (document.readyState === "loading") {
 } else {
   bindUIHandlers();
 }
+
+// --- Global threshold library ---
+
+function sendGlobalThresholdUpdate(id, field, value, checked) {
+  var upd = { id: id, field: field, value: String(value) };
+  if (typeof checked === "boolean") upd.checked = checked;
+  sendJson({
+    action: action,
+    event: "sendToPlugin",
+    context: sdkContext(),
+    payload: { updateGlobalThreshold: upd }
+  });
+}
+
+function renderGlobalThresholds(thresholds) {
+  var container = byId("globalThresholdsContainer");
+  if (!container) return;
+  var list = thresholds || [];
+
+  var existingItems = container.querySelectorAll(".threshold-item");
+  var existingIds = Array.prototype.map.call(existingItems, function(el) { return el.dataset.thresholdId; });
+  var incomingIds = list.map(function(t) { return t.id; });
+
+  if (JSON.stringify(existingIds) !== JSON.stringify(incomingIds)) {
+    container.innerHTML = "";
+    list.forEach(function(t) { container.appendChild(createGlobalThresholdElement(t)); });
+    return;
+  }
+
+  var active = document.activeElement;
+  list.forEach(function(t) {
+    var item = container.querySelector('.threshold-item[data-threshold-id="' + t.id + '"]');
+    if (!item || (active && item.contains(active))) return;
+    applyInputValue(item.querySelector(".threshold-name"), t.name || "");
+    applyInputValue(item.querySelector(".threshold-text"), t.text || "");
+    applyInputValue(item.querySelector(".threshold-value"), t.value != null ? t.value : "");
+    applyInputValue(item.querySelector(".threshold-hysteresis"), t.hysteresis != null ? t.hysteresis : "");
+    applyInputValue(item.querySelector(".threshold-dwell"), t.dwellMs != null ? t.dwellMs : "");
+    applyInputValue(item.querySelector(".threshold-cooldown"), t.cooldownMs != null ? t.cooldownMs : "");
+  });
+}
+
+function createGlobalThresholdElement(threshold) {
+  var template = document.querySelector("#globalThresholdTemplate");
+  if (!template) return document.createDocumentFragment();
+  var clone = template.content.cloneNode(true);
+  var wrapper = clone.querySelector(".threshold-item");
+  wrapper.dataset.thresholdId = threshold.id;
+
+  var nameInput = clone.querySelector(".threshold-name");
+  nameInput.value = threshold.name || "";
+
+  var textInput = clone.querySelector(".threshold-text");
+  textInput.value = threshold.text || "";
+
+  var operatorSelect = clone.querySelector(".threshold-operator");
+  operatorSelect.value = threshold.operator || ">=";
+
+  var valueInput = clone.querySelector(".threshold-value");
+  valueInput.value = threshold.value != null ? threshold.value : "";
+
+  var hysteresisInput = clone.querySelector(".threshold-hysteresis");
+  hysteresisInput.value = threshold.hysteresis != null ? threshold.hysteresis : "";
+
+  var dwellInput = clone.querySelector(".threshold-dwell");
+  dwellInput.value = threshold.dwellMs != null ? threshold.dwellMs : "";
+
+  var cooldownInput = clone.querySelector(".threshold-cooldown");
+  cooldownInput.value = threshold.cooldownMs != null ? threshold.cooldownMs : "";
+
+  var bgInput = clone.querySelector(".threshold-bg");
+  bgInput.value = threshold.backgroundColor || "#333300";
+  var fgInput = clone.querySelector(".threshold-fg");
+  fgInput.value = threshold.foregroundColor || "#999900";
+  var hlInput = clone.querySelector(".threshold-hl");
+  hlInput.value = threshold.highlightColor || "#ffff00";
+  var vtInput = clone.querySelector(".threshold-vt");
+  vtInput.value = threshold.valueTextColor || "#ffff00";
+  var tcInput = clone.querySelector(".threshold-tc");
+  if (tcInput) tcInput.value = threshold.textColor || "#ffffff";
+
+  var toggleBtn = clone.querySelector(".threshold-toggle");
+  var settingsDiv = clone.querySelector(".threshold-settings");
+  var stickyBtn = clone.querySelector(".threshold-sticky-toggle");
+  var advancedToggleBtn = clone.querySelector(".threshold-advanced-toggle");
+  var advancedPanel = clone.querySelector(".threshold-advanced-panel");
+
+  var isEnabled = threshold.enabled;
+  var isSticky = threshold.sticky === true;
+  var isAdvancedOpen = globalThresholdAdvancedOpen[threshold.id] === true;
+  var thresholdId = threshold.id;
+
+  function updateToggleState() {
+    toggleBtn.textContent = isEnabled ? "on" : "off";
+    toggleBtn.style.background = isEnabled ? "#4a4" : "#a44";
+    settingsDiv.style.display = isEnabled ? "block" : "none";
+  }
+  function updateStickyState() {
+    if (!stickyBtn) return;
+    stickyBtn.textContent = isSticky ? "on" : "off";
+    stickyBtn.style.background = isSticky ? "#4a4" : "#a44";
+    stickyBtn.style.color = "#fff";
+  }
+  function updateAdvancedState() {
+    if (!advancedToggleBtn || !advancedPanel) return;
+    advancedToggleBtn.textContent = isAdvancedOpen ? "Advanced ▼" : "Advanced ▶";
+    advancedPanel.style.display = isAdvancedOpen ? "block" : "none";
+  }
+  updateToggleState();
+  updateStickyState();
+  updateAdvancedState();
+
+  toggleBtn.addEventListener("click", function() {
+    isEnabled = !isEnabled;
+    updateToggleState();
+    sendGlobalThresholdUpdate(thresholdId, "thresholdEnabled", isEnabled ? "true" : "false", isEnabled);
+  });
+
+  var nameTimeout;
+  nameInput.addEventListener("input", function(e) {
+    clearTimeout(nameTimeout);
+    nameTimeout = setTimeout(function() {
+      sendGlobalThresholdUpdate(thresholdId, "thresholdName", e.target.value);
+    }, 300);
+  });
+
+  var textTimeout;
+  textInput.addEventListener("input", function(e) {
+    clearTimeout(textTimeout);
+    textTimeout = setTimeout(function() {
+      sendGlobalThresholdUpdate(thresholdId, "thresholdText", e.target.value);
+    }, 300);
+  });
+
+  operatorSelect.addEventListener("change", function(e) {
+    sendGlobalThresholdUpdate(thresholdId, "thresholdOperator", e.target.value);
+  });
+
+  var valueTimeout;
+  valueInput.addEventListener("input", function(e) {
+    clearTimeout(valueTimeout);
+    valueTimeout = setTimeout(function() {
+      sendGlobalThresholdUpdate(thresholdId, "thresholdValue", e.target.value);
+    }, 300);
+  });
+
+  var hysteresisTimeout;
+  hysteresisInput.addEventListener("input", function(e) {
+    clearTimeout(hysteresisTimeout);
+    hysteresisTimeout = setTimeout(function() {
+      sendGlobalThresholdUpdate(thresholdId, "thresholdHysteresis", e.target.value);
+    }, 300);
+  });
+
+  var dwellTimeout;
+  dwellInput.addEventListener("input", function(e) {
+    clearTimeout(dwellTimeout);
+    dwellTimeout = setTimeout(function() {
+      sendGlobalThresholdUpdate(thresholdId, "thresholdDwellMs", e.target.value);
+    }, 300);
+  });
+
+  var cooldownTimeout;
+  cooldownInput.addEventListener("input", function(e) {
+    clearTimeout(cooldownTimeout);
+    cooldownTimeout = setTimeout(function() {
+      sendGlobalThresholdUpdate(thresholdId, "thresholdCooldownMs", e.target.value);
+    }, 300);
+  });
+
+  if (stickyBtn) {
+    stickyBtn.addEventListener("click", function() {
+      isSticky = !isSticky;
+      updateStickyState();
+      sendGlobalThresholdUpdate(thresholdId, "thresholdSticky", isSticky ? "true" : "false", isSticky);
+    });
+  }
+
+  if (advancedToggleBtn) {
+    advancedToggleBtn.addEventListener("click", function() {
+      isAdvancedOpen = !isAdvancedOpen;
+      globalThresholdAdvancedOpen[thresholdId] = isAdvancedOpen;
+      updateAdvancedState();
+    });
+  }
+
+  bgInput.addEventListener("change", function(e) { sendGlobalThresholdUpdate(thresholdId, "thresholdBackgroundColor", e.target.value); });
+  fgInput.addEventListener("change", function(e) { sendGlobalThresholdUpdate(thresholdId, "thresholdForegroundColor", e.target.value); });
+  hlInput.addEventListener("change", function(e) { sendGlobalThresholdUpdate(thresholdId, "thresholdHighlightColor", e.target.value); });
+  vtInput.addEventListener("change", function(e) { sendGlobalThresholdUpdate(thresholdId, "thresholdValueTextColor", e.target.value); });
+  if (tcInput) {
+    tcInput.addEventListener("change", function(e) { sendGlobalThresholdUpdate(thresholdId, "thresholdTextColor", e.target.value); });
+  }
+
+  var removeBtn = clone.querySelector(".threshold-remove");
+  removeBtn.addEventListener("click", function() {
+    delete globalThresholdAdvancedOpen[thresholdId];
+    sendJson({
+      action: action,
+      event: "sendToPlugin",
+      context: sdkContext(),
+      payload: { deleteGlobalThreshold: thresholdId }
+    });
+    wrapper.remove();
+  });
+
+  return clone;
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+  var addBtn = byId("addGlobalThresholdBtn");
+  if (addBtn) {
+    addBtn.addEventListener("click", function() {
+      var nameEl = byId("newGlobalThresholdName");
+      var name = nameEl ? nameEl.value.trim() : "";
+      sendJson({
+        action: action,
+        event: "sendToPlugin",
+        context: sdkContext(),
+        payload: { addGlobalThreshold: name }
+      });
+      if (nameEl) nameEl.value = "";
+    });
+  }
+});

@@ -122,6 +122,17 @@ func (tm *actionManager) SetInterval(d time.Duration) {
 	}
 }
 
+// AllActions returns a snapshot of all registered action data entries.
+func (tm *actionManager) AllActions() []actionData {
+	tm.mux.RLock()
+	defer tm.mux.RUnlock()
+	out := make([]actionData, 0, len(tm.actions))
+	for _, d := range tm.actions {
+		out = append(out, *d)
+	}
+	return out
+}
+
 // GetInterval returns the current polling interval
 func (tm *actionManager) GetInterval() time.Duration {
 	tm.mux.RLock()
