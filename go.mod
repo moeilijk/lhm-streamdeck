@@ -9,7 +9,7 @@ require (
 	github.com/hashicorp/go-plugin v1.8.0
 	github.com/shayne/go-winpeg v0.0.0-20200807055429-803ae16a07c6
 	golang.org/x/image v0.39.0
-	golang.org/x/sys v0.43.0
+	golang.org/x/sys v0.44.0
 	google.golang.org/grpc v1.81.0
 	google.golang.org/protobuf v1.36.11
 )
