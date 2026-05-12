@@ -3,6 +3,7 @@ package lhmstreamdeckplugin
 import (
 	"fmt"
 	"image/color"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -951,9 +952,329 @@ func (p *Plugin) applyThresholdColors(g *graph.Graph, t *Threshold) {
 
 // sendThresholdsToPI sends the current thresholds to the Property Inspector
 func (p *Plugin) sendThresholdsToPI(action, context string, settings *actionSettings) error {
+	p.mu.RLock()
+	globals := make([]Threshold, len(p.globalSettings.GlobalThresholds))
+	copy(globals, p.globalSettings.GlobalThresholds)
+	p.mu.RUnlock()
 	payload := map[string]interface{}{
-		"thresholds": settings.Thresholds,
-		"settings":   settings,
+		"thresholds":       settings.Thresholds,
+		"settings":         settings,
+		"globalThresholds": globals,
 	}
 	return p.sd.SendToPropertyInspector(action, context, payload)
+}
+
+// resolveThresholdsForEval merges per-tile thresholds with referenced globals.
+// Must be called with p.mu.RLock held.
+func (p *Plugin) resolveThresholdsForEval(local []Threshold, refs []string) []Threshold {
+	if len(refs) == 0 {
+		return local
+	}
+	result := make([]Threshold, len(local), len(local)+len(refs))
+	copy(result, local)
+	for _, id := range refs {
+		for i := range p.globalSettings.GlobalThresholds {
+			if p.globalSettings.GlobalThresholds[i].ID == id {
+				result = append(result, p.globalSettings.GlobalThresholds[i])
+				break
+			}
+		}
+	}
+	return result
+}
+
+// broadcastGlobalThresholds sends the current global threshold list to all open tile PIs.
+func (p *Plugin) broadcastGlobalThresholds() {
+	p.mu.RLock()
+	globals := make([]Threshold, len(p.globalSettings.GlobalThresholds))
+	copy(globals, p.globalSettings.GlobalThresholds)
+	p.mu.RUnlock()
+
+	payload := map[string]interface{}{"globalThresholds": globals}
+
+	for _, a := range p.am.AllActions() {
+		_ = p.sd.SendToPropertyInspector(a.action, a.context, payload)
+	}
+
+	p.mu.RLock()
+	compositeCtxs := make([]string, 0, len(p.compositeSettings))
+	for ctx := range p.compositeSettings {
+		compositeCtxs = append(compositeCtxs, ctx)
+	}
+	derivedCtxs := make([]string, 0, len(p.derivedSettings))
+	for ctx := range p.derivedSettings {
+		derivedCtxs = append(derivedCtxs, ctx)
+	}
+	p.mu.RUnlock()
+
+	for _, ctx := range compositeCtxs {
+		_ = p.sd.SendToPropertyInspector(compositeAction, ctx, payload)
+	}
+	for _, ctx := range derivedCtxs {
+		_ = p.sd.SendToPropertyInspector(derivedAction, ctx, payload)
+	}
+}
+
+// handleGlobalAddThreshold adds a new threshold to the global library.
+func (p *Plugin) handleGlobalAddThreshold(name string) {
+	if name == "" {
+		name = "New"
+	}
+	newThreshold := Threshold{
+		ID:              fmt.Sprintf("gthreshold_%d", time.Now().UnixNano()),
+		Name:            name,
+		Enabled:         true,
+		Operator:        ">=",
+		Value:           0,
+		Hysteresis:      defaultThresholdHysteresis,
+		DwellMs:         defaultThresholdDwellMs,
+		CooldownMs:      defaultThresholdCooldownMs,
+		BackgroundColor: "#333300",
+		ForegroundColor: "#999900",
+		HighlightColor:  "#ffff00",
+		ValueTextColor:  "#ffff00",
+		TextColor:       "#ffffff",
+	}
+	p.mu.Lock()
+	p.globalSettings.GlobalThresholds = append(p.globalSettings.GlobalThresholds, newThreshold)
+	gs := p.globalSettings
+	p.mu.Unlock()
+	if err := p.sd.SetGlobalSettings(gs); err != nil {
+		log.Printf("handleGlobalAddThreshold SetGlobalSettings: %v", err)
+	}
+	p.broadcastGlobalThresholds()
+}
+
+// handleGlobalRemoveThreshold removes a threshold from the global library by ID.
+func (p *Plugin) handleGlobalRemoveThreshold(id string) {
+	p.mu.Lock()
+	ts := p.globalSettings.GlobalThresholds
+	for i, t := range ts {
+		if t.ID == id {
+			p.globalSettings.GlobalThresholds = append(ts[:i], ts[i+1:]...)
+			break
+		}
+	}
+	gs := p.globalSettings
+	p.mu.Unlock()
+	if err := p.sd.SetGlobalSettings(gs); err != nil {
+		log.Printf("handleGlobalRemoveThreshold SetGlobalSettings: %v", err)
+	}
+	p.broadcastGlobalThresholds()
+}
+
+// handleGlobalThresholdUpdate updates a single field of a global threshold.
+func (p *Plugin) handleGlobalThresholdUpdate(id, field, value string, checked bool) {
+	p.mu.Lock()
+	var t *Threshold
+	for i := range p.globalSettings.GlobalThresholds {
+		if p.globalSettings.GlobalThresholds[i].ID == id {
+			t = &p.globalSettings.GlobalThresholds[i]
+			break
+		}
+	}
+	if t == nil {
+		p.mu.Unlock()
+		return
+	}
+	switch field {
+	case "thresholdEnabled":
+		t.Enabled = checked
+	case "thresholdName":
+		t.Name = value
+	case "thresholdOperator":
+		if isValidOperator(value) {
+			t.Operator = value
+		}
+	case "thresholdValue":
+		t.Value, _ = strconv.ParseFloat(value, 64)
+	case "thresholdHysteresis":
+		t.Hysteresis, _ = strconv.ParseFloat(value, 64)
+	case "thresholdDwellMs":
+		t.DwellMs, _ = strconv.Atoi(value)
+	case "thresholdCooldownMs":
+		t.CooldownMs, _ = strconv.Atoi(value)
+	case "thresholdSticky":
+		t.Sticky = checked
+	case "thresholdText":
+		t.Text = value
+	case "thresholdTextColor":
+		t.TextColor = value
+	case "thresholdBackgroundColor":
+		t.BackgroundColor = value
+	case "thresholdForegroundColor":
+		t.ForegroundColor = value
+	case "thresholdHighlightColor":
+		t.HighlightColor = value
+	case "thresholdValueTextColor":
+		t.ValueTextColor = value
+	}
+	gs := p.globalSettings
+	p.mu.Unlock()
+	if err := p.sd.SetGlobalSettings(gs); err != nil {
+		log.Printf("handleGlobalThresholdUpdate SetGlobalSettings: %v", err)
+	}
+	p.markGlobalThresholdDirty(id)
+	p.broadcastGlobalThresholds()
+}
+
+// markGlobalThresholdDirty marks all tiles that reference the given global threshold ID as dirty
+// so they re-render on the next tick with the updated colors/settings.
+func (p *Plugin) markGlobalThresholdDirty(globalID string) {
+	for _, a := range p.am.AllActions() {
+		for _, ref := range a.settings.GlobalThresholdRefs {
+			if ref == globalID {
+				p.markThresholdDirty(a.context)
+				break
+			}
+		}
+	}
+	p.mu.RLock()
+	var compositeHits []string
+	for ctx, cs := range p.compositeSettings {
+		for i := 0; i < cs.SlotCount; i++ {
+			for _, ref := range cs.Slots[i].GlobalThresholdRefs {
+				if ref == globalID {
+					compositeHits = append(compositeHits, ctx)
+					break
+				}
+			}
+		}
+	}
+	var derivedHits []string
+	for ctx, ds := range p.derivedSettings {
+		for _, ref := range ds.GlobalThresholdRefs {
+			if ref == globalID {
+				derivedHits = append(derivedHits, ctx)
+				break
+			}
+		}
+	}
+	p.mu.RUnlock()
+	for _, ctx := range compositeHits {
+		p.markThresholdDirty(ctx)
+	}
+	for _, ctx := range derivedHits {
+		p.markThresholdDirty(ctx)
+	}
+}
+
+// handleDerivedAddGlobalRef adds a global threshold ref to a derived tile.
+func (p *Plugin) handleDerivedAddGlobalRef(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection) {
+	p.mu.Lock()
+	s, ok := p.derivedSettings[event.Context]
+	if !ok {
+		p.mu.Unlock()
+		return
+	}
+	for _, id := range s.GlobalThresholdRefs {
+		if id == sdpi.Value {
+			p.mu.Unlock()
+			return
+		}
+	}
+	s.GlobalThresholdRefs = append(s.GlobalThresholdRefs, sdpi.Value)
+	p.mu.Unlock()
+	p.markThresholdDirty(event.Context)
+	_ = p.sd.SetSettings(event.Context, s)
+}
+
+// handleDerivedRemoveGlobalRef removes a global threshold ref from a derived tile.
+func (p *Plugin) handleDerivedRemoveGlobalRef(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection) {
+	p.mu.Lock()
+	s, ok := p.derivedSettings[event.Context]
+	if !ok {
+		p.mu.Unlock()
+		return
+	}
+	for i, id := range s.GlobalThresholdRefs {
+		if id == sdpi.Value {
+			s.GlobalThresholdRefs = append(s.GlobalThresholdRefs[:i], s.GlobalThresholdRefs[i+1:]...)
+			break
+		}
+	}
+	p.mu.Unlock()
+	p.markThresholdDirty(event.Context)
+	_ = p.sd.SetSettings(event.Context, s)
+}
+
+// handleCompositeSlotAddGlobalRef adds a global threshold ref to a composite slot.
+func (p *Plugin) handleCompositeSlotAddGlobalRef(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection, slotIdx int) {
+	p.mu.Lock()
+	s, ok := p.compositeSettings[event.Context]
+	if !ok || slotIdx < 0 || slotIdx >= 4 {
+		p.mu.Unlock()
+		return
+	}
+	for _, id := range s.Slots[slotIdx].GlobalThresholdRefs {
+		if id == sdpi.Value {
+			p.mu.Unlock()
+			return
+		}
+	}
+	s.Slots[slotIdx].GlobalThresholdRefs = append(s.Slots[slotIdx].GlobalThresholdRefs, sdpi.Value)
+	p.mu.Unlock()
+	p.markThresholdDirty(event.Context)
+	_ = p.sd.SetSettings(event.Context, s)
+}
+
+// handleCompositeSlotRemoveGlobalRef removes a global threshold ref from a composite slot.
+func (p *Plugin) handleCompositeSlotRemoveGlobalRef(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection, slotIdx int) {
+	p.mu.Lock()
+	s, ok := p.compositeSettings[event.Context]
+	if !ok || slotIdx < 0 || slotIdx >= 4 {
+		p.mu.Unlock()
+		return
+	}
+	refs := s.Slots[slotIdx].GlobalThresholdRefs
+	for i, id := range refs {
+		if id == sdpi.Value {
+			s.Slots[slotIdx].GlobalThresholdRefs = append(refs[:i], refs[i+1:]...)
+			break
+		}
+	}
+	p.mu.Unlock()
+	p.markThresholdDirty(event.Context)
+	_ = p.sd.SetSettings(event.Context, s)
+}
+
+// handleAddGlobalRef adds a global threshold ID reference to a standard tile's settings.
+func (p *Plugin) handleAddGlobalRef(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection) error {
+	settings, err := p.am.getSettings(event.Context)
+	if err != nil {
+		return fmt.Errorf("handleAddGlobalRef getSettings: %v", err)
+	}
+	for _, id := range settings.GlobalThresholdRefs {
+		if id == sdpi.Value {
+			return nil // already present
+		}
+	}
+	settings.GlobalThresholdRefs = append(settings.GlobalThresholdRefs, sdpi.Value)
+	p.markThresholdDirty(event.Context)
+	if err := p.sd.SetSettings(event.Context, &settings); err != nil {
+		return fmt.Errorf("handleAddGlobalRef SetSettings: %v", err)
+	}
+	p.am.SetAction(event.Action, event.Context, &settings)
+	return nil
+}
+
+// handleRemoveGlobalRef removes a global threshold ID reference from a standard tile's settings.
+func (p *Plugin) handleRemoveGlobalRef(event *streamdeck.EvSendToPlugin, sdpi *evSdpiCollection) error {
+	settings, err := p.am.getSettings(event.Context)
+	if err != nil {
+		return fmt.Errorf("handleRemoveGlobalRef getSettings: %v", err)
+	}
+	refs := settings.GlobalThresholdRefs
+	for i, id := range refs {
+		if id == sdpi.Value {
+			settings.GlobalThresholdRefs = append(refs[:i], refs[i+1:]...)
+			break
+		}
+	}
+	p.markThresholdDirty(event.Context)
+	if err := p.sd.SetSettings(event.Context, &settings); err != nil {
+		return fmt.Errorf("handleRemoveGlobalRef SetSettings: %v", err)
+	}
+	p.am.SetAction(event.Action, event.Context, &settings)
+	return nil
 }

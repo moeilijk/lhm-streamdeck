@@ -299,7 +299,10 @@ func (p *Plugin) updateDerivedTile(ctx string) {
 	valueTextNoUnit, displayText := p.formatDisplayValue(smoothedAggregated, displayUnit, settings.Format, readingType)
 
 	now := time.Now()
-	activeThreshold := p.evaluateThresholds(ctx, aggregated, settings.Thresholds, now)
+	p.mu.RLock()
+	derivedThresholds := p.resolveThresholdsForEval(settings.Thresholds, settings.GlobalThresholdRefs)
+	p.mu.RUnlock()
+	activeThreshold := p.evaluateThresholds(ctx, aggregated, derivedThresholds, now)
 
 	newThresholdID := ""
 	alertText := ""
@@ -483,13 +486,16 @@ func (p *Plugin) handleDerivedPropertyInspectorConnected(event *streamdeck.EvSen
 	p.mu.RLock()
 	profiles := make([]lhmSourceProfile, len(p.globalSettings.SourceProfiles))
 	copy(profiles, p.globalSettings.SourceProfiles)
+	globals := make([]Threshold, len(p.globalSettings.GlobalThresholds))
+	copy(globals, p.globalSettings.GlobalThresholds)
 	p.mu.RUnlock()
 
 	payload := map[string]interface{}{
-		"sensors":         evsensors,
-		"derivedSettings": settingsCopy,
-		"favorites":       p.favoriteReadingsSnapshotForSource(profileID),
-		"sourceProfiles":  profiles,
+		"sensors":          evsensors,
+		"derivedSettings":  settingsCopy,
+		"favorites":        p.favoriteReadingsSnapshotForSource(profileID),
+		"sourceProfiles":   profiles,
+		"globalThresholds": globals,
 	}
 	if err := p.sd.SendToPropertyInspector(event.Action, event.Context, payload); err != nil {
 		log.Printf("derived PI SendToPropertyInspector: %v", err)

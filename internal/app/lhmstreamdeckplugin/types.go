@@ -14,6 +14,7 @@ type globalSettings struct {
 	SourceProfiles         []lhmSourceProfile `json:"sourceProfiles,omitempty"`         // named LHM source profiles
 	DefaultSourceProfileID string             `json:"defaultSourceProfileId,omitempty"` // ID of the default source profile
 	FavoriteReadings       []favoriteReading  `json:"favoriteReadings,omitempty"`       // shared favorites for all tiles
+	GlobalThresholds       []Threshold        `json:"globalThresholds,omitempty"`       // shared threshold library
 
 	// Legacy fields — kept for migration only, omitempty so they are dropped after migration
 	LhmHost string `json:"lhmHost,omitempty"`
@@ -80,9 +81,10 @@ type actionSettings struct {
 	InErrorState              bool    `json:"inErrorState"`
 
 	// Dynamic threshold system
-	Thresholds         []Threshold `json:"thresholds"`
-	CurrentThresholdID string      `json:"currentThresholdId"`
-	SnoozeDurations    []int       `json:"snoozeDurations,omitempty"`
+	Thresholds          []Threshold `json:"thresholds"`
+	GlobalThresholdRefs []string    `json:"globalThresholdRefs,omitempty"`
+	CurrentThresholdID  string      `json:"currentThresholdId"`
+	SnoozeDurations     []int       `json:"snoozeDurations,omitempty"`
 
 	// Legacy Warning Threshold Settings (kept for migration, omitempty)
 	WarningEnabled         bool    `json:"warningEnabled,omitempty"`
@@ -191,8 +193,9 @@ type compositeSlotSettings struct {
 	TextStroke         bool   `json:"textStroke"`
 	TextStrokeColor    string `json:"textStrokeColor"`
 
-	Thresholds         []Threshold `json:"thresholds,omitempty"`
-	CurrentThresholdID string      `json:"currentThresholdId,omitempty"`
+	Thresholds          []Threshold `json:"thresholds,omitempty"`
+	GlobalThresholdRefs []string    `json:"globalThresholdRefs,omitempty"`
+	CurrentThresholdID  string      `json:"currentThresholdId,omitempty"`
 }
 
 type compositeActionSettings struct {
@@ -240,9 +243,10 @@ type derivedActionSettings struct {
 	TextStrokeColor          string      `json:"textStrokeColor"`
 	UpdateIntervalOverrideMs int         `json:"updateIntervalOverrideMs"` // 0 = follow global
 	SmoothingAlpha           float64     `json:"smoothingAlpha"`           // 0.1–1.0; 0 = 1.0 (no smoothing)
-	Thresholds               []Threshold `json:"thresholds"`
-	CurrentThresholdID string      `json:"currentThresholdId"`
-	SnoozeDurations    []int       `json:"snoozeDurations,omitempty"`
+	Thresholds          []Threshold `json:"thresholds"`
+	GlobalThresholdRefs []string    `json:"globalThresholdRefs,omitempty"`
+	CurrentThresholdID  string      `json:"currentThresholdId"`
+	SnoozeDurations     []int       `json:"snoozeDurations,omitempty"`
 }
 
 type evSdpiCollection struct {

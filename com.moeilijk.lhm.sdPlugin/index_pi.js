@@ -17,6 +17,8 @@ var websocket = null,
   onchangeevt = "onchange"; // 'oninput'; // change this, if you want interactive elements act on any change, or while they're modified
 
 var sourceProfiles = [];
+var globalThresholds = [];
+var currentGlobalThresholdRefs = [];
 
 function rebuildSourceProfileDropdown(selectedId) {
   var sel = document.getElementById("sourceProfileSelect");
@@ -128,6 +130,14 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
     ) {
       maybeRenderThresholds(jsonObj.payload.thresholds, true);
     }
+    // Handle global threshold list updates
+    if (
+      Array.isArray(getPropFromString(jsonObj, "payload.globalThresholds")) &&
+      event === "sendToPropertyInspector"
+    ) {
+      globalThresholds = jsonObj.payload.globalThresholds;
+      renderGlobalRefs();
+    }
     if (getPropFromString(jsonObj, "payload.settings")) {
       var settings = jsonObj.payload.settings;
       currentSensorSettings = settings || {};
@@ -191,6 +201,10 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       // Render dynamic thresholds
       if (settings.thresholds) {
         maybeRenderThresholds(settings.thresholds, false);
+      }
+      if (Array.isArray(settings.globalThresholdRefs)) {
+        currentGlobalThresholdRefs = settings.globalThresholdRefs;
+        renderGlobalRefs();
       }
       renderFavoriteControls();
     }
@@ -1031,13 +1045,32 @@ function renderThresholds(thresholds) {
   const container = document.querySelector("#thresholdsContainer");
   if (!container) return;
 
-  // Clear existing thresholds
-  container.innerHTML = "";
+  const existingItems = container.querySelectorAll(".threshold-item");
+  const existingIds = Array.prototype.map.call(existingItems, function(el) { return el.dataset.thresholdId; });
+  const incomingIds = thresholds.map(function(t) { return t.id; });
 
-  // Render in stored order (arrows control precedence)
-  thresholds.forEach(function(threshold, index) {
-    const element = createThresholdElement(threshold, index, thresholds.length);
-    container.appendChild(element);
+  if (JSON.stringify(existingIds) !== JSON.stringify(incomingIds)) {
+    container.innerHTML = "";
+    thresholds.forEach(function(threshold, index) {
+      container.appendChild(createThresholdElement(threshold, index, thresholds.length));
+    });
+    return;
+  }
+
+  const active = document.activeElement;
+  thresholds.forEach(function(t) {
+    const item = container.querySelector('.threshold-item[data-threshold-id="' + t.id + '"]');
+    if (!item || (active && item.contains(active))) return;
+    const set = function(sel, val) {
+      const el = item.querySelector(sel);
+      if (el && el.value !== String(val == null ? "" : val)) el.value = val == null ? "" : val;
+    };
+    set(".threshold-name", t.name || "");
+    set(".threshold-text", t.text || "");
+    set(".threshold-value", t.value != null ? t.value : "");
+    set(".threshold-hysteresis", t.hysteresis != null ? t.hysteresis : "");
+    set(".threshold-dwell", t.dwellMs != null ? t.dwellMs : "");
+    set(".threshold-cooldown", t.cooldownMs != null ? t.cooldownMs : "");
   });
 }
 
@@ -1313,4 +1346,54 @@ function createThresholdElement(threshold, index, total) {
   });
 
   return clone;
+}
+
+/** GLOBAL THRESHOLD REFS */
+
+function renderGlobalRefs() {
+  var container = document.querySelector("#globalRefsContainer");
+  if (!container) return;
+  container.innerHTML = "";
+  if (!globalThresholds || globalThresholds.length === 0) {
+    var empty = document.createElement("div");
+    empty.className = "sdpi-item";
+    empty.innerHTML = '<div class="sdpi-item-label" style="color:#666;">None defined</div><div class="sdpi-item-value" style="color:#666;">Add in Settings tile</div>';
+    container.appendChild(empty);
+    return;
+  }
+  globalThresholds.forEach(function(gt) {
+    var checked = currentGlobalThresholdRefs.indexOf(gt.id) !== -1;
+    var row = document.createElement("div");
+    row.className = "sdpi-item";
+    var label = document.createElement("div");
+    label.className = "sdpi-item-label";
+    label.textContent = gt.name || gt.id;
+    var valCell = document.createElement("div");
+    valCell.className = "sdpi-item-value";
+    valCell.style.cssText = "display:flex;align-items:center;gap:4px;";
+    var span = document.createElement("span");
+    span.style.color = "#888";
+    span.style.fontSize = "9pt";
+    span.textContent = (gt.operator || ">=") + " " + (gt.value != null ? gt.value : "");
+    var btn = document.createElement("button");
+    btn.style.cssText = "width:36px;padding:0;background:" + (checked ? "#4a4" : "#555") + ";color:#fff;";
+    btn.textContent = checked ? "on" : "off";
+    btn.addEventListener("click", function() {
+      var nowChecked = currentGlobalThresholdRefs.indexOf(gt.id) !== -1;
+      if (nowChecked) {
+        currentGlobalThresholdRefs = currentGlobalThresholdRefs.filter(function(id) { return id !== gt.id; });
+        sendValueToPlugin({ key: "removeGlobalRef", value: gt.id }, "sdpi_collection");
+      } else {
+        currentGlobalThresholdRefs = currentGlobalThresholdRefs.concat([gt.id]);
+        sendValueToPlugin({ key: "addGlobalRef", value: gt.id }, "sdpi_collection");
+      }
+      btn.style.background = currentGlobalThresholdRefs.indexOf(gt.id) !== -1 ? "#4a4" : "#555";
+      btn.textContent = currentGlobalThresholdRefs.indexOf(gt.id) !== -1 ? "on" : "off";
+    });
+    valCell.appendChild(span);
+    valCell.appendChild(btn);
+    row.appendChild(label);
+    row.appendChild(valCell);
+    container.appendChild(row);
+  });
 }

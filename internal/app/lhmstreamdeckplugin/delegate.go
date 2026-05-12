@@ -53,7 +53,8 @@ func isSettingsPayload(m map[string]*json.RawMessage) bool {
 	}
 	for _, k := range []string{"settingsConnected", "setPollInterval", "setLhmEndpoint", "updateTileAppearance",
 		"addSourceProfile", "deleteSourceProfile", "setSourceProfile", "setDefaultSourceProfile",
-		"setSelectedSourceProfile", "requestSettingsStatus"} {
+		"setSelectedSourceProfile", "requestSettingsStatus",
+		"addGlobalThreshold", "deleteGlobalThreshold", "updateGlobalThreshold"} {
 		if _, ok := m[k]; ok {
 			return true
 		}
@@ -522,6 +523,11 @@ func (p *Plugin) OnPropertyInspectorConnected(event *streamdeck.EvSendToPlugin) 
 	if err := p.sendCatalogToPropertyInspector(event.Action, event.Context, &settings, sensors); err != nil {
 		log.Printf("OnPropertyInspectorConnected sendCatalogToPropertyInspector: %v\n", err)
 	}
+	p.mu.RLock()
+	globals := make([]Threshold, len(p.globalSettings.GlobalThresholds))
+	copy(globals, p.globalSettings.GlobalThresholds)
+	p.mu.RUnlock()
+	_ = p.sd.SendToPropertyInspector(event.Action, event.Context, map[string]interface{}{"globalThresholds": globals})
 	if settings.SensorUID != "" {
 		readings, rerr := p.sendReadingsToPropertyInspector(event.Action, event.Context, settings.SensorUID, &settings)
 		if rerr == nil {
@@ -741,6 +747,37 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			return
 		}
 
+		// Check for addGlobalThreshold
+		if raw, ok := payload["addGlobalThreshold"]; ok {
+			var name string
+			_ = json.Unmarshal(*raw, &name)
+			p.handleGlobalAddThreshold(name)
+			return
+		}
+
+		// Check for deleteGlobalThreshold
+		if raw, ok := payload["deleteGlobalThreshold"]; ok {
+			var id string
+			if err := json.Unmarshal(*raw, &id); err == nil {
+				p.handleGlobalRemoveThreshold(id)
+			}
+			return
+		}
+
+		// Check for updateGlobalThreshold
+		if raw, ok := payload["updateGlobalThreshold"]; ok {
+			var upd struct {
+				ID      string `json:"id"`
+				Field   string `json:"field"`
+				Value   string `json:"value"`
+				Checked bool   `json:"checked"`
+			}
+			if err := json.Unmarshal(*raw, &upd); err == nil {
+				p.handleGlobalThresholdUpdate(upd.ID, upd.Field, upd.Value, upd.Checked)
+			}
+			return
+		}
+
 		// Check for updateTileAppearance
 		if raw, ok := payload["updateTileAppearance"]; ok {
 			var appearance settingsTileSettings
@@ -832,6 +869,10 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 				return
 			}
 			switch sdpi.Key {
+			case "derived_addGlobalRef":
+				p.handleDerivedAddGlobalRef(event, &sdpi)
+			case "derived_removeGlobalRef":
+				p.handleDerivedRemoveGlobalRef(event, &sdpi)
 			case "derived_formula", "derived_slotCount", "derived_format", "derived_divisor",
 				"derived_graphUnit", "derived_min", "derived_max",
 				"derived_foregroundColor", "derived_backgroundColor", "derived_highlightColor",
@@ -883,6 +924,10 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 					p.handleCompositeSlotSensorSelect(event, &sdpi, slotIdx)
 				case "readingSelect":
 					p.handleCompositeSlotReadingSelect(event, &sdpi, slotIdx)
+				case "addGlobalRef":
+					p.handleCompositeSlotAddGlobalRef(event, &sdpi, slotIdx)
+				case "removeGlobalRef":
+					p.handleCompositeSlotRemoveGlobalRef(event, &sdpi, slotIdx)
 				case "addThreshold":
 					p.handleCompositeAddThreshold(event, &sdpi, slotIdx)
 				case "removeThreshold":
@@ -1037,6 +1082,15 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			err := p.handleColorChange(event, sdpi.Key, &sdpi)
 			if err != nil {
 				log.Println("handleColorChange (threshold)", err)
+			}
+		// Global threshold reference handlers
+		case "addGlobalRef":
+			if err := p.handleAddGlobalRef(event, &sdpi); err != nil {
+				log.Println("handleAddGlobalRef", err)
+			}
+		case "removeGlobalRef":
+			if err := p.handleRemoveGlobalRef(event, &sdpi); err != nil {
+				log.Println("handleRemoveGlobalRef", err)
 			}
 		// Dynamic threshold handlers
 		case "addThreshold":
