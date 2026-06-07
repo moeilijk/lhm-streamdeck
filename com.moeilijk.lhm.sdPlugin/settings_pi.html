@@ -75,27 +75,30 @@
       </details>
     </div>
 
-    <div class="sdpi-heading">Tile Appearance</div>
+    <details>
+      <summary>Tile Appearance</summary>
 
-    <div type="color" class="sdpi-item">
-      <div class="sdpi-item-label">Background</div>
-      <input type="color" class="sdpi-item-value" id="tileBackground" value="#000000" />
-      <div class="sdpi-item-label">Text</div>
-      <input type="color" class="sdpi-item-value" id="tileTextColor" value="#ffffff" />
-    </div>
-
-    <div class="sdpi-item show-label-row">
-      <div class="sdpi-item-label">Show Background</div>
-      <div class="show-label-cell">
-        <input type="checkbox" class="show-label-checkbox" id="showLabel" checked />
+      <div type="color" class="sdpi-item">
+        <div class="sdpi-item-label">Background</div>
+        <input type="color" class="sdpi-item-value" id="tileBackground" value="#000000" />
+        <div class="sdpi-item-label">Text</div>
+        <input type="color" class="sdpi-item-value" id="tileTextColor" value="#ffffff" />
       </div>
-      <div class="sdpi-item-label empty"></div>
-      <div class="show-label-cell show-label-cell-spacer" aria-hidden="true"></div>
-    </div>
 
-    <div class="sdpi-heading">Global Thresholds</div>
+      <div class="sdpi-item show-label-row">
+        <div class="sdpi-item-label">Show Background</div>
+        <div class="show-label-cell">
+          <input type="checkbox" class="show-label-checkbox" id="showLabel" checked />
+        </div>
+        <div class="sdpi-item-label empty"></div>
+        <div class="show-label-cell show-label-cell-spacer" aria-hidden="true"></div>
+      </div>
+    </details>
 
-    <div id="globalThresholdsContainer">
+    <details>
+      <summary>Global Thresholds</summary>
+
+      <div id="globalThresholdsContainer">
       <!-- Dynamic global threshold items will be rendered here -->
     </div>
 
@@ -106,6 +109,8 @@
         <button id="addGlobalThresholdBtn" class="sdpi-item-value" style="width: 60px;">Add</button>
       </div>
     </div>
+
+    </details>
 
     <!-- Template for global threshold items -->
     <template id="globalThresholdTemplate">

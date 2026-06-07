@@ -38,45 +38,6 @@
       </select>
     </div>
 
-    <div class="sdpi-heading">Presets</div>
-
-    <div class="sdpi-item">
-      <div class="sdpi-item-label">Load</div>
-      <select class="sdpi-item-value select" id="preset_load">
-        <option value="">— select preset —</option>
-      </select>
-    </div>
-    <div class="sdpi-item">
-      <div class="sdpi-item-label">Save as</div>
-      <input class="sdpi-item-value" type="text" id="preset_saveas" placeholder="Preset name" />
-    </div>
-
-    <div class="sdpi-heading">Font Sizes</div>
-
-    <div type="range" class="sdpi-item">
-      <div class="sdpi-item-label">Title</div>
-      <div class="sdpi-item-value">
-        <span value="8">8</span>
-        <div class="range-wrap">
-          <span class="range-val">10.5</span>
-          <input type="range" min="8" max="20" step="0.5" value="10.5" id="titleFontSize" />
-        </div>
-        <span value="20">20</span>
-      </div>
-    </div>
-
-    <div type="range" class="sdpi-item">
-      <div class="sdpi-item-label">Value</div>
-      <div class="sdpi-item-value">
-        <span value="8">8</span>
-        <div class="range-wrap">
-          <span class="range-val">10.5</span>
-          <input type="range" min="8" max="20" step="0.5" value="10.5" id="valueFontSize" />
-        </div>
-        <span value="20">20</span>
-      </div>
-    </div>
-
     <div class="sdpi-heading">Tile Settings</div>
 
     <div class="sdpi-item">
@@ -129,31 +90,6 @@
     </div>
 
     <div class="sdpi-item">
-      <div class="sdpi-item-label">Update every</div>
-      <select class="sdpi-item-value select" id="derived_updateIntervalOverrideMs">
-        <option value="0">Use global</option>
-        <option value="1000">1s</option>
-        <option value="2000">2s</option>
-        <option value="5000">5s</option>
-        <option value="10000">10s</option>
-        <option value="30000">30s</option>
-        <option value="60000">60s</option>
-      </select>
-    </div>
-
-    <div type="range" class="sdpi-item" id="derived_smoothingAlpha">
-      <div class="sdpi-item-label">Smoothing</div>
-      <div class="sdpi-item-value">
-        <span value="0.1">0.1</span>
-        <div class="range-wrap">
-          <span class="range-val">1</span>
-          <input type="range" min="0.1" max="1" step="0.1" value="1" />
-        </div>
-        <span value="1">1</span>
-      </div>
-    </div>
-
-    <div class="sdpi-item">
       <div class="sdpi-item-label">All sensors</div>
       <select class="sdpi-item-value select slot-sensor-select" id="allSlots_sensorSelect" disabled>
         <option value="">Loading...</option>
@@ -161,7 +97,61 @@
     </div>
 
     <details>
+      <summary>Timing &amp; Smoothing</summary>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Update every</div>
+        <select class="sdpi-item-value select" id="derived_updateIntervalOverrideMs">
+          <option value="0">Use global</option>
+          <option value="1000">1s</option>
+          <option value="2000">2s</option>
+          <option value="5000">5s</option>
+          <option value="10000">10s</option>
+          <option value="30000">30s</option>
+          <option value="60000">60s</option>
+        </select>
+      </div>
+
+      <div type="range" class="sdpi-item" id="derived_smoothingAlpha">
+        <div class="sdpi-item-label">Smoothing</div>
+        <div class="sdpi-item-value">
+          <span value="0.1">0.1</span>
+          <div class="range-wrap">
+            <span class="range-val">1</span>
+            <input type="range" min="0.1" max="1" step="0.1" value="1" />
+          </div>
+          <span value="1">1</span>
+        </div>
+      </div>
+    </details>
+
+    <details>
       <summary>Appearance</summary>
+
+      <div type="range" class="sdpi-item">
+        <div class="sdpi-item-label">Title size</div>
+        <div class="sdpi-item-value">
+          <span value="8">8</span>
+          <div class="range-wrap">
+            <span class="range-val">10.5</span>
+            <input type="range" min="8" max="20" step="0.5" value="10.5" id="titleFontSize" />
+          </div>
+          <span value="20">20</span>
+        </div>
+      </div>
+
+      <div type="range" class="sdpi-item">
+        <div class="sdpi-item-label">Value size</div>
+        <div class="sdpi-item-value">
+          <span value="8">8</span>
+          <div class="range-wrap">
+            <span class="range-val">10.5</span>
+            <input type="range" min="8" max="20" step="0.5" value="10.5" id="valueFontSize" />
+          </div>
+          <span value="20">20</span>
+        </div>
+      </div>
+
       <div class="sdpi-item">
         <div class="sdpi-item-label">Highlight</div>
         <input class="sdpi-item-value" type="color" id="derived_highlightColor" value="#009E00" />
@@ -245,6 +235,21 @@
           <option value="GB">GB</option>
           <option value="TB">TB</option>
         </select>
+      </div>
+    </details>
+
+    <details>
+      <summary>Presets</summary>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Load</div>
+        <select class="sdpi-item-value select" id="preset_load">
+          <option value="">— select preset —</option>
+        </select>
+      </div>
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Save as</div>
+        <input class="sdpi-item-value" type="text" id="preset_saveas" placeholder="Preset name" />
       </div>
     </details>
 
@@ -576,10 +581,12 @@
       </details>
     </div>
 
-    <div class="sdpi-heading">Global Thresholds</div>
-    <div id="derivedGlobalRefsContainer">
-      <!-- Dynamic global threshold checkboxes rendered here -->
-    </div>
+    <details>
+      <summary>Global Thresholds</summary>
+      <div id="derivedGlobalRefsContainer">
+        <!-- Dynamic global threshold checkboxes rendered here -->
+      </div>
+    </details>
 
   </div><!-- #ui -->
 

@@ -204,6 +204,9 @@ func bridgeBinaryName() string {
 
 // startSourceClientLocked starts the bridge for rt. Caller must hold rt.mu write lock.
 func (p *Plugin) startSourceClientLocked(rt *sourceRuntime) error {
+	if runtime.GOOS == "linux" {
+		return startLinuxSource(rt)
+	}
 	cmd := exec.Command(bridgeBinaryName())
 	cmd.Env = append(os.Environ(), "LHM_ENDPOINT="+profileEndpoint(rt.profile))
 
@@ -425,8 +428,8 @@ func (p *Plugin) RunForever() error {
 
 			for _, rt := range rts {
 				rt.mu.RLock()
-				needsStart := rt.c == nil
-				needsRestart := !needsStart && rt.c.Exited()
+				needsStart := rt.hw == nil
+				needsRestart := !needsStart && rt.c != nil && rt.c.Exited()
 				rt.mu.RUnlock()
 
 				if needsStart || needsRestart {
