@@ -350,6 +350,27 @@ async function run() {
           fail(`test 5c — Load reading unexpectedly matched Temp global after mapping`);
         }
       }
+
+      // 5d — Voltage type mismatch: LHM sends "Voltage", global stores "Volt"
+      // lhmTypeToReadingType is defined inline above (same code as pi_utils.js)
+      const voltageTypes = [
+        { raw: 'Voltage', expected: 'Volt' },
+        { raw: 'Fan',     expected: 'Fan' },
+        { raw: 'Load',    expected: 'Usage' },
+        { raw: 'Control', expected: 'Usage' },
+        { raw: 'Clock',   expected: 'Clock' },
+      ];
+      let type5dOk = true;
+      for (const { raw, expected } of voltageTypes) {
+        const got = lhmTypeToReadingType(raw);
+        if (got !== expected) {
+          fail(`test 5d — lhmTypeToReadingType("${raw}") = "${got}", expected "${expected}"`);
+          type5dOk = false;
+        }
+      }
+      if (type5dOk) {
+        pass('test 5d — all LHM type strings map correctly (Voltage→Volt, Load→Usage, etc.)');
+      }
     }
     piWs.close();
   }
