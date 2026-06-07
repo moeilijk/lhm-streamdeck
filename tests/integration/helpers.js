@@ -193,6 +193,27 @@ function getSlotSettings(context) {
   return null;
 }
 
+// ── Get current composite tile settings via PI reconnect ─────────────────────
+async function getCompositeTileSettings(wsPort, context) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(`ws://localhost:${wsPort}`);
+    const timer = setTimeout(() => { ws.close(); reject(new Error('getCompositeTileSettings timeout')); }, 10000);
+    ws.on('error', e => { clearTimeout(timer); reject(e); });
+    ws.on('open', () => ws.send(JSON.stringify({ event: 'registerPropertyInspector', uuid: context })));
+    ws.on('message', raw => {
+      const msg = JSON.parse(raw);
+      if (msg.event !== 'sendToPropertyInspector') return;
+      const pl = msg.payload || {};
+      if (pl.error) return;
+      if (pl.compositeSettings) {
+        clearTimeout(timer);
+        ws.close();
+        resolve(pl.compositeSettings);
+      }
+    });
+  });
+}
+
 // ── Get current tile settings via PI reconnect ────────────────────────────────
 async function getTileSettings(wsPort, context, action) {
   return new Promise((resolve, reject) => {
@@ -264,7 +285,7 @@ module.exports = {
   waitForDeckBridge, connectPI, waitForMessage, sendToPlugin, sdpi,
   httpPost, createSlot, deleteSlot,
   mockSet, mockReset,
-  readProfile, getSlotSettings, getTileSettings,
+  readProfile, getSlotSettings, getTileSettings, getCompositeTileSettings,
   readGlobalSettings,
   ensureMockSourceProfile,
   MOCK_PORT,
