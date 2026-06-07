@@ -1,94 +1,94 @@
 {
-	"$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
-	"SDKVersion": 3,
-	"Software": {
-		"MinimumVersion": "6.9"
-	},
-	"Actions": [
-		{
-			"Icon": "actionIcon",
-			"Name": "Libre Hardware Monitor",
-			"States": [
-				{
-					"Image": "defaultImage",
-					"TitleAlignment": "top",
-					"FontSize": 9,
-					"TitleColor": "#b7b7b7",
-					"ShowTitle": false
-				}
-			],
-			"SupportedInMultiActions": false,
-			"Tooltip": "Display sensor readings from Libre Hardware Monitor",
-			"UUID": "com.moeilijk.lhm.reading"
-		},
-		{
-			"Icon": "actionIcon_composite",
-			"Name": "LHM Composite Dashboard",
-			"States": [
-				{
-					"Image": "defaultImage",
-					"ShowTitle": false
-				}
-			],
-			"SupportedInMultiActions": false,
-			"Tooltip": "Display 2–4 sensor readings on one tile with overlaid graphs",
-			"UUID": "com.moeilijk.lhm.composite",
-			"PropertyInspectorPath": "composite_pi.html"
-		},
-		{
-			"Icon": "actionIcon_derived",
-			"Name": "LHM Derived Metric",
-			"States": [
-				{
-					"Image": "defaultImage",
-					"ShowTitle": false
-				}
-			],
-			"SupportedInMultiActions": false,
-			"Tooltip": "Aggregate 2–8 sensor readings with sum, average, max, min, delta or pct formula",
-			"UUID": "com.moeilijk.lhm.derived",
-			"PropertyInspectorPath": "derived_pi.html"
-		},
-		{
-			"Icon": "actionIcon_gear_white",
-			"Name": "LHM Settings",
-			"States": [
-				{
-					"Image": "settingsImage",
-					"Title": "Refresh Rate",
-					"TitleAlignment": "top",
-					"FontSize": 9,
-					"TitleColor": "#b7b7b7",
-					"ShowTitle": false
-				}
-			],
-			"SupportedInMultiActions": false,
-			"Tooltip": "Configure Libre Hardware Monitor plugin settings",
-			"UUID": "com.moeilijk.lhm.settings",
-			"PropertyInspectorPath": "settings_pi.html"
-		}
-	],
-	"Author": "moeilijk",
-	"CodePath": "lhm.exe",
-	"PropertyInspectorPath": "index_pi.html",
-	"Description": "Display sensor readings from Libre Hardware Monitor. Enable its remote web server on port 8085 for the plugin to connect.",
-	"Name": "Libre Hardware Monitor",
-	"UUID": "com.moeilijk.lhm",
-	"Icon": "pluginIcon",
-	"CategoryIcon": "categoryIcon",
-	"URL": "https://github.com/moeilijk/lhm-streamdeck",
-	"Version": "1.8.1.0",
-	"ApplicationsToMonitor": {
-		"windows": [
-			"LibreHardwareMonitor.EXE",
-			"LibreHardwareMonitor.exe"
-		]
-	},
-	"OS": [
-		{
-			"Platform": "windows",
-			"MinimumVersion": "10"
-		}
-	],
-	"Category": "Libre Hardware Monitor"
+  "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+  "SDKVersion": 3,
+  "Software": {
+    "MinimumVersion": "6.9"
+  },
+  "Actions": [
+    {
+      "Icon": "actionIcon",
+      "Name": "Libre Hardware Monitor",
+      "States": [
+        {
+          "Image": "defaultImage",
+          "TitleAlignment": "top",
+          "FontSize": 9,
+          "TitleColor": "#b7b7b7",
+          "ShowTitle": false
+        }
+      ],
+      "SupportedInMultiActions": false,
+      "Tooltip": "Display sensor readings from Libre Hardware Monitor",
+      "UUID": "com.moeilijk.lhm.reading"
+    },
+    {
+      "Icon": "actionIcon_composite",
+      "Name": "LHM Composite Dashboard",
+      "States": [
+        {
+          "Image": "defaultImage",
+          "ShowTitle": false
+        }
+      ],
+      "SupportedInMultiActions": false,
+      "Tooltip": "Display 2\u20134 sensor readings on one tile with overlaid graphs",
+      "UUID": "com.moeilijk.lhm.composite",
+      "PropertyInspectorPath": "composite_pi.html"
+    },
+    {
+      "Icon": "actionIcon_derived",
+      "Name": "LHM Derived Metric",
+      "States": [
+        {
+          "Image": "defaultImage",
+          "ShowTitle": false
+        }
+      ],
+      "SupportedInMultiActions": false,
+      "Tooltip": "Aggregate 2\u20138 sensor readings with sum, average, max, min, delta or pct formula",
+      "UUID": "com.moeilijk.lhm.derived",
+      "PropertyInspectorPath": "derived_pi.html"
+    },
+    {
+      "Icon": "actionIcon_gear_white",
+      "Name": "LHM Settings",
+      "States": [
+        {
+          "Image": "settingsImage",
+          "Title": "Refresh Rate",
+          "TitleAlignment": "top",
+          "FontSize": 9,
+          "TitleColor": "#b7b7b7",
+          "ShowTitle": false
+        }
+      ],
+      "SupportedInMultiActions": false,
+      "Tooltip": "Configure Libre Hardware Monitor plugin settings",
+      "UUID": "com.moeilijk.lhm.settings",
+      "PropertyInspectorPath": "settings_pi.html"
+    }
+  ],
+  "Author": "moeilijk",
+  "CodePath": "lhm.exe",
+  "PropertyInspectorPath": "index_pi.html",
+  "Description": "Display sensor readings from Libre Hardware Monitor. Enable its remote web server on port 8085 for the plugin to connect.",
+  "Name": "Libre Hardware Monitor",
+  "UUID": "com.moeilijk.lhm",
+  "Icon": "pluginIcon",
+  "CategoryIcon": "categoryIcon",
+  "URL": "https://github.com/moeilijk/lhm-streamdeck",
+  "Version": "1.8.1.0",
+  "ApplicationsToMonitor": {
+    "windows": [
+      "LibreHardwareMonitor.EXE",
+      "LibreHardwareMonitor.exe"
+    ]
+  },
+  "OS": [
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ],
+  "Category": "Libre Hardware Monitor"
 }
