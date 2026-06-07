@@ -193,6 +193,27 @@ function getSlotSettings(context) {
   return null;
 }
 
+// ── Get current derived tile settings via PI reconnect ───────────────────────
+async function getDerivedTileSettings(wsPort, context) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(`ws://localhost:${wsPort}`);
+    const timer = setTimeout(() => { ws.close(); reject(new Error('getDerivedTileSettings timeout')); }, 10000);
+    ws.on('error', e => { clearTimeout(timer); reject(e); });
+    ws.on('open', () => ws.send(JSON.stringify({ event: 'registerPropertyInspector', uuid: context })));
+    ws.on('message', raw => {
+      const msg = JSON.parse(raw);
+      if (msg.event !== 'sendToPropertyInspector') return;
+      const pl = msg.payload || {};
+      if (pl.error) return;
+      if (pl.derivedSettings) {
+        clearTimeout(timer);
+        ws.close();
+        resolve(pl.derivedSettings);
+      }
+    });
+  });
+}
+
 // ── Get current composite tile settings via PI reconnect ─────────────────────
 async function getCompositeTileSettings(wsPort, context) {
   return new Promise((resolve, reject) => {
@@ -285,7 +306,7 @@ module.exports = {
   waitForDeckBridge, connectPI, waitForMessage, sendToPlugin, sdpi,
   httpPost, createSlot, deleteSlot,
   mockSet, mockReset,
-  readProfile, getSlotSettings, getTileSettings, getCompositeTileSettings,
+  readProfile, getSlotSettings, getTileSettings, getCompositeTileSettings, getDerivedTileSettings,
   readGlobalSettings,
   ensureMockSourceProfile,
   MOCK_PORT,

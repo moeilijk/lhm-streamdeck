@@ -23,19 +23,23 @@
 - Composite smoothingAlpha persisted
 - Composite updateIntervalOverrideMs persisted
 
+### test-derived-thresholds.js (7 assertions)
+- Global threshold (readingType="") fires on derived tile at high average
+- Global threshold not active at low average
+- Global threshold also fires on reference reading tile
+- Derived tile suppress: suppressed global does not fire
+- Global still fires on unsuppressed tile while derived is suppressed
+- Unsuppress restores derived tile firing
+- smoothingAlpha, updateIntervalOverrideMs, graphHeightPct, graphLineThickness, textStroke all persisted
+
+### test-composite-global-suppress.js (5 assertions)
+- Global Temp threshold auto-applies to composite slot 0
+- Composite slot 0 not active at 45°C
+- Composite slot 0 suppress: global does not fire
+- Global still fires on unsuppressed reading tile while composite is suppressed
+- Composite slot 0 unsuppress: global fires again
+
 ## To be built
-
-### test-derived-thresholds.js (keys 30–31)
-- Derived tile: configure slots (e.g. 2× CPU Package, formula=average)
-- Per-tile threshold fires when formula value exceeds limit
-- Threshold does NOT fire below limit
-- smoothingAlpha, updateIntervalOverrideMs persisted on derived tile
-- derived_graphHeightPct, derived_graphLineThickness, derived_textStroke persisted
-
-### test-composite-global-suppress.js (keys 40–41)
-- Global threshold auto-applies to composite slot with matching ReadingType
-- Composite slot suppresses global: slot does not fire, other tile does
-- Composite slot unsuppresses global: slot fires again
 
 ### test-settings-tile.js (key 50)
 - connectionStatus = connected when mock server is running
