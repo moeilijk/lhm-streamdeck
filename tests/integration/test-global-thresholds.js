@@ -287,6 +287,73 @@ async function run() {
     fail(`test 4 — expected ${gTempId} to fire after unsuppress, got: ${settings.currentThresholdId}`);
   }
 
+  // ── TEST 5: PI visibility — global appears in PI for matching type ──────────
+  // Regression: PI was showing "None match" because it compared LHM type string
+  // ("Temperature") against the stored ReadingType short form ("Temp").
+  console.log('\n[test 5] PI visibility: global with readingType="Temp" visible on Temp tile');
+
+  {
+    // Connect as PI to tempCtx and collect both the sensors payload and the
+    // globalThresholds broadcast that follows. We simulate the PI filter logic
+    // to verify the type mapping would resolve correctly.
+    const { ws: piWs } = await connectPI(wsPort, tempCtx, READING_ACTION);
+
+    // sensorSelect → triggers readings payload with type field
+    const readingsP = waitForMessage(piWs, msg => {
+      if (msg.event !== 'sendToPropertyInspector') return undefined;
+      const pl = msg.payload || {};
+      if (pl.readings && Array.isArray(pl.readings)) return pl;
+    });
+    sdpi(piWs, tempCtx, READING_ACTION, 'sensorSelect', '/mockcpu/0');
+    const readingsPl = await readingsP;
+    const readings = readingsPl.readings;
+    const tempReading = readings.find(r => r.label === 'CPU Package');
+
+    if (!tempReading) {
+      fail('test 5a — CPU Package reading not in payload');
+    } else {
+      pass(`test 5a — CPU Package reading received, raw type="${tempReading.type}"`);
+
+      // Simulate PI-side lhmTypeToReadingType mapping
+      function lhmTypeToReadingType(t) {
+        switch ((t || '').toLowerCase()) {
+          case 'temperature': return 'Temp';
+          case 'voltage':     return 'Volt';
+          case 'fan':         return 'Fan';
+          case 'current':     return 'Current';
+          case 'power':       return 'Power';
+          case 'clock':       return 'Clock';
+          case 'load': case 'control': case 'level': return 'Usage';
+          default: return t ? 'Other' : '';
+        }
+      }
+      const mappedType = lhmTypeToReadingType(tempReading.type);
+
+      // Verify global threshold with readingType="Temp" matches after mapping
+      const globalGs = readGlobalSettings().globalThresholds || [];
+      const tempGlobal = globalGs.find(g => g.id === gTempId);
+      if (!tempGlobal) {
+        fail('test 5b — global threshold not found in settings');
+      } else if (mappedType === tempGlobal.readingType) {
+        pass(`test 5b — mapped type "${mappedType}" matches global readingType "${tempGlobal.readingType}" — no "None match"`);
+      } else {
+        fail(`test 5b — type mismatch: mapped="${mappedType}" vs global="${tempGlobal.readingType}"`);
+      }
+
+      // Also verify a Load reading maps differently, confirming type filter blocks it
+      const loadReading = readings.find(r => r.label === 'CPU Total');
+      if (loadReading) {
+        const loadMapped = lhmTypeToReadingType(loadReading.type);
+        if (loadMapped !== tempGlobal.readingType) {
+          pass(`test 5c — Load reading maps to "${loadMapped}", correctly excluded from Temp global`);
+        } else {
+          fail(`test 5c — Load reading unexpectedly matched Temp global after mapping`);
+        }
+      }
+    }
+    piWs.close();
+  }
+
   // ── Cleanup ────────────────────────────────────────────────────────────────
   await mockReset();
   // Remove global threshold
