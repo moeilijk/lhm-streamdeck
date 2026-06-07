@@ -73,13 +73,28 @@ echo "DeckBridge deploy: OK"
 echo ""
 echo "── integration tests ──"
 cd "$ROOT"
-node tests/integration/test-global-thresholds.js
-TEST_EXIT=$?
 
-if [[ $TEST_EXIT -eq 0 ]]; then
+OVERALL_EXIT=0
+
+for TEST_FILE in \
+  tests/integration/test-global-thresholds.js \
+  tests/integration/test-per-tile-thresholds.js \
+  tests/integration/test-composite-thresholds.js; do
+  echo ""
+  echo "── $TEST_FILE ──"
+  node "$TEST_FILE"
+  FILE_EXIT=$?
+  if [[ $FILE_EXIT -ne 0 ]]; then
+    OVERALL_EXIT=$FILE_EXIT
+    echo "FAILED: $TEST_FILE (exit $FILE_EXIT)"
+  fi
+done
+
+echo ""
+if [[ $OVERALL_EXIT -eq 0 ]]; then
   echo "ALL TESTS PASSED"
 else
-  echo "TESTS FAILED (exit $TEST_EXIT)"
+  echo "SOME TESTS FAILED"
 fi
 
-exit $TEST_EXIT
+exit $OVERALL_EXIT

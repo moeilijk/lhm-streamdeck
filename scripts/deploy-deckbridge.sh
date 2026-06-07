@@ -32,7 +32,14 @@ mkdir -p "$plugin_dst"
 rsync -a --delete "$plugin_src/" "$plugin_dst/"
 
 # Inject CodePathLinux into the deployed manifest so DeckBridge runs lhm natively.
-python3 - "$plugin_dst/manifest.json" <<'PYEOF'
+# Skip when plugin_dst is a symlink pointing back at the source (e.g. development layout),
+# to avoid corrupting the committed manifest.json.
+plugin_src_real=$(realpath "$plugin_src")
+plugin_dst_real=$(realpath "$plugin_dst" 2>/dev/null || echo "")
+if [[ "$plugin_src_real" == "$plugin_dst_real" ]]; then
+  echo "note: plugin_dst is symlinked to source — skipping CodePathLinux injection"
+else
+  python3 - "$plugin_dst/manifest.json" <<'PYEOF'
 import json, sys
 path = sys.argv[1]
 with open(path) as f:
@@ -41,6 +48,7 @@ m['CodePathLinux'] = 'lhm'
 with open(path, 'w') as f:
     json.dump(m, f, indent=2)
 PYEOF
+fi
 
 # ── start DeckBridge daemon ─────────────────────────────────────────────────
 echo "start: DeckBridge"
