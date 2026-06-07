@@ -79,7 +79,9 @@ OVERALL_EXIT=0
 for TEST_FILE in \
   tests/integration/test-global-thresholds.js \
   tests/integration/test-per-tile-thresholds.js \
-  tests/integration/test-composite-thresholds.js; do
+  tests/integration/test-composite-thresholds.js \
+  tests/integration/test-derived-thresholds.js \
+  tests/integration/test-composite-global-suppress.js; do
   echo ""
   echo "── $TEST_FILE ──"
   node "$TEST_FILE"
