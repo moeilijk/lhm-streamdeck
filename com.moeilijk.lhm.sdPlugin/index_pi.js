@@ -18,7 +18,8 @@ var websocket = null,
 
 var sourceProfiles = [];
 var globalThresholds = [];
-var currentGlobalThresholdRefs = [];
+var currentSuppressedGlobalIDs = [];
+var currentReadingType = "";
 
 function rebuildSourceProfileDropdown(selectedId) {
   var sel = document.getElementById("sourceProfileSelect");
@@ -136,7 +137,7 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       event === "sendToPropertyInspector"
     ) {
       globalThresholds = jsonObj.payload.globalThresholds;
-      renderGlobalRefs();
+      renderActiveGlobals();
     }
     if (getPropFromString(jsonObj, "payload.settings")) {
       var settings = jsonObj.payload.settings;
@@ -202,10 +203,8 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       if (settings.thresholds) {
         maybeRenderThresholds(settings.thresholds, false);
       }
-      if (Array.isArray(settings.globalThresholdRefs)) {
-        currentGlobalThresholdRefs = settings.globalThresholdRefs;
-        renderGlobalRefs();
-      }
+      currentSuppressedGlobalIDs = Array.isArray(settings.suppressedGlobalIDs) ? settings.suppressedGlobalIDs : [];
+      renderActiveGlobals();
       renderFavoriteControls();
     }
   };
@@ -314,6 +313,10 @@ function addReadings(el, readings, settings) {
 
   // Store readings globally for unit lookup
   currentReadings = readings;
+  // Derive current reading type for active globals display
+  var matchedR = readings.find(function(r) { return r.id === currentSensorSettings.readingId; });
+  currentReadingType = matchedR ? (matchedR.type || "") : "";
+  renderActiveGlobals();
 
   el.removeAttribute("disabled");
 
@@ -1348,21 +1351,26 @@ function createThresholdElement(threshold, index, total) {
   return clone;
 }
 
-/** GLOBAL THRESHOLD REFS */
+/** ACTIVE GLOBAL THRESHOLDS */
 
-function renderGlobalRefs() {
+function renderActiveGlobals() {
   var container = document.querySelector("#globalRefsContainer");
   if (!container) return;
   container.innerHTML = "";
-  if (!globalThresholds || globalThresholds.length === 0) {
-    var empty = document.createElement("div");
-    empty.className = "sdpi-item";
-    empty.innerHTML = '<div class="sdpi-item-label" style="color:#666;">None defined</div><div class="sdpi-item-value" style="color:#666;">Add in Settings tile</div>';
-    container.appendChild(empty);
+  var active = (globalThresholds || []).filter(function(gt) {
+    return !gt.readingType || gt.readingType === currentReadingType;
+  });
+  if (active.length === 0) {
+    if (globalThresholds && globalThresholds.length > 0 && currentReadingType) {
+      var none = document.createElement("div");
+      none.className = "sdpi-item";
+      none.innerHTML = '<div class="sdpi-item-label" style="color:#666;">None match</div><div class="sdpi-item-value" style="color:#666;">sensor type: ' + currentReadingType + '</div>';
+      container.appendChild(none);
+    }
     return;
   }
-  globalThresholds.forEach(function(gt) {
-    var checked = currentGlobalThresholdRefs.indexOf(gt.id) !== -1;
+  active.forEach(function(gt) {
+    var suppressed = currentSuppressedGlobalIDs.indexOf(gt.id) !== -1;
     var row = document.createElement("div");
     row.className = "sdpi-item";
     var label = document.createElement("div");
@@ -1376,19 +1384,22 @@ function renderGlobalRefs() {
     span.style.fontSize = "9pt";
     span.textContent = (gt.operator || ">=") + " " + (gt.value != null ? gt.value : "");
     var btn = document.createElement("button");
-    btn.style.cssText = "width:36px;padding:0;background:" + (checked ? "#4a4" : "#555") + ";color:#fff;";
-    btn.textContent = checked ? "on" : "off";
+    btn.style.cssText = "width:50px;padding:0;background:" + (suppressed ? "#a44" : "#4a4") + ";color:#fff;";
+    btn.textContent = suppressed ? "off" : "on";
+    btn.title = suppressed ? "Click to enable for this tile" : "Click to disable for this tile";
     btn.addEventListener("click", function() {
-      var nowChecked = currentGlobalThresholdRefs.indexOf(gt.id) !== -1;
-      if (nowChecked) {
-        currentGlobalThresholdRefs = currentGlobalThresholdRefs.filter(function(id) { return id !== gt.id; });
-        sendValueToPlugin({ key: "removeGlobalRef", value: gt.id }, "sdpi_collection");
+      var isSuppressed = currentSuppressedGlobalIDs.indexOf(gt.id) !== -1;
+      if (isSuppressed) {
+        currentSuppressedGlobalIDs = currentSuppressedGlobalIDs.filter(function(id) { return id !== gt.id; });
+        sendValueToPlugin({ key: "unsuppressGlobal", value: gt.id }, "sdpi_collection");
       } else {
-        currentGlobalThresholdRefs = currentGlobalThresholdRefs.concat([gt.id]);
-        sendValueToPlugin({ key: "addGlobalRef", value: gt.id }, "sdpi_collection");
+        currentSuppressedGlobalIDs = currentSuppressedGlobalIDs.concat([gt.id]);
+        sendValueToPlugin({ key: "suppressGlobal", value: gt.id }, "sdpi_collection");
       }
-      btn.style.background = currentGlobalThresholdRefs.indexOf(gt.id) !== -1 ? "#4a4" : "#555";
-      btn.textContent = currentGlobalThresholdRefs.indexOf(gt.id) !== -1 ? "on" : "off";
+      var nowSuppressed = currentSuppressedGlobalIDs.indexOf(gt.id) !== -1;
+      btn.style.background = nowSuppressed ? "#a44" : "#4a4";
+      btn.textContent = nowSuppressed ? "off" : "on";
+      btn.title = nowSuppressed ? "Click to enable for this tile" : "Click to disable for this tile";
     });
     valCell.appendChild(span);
     valCell.appendChild(btn);

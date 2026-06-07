@@ -436,7 +436,7 @@ func (p *Plugin) updateCompositeTile(ctx string) {
 		// Threshold evaluation per slot — uses raw v, synthetic context key
 		slotCtx := ctx + "|" + strconv.Itoa(i)
 		p.mu.RLock()
-		slotThresholds := p.resolveThresholdsForEval(slot.Thresholds, slot.GlobalThresholdRefs)
+		slotThresholds := p.resolveThresholdsForEval(slot.Thresholds, slot.SuppressedGlobalIDs, hwsensorsservice.ReadingType(r.TypeI()))
 		p.mu.RUnlock()
 		active := p.evaluateThresholds(slotCtx, v, slotThresholds, now)
 		activeThresholds[i] = active

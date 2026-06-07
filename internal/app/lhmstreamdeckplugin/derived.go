@@ -300,7 +300,7 @@ func (p *Plugin) updateDerivedTile(ctx string) {
 
 	now := time.Now()
 	p.mu.RLock()
-	derivedThresholds := p.resolveThresholdsForEval(settings.Thresholds, settings.GlobalThresholdRefs)
+	derivedThresholds := p.resolveThresholdsForEval(settings.Thresholds, settings.SuppressedGlobalIDs, readingType)
 	p.mu.RUnlock()
 	activeThreshold := p.evaluateThresholds(ctx, aggregated, derivedThresholds, now)
 
