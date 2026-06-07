@@ -5,7 +5,8 @@ var websocket = null,
   currentSettings = {},
   sourceProfiles = [],
   slotThresholdAdvancedOpen = Object.create(null),
-  globalThresholds = [];
+  globalThresholds = [],
+  slotReadingTypes = [];
 
 var onchangeevt = "onchange";
 
@@ -79,7 +80,7 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
     if (Array.isArray(payload.globalThresholds)) {
       globalThresholds = payload.globalThresholds;
       for (var gi = 0; gi < 4; gi++) {
-        renderSlotGlobalRefs(gi);
+        renderSlotActiveGlobals(gi);
       }
     }
 
@@ -180,6 +181,10 @@ function populateReadingSelect(slotIdx, readings) {
     el.add(opt);
   });
   el.removeAttribute("disabled");
+  // Track reading type for active globals display
+  var matched = readings.find(function(r) { return String(r.id) === currentRid; });
+  slotReadingTypes[slotIdx] = matched ? (matched.type || "") : "";
+  renderSlotActiveGlobals(slotIdx);
 }
 
 // --- populate all UI fields from settings ---
@@ -226,7 +231,7 @@ function applySettingsToUI(s) {
     }
 
     renderSlotThresholds(i, slot.thresholds || []);
-    renderSlotGlobalRefs(i);
+    renderSlotActiveGlobals(i);
   }
 }
 
@@ -523,16 +528,20 @@ function createSlotThresholdElement(slotIdx, threshold, index, total) {
 
 // --- global threshold refs per slot ---
 
-function renderSlotGlobalRefs(slotIdx) {
+function renderSlotActiveGlobals(slotIdx) {
   var container = byId("slot" + slotIdx + "_globalRefsContainer");
   if (!container) return;
   container.innerHTML = "";
-  if (!globalThresholds || globalThresholds.length === 0) return;
+  var slotRt = slotReadingTypes[slotIdx] || "";
+  var active = (globalThresholds || []).filter(function(gt) {
+    return !gt.readingType || gt.readingType === slotRt;
+  });
+  if (active.length === 0) return;
   var slot = currentSettings.slots && currentSettings.slots[slotIdx];
-  var currentRefs = (slot && Array.isArray(slot.globalThresholdRefs)) ? slot.globalThresholdRefs : [];
+  var suppressed = (slot && Array.isArray(slot.suppressedGlobalIDs)) ? slot.suppressedGlobalIDs : [];
 
-  globalThresholds.forEach(function(gt) {
-    var checked = currentRefs.indexOf(gt.id) !== -1;
+  active.forEach(function(gt) {
+    var isSuppressed = suppressed.indexOf(gt.id) !== -1;
     var row = document.createElement("div");
     row.className = "sdpi-item";
     var label = document.createElement("div");
@@ -546,23 +555,24 @@ function renderSlotGlobalRefs(slotIdx) {
     span.style.fontSize = "9pt";
     span.textContent = (gt.operator || ">=") + " " + (gt.value != null ? gt.value : "");
     var btn = document.createElement("button");
-    btn.style.cssText = "width:36px;padding:0;background:" + (checked ? "#4a4" : "#555") + ";color:#fff;";
-    btn.textContent = checked ? "on" : "off";
+    btn.style.cssText = "width:50px;padding:0;background:" + (isSuppressed ? "#a44" : "#4a4") + ";color:#fff;";
+    btn.textContent = isSuppressed ? "off" : "on";
     (function(gtId, slotI) {
       btn.addEventListener("click", function() {
         var sl = currentSettings.slots && currentSettings.slots[slotI];
-        var refs = (sl && Array.isArray(sl.globalThresholdRefs)) ? sl.globalThresholdRefs.slice() : [];
-        var idx = refs.indexOf(gtId);
+        var sups = (sl && Array.isArray(sl.suppressedGlobalIDs)) ? sl.suppressedGlobalIDs.slice() : [];
+        var idx = sups.indexOf(gtId);
         if (idx !== -1) {
-          refs.splice(idx, 1);
-          sendValueToPlugin({ key: "slot" + slotI + "_removeGlobalRef", value: gtId }, "sdpi_collection");
+          sups.splice(idx, 1);
+          sendValueToPlugin({ key: "slot" + slotI + "_unsuppressGlobal", value: gtId }, "sdpi_collection");
         } else {
-          refs.push(gtId);
-          sendValueToPlugin({ key: "slot" + slotI + "_addGlobalRef", value: gtId }, "sdpi_collection");
+          sups.push(gtId);
+          sendValueToPlugin({ key: "slot" + slotI + "_suppressGlobal", value: gtId }, "sdpi_collection");
         }
-        if (sl) sl.globalThresholdRefs = refs;
-        btn.style.background = refs.indexOf(gtId) !== -1 ? "#4a4" : "#555";
-        btn.textContent = refs.indexOf(gtId) !== -1 ? "on" : "off";
+        if (sl) sl.suppressedGlobalIDs = sups;
+        var nowSuppressed = sups.indexOf(gtId) !== -1;
+        btn.style.background = nowSuppressed ? "#a44" : "#4a4";
+        btn.textContent = nowSuppressed ? "off" : "on";
       });
     })(gt.id, slotIdx);
     valCell.appendChild(span);

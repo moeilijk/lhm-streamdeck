@@ -639,6 +639,9 @@ function createGlobalThresholdElement(threshold) {
   var textInput = clone.querySelector(".threshold-text");
   textInput.value = threshold.text || "";
 
+  var readingTypeSelect = clone.querySelector(".threshold-reading-type");
+  if (readingTypeSelect) readingTypeSelect.value = threshold.readingType || "";
+
   var operatorSelect = clone.querySelector(".threshold-operator");
   operatorSelect.value = threshold.operator || ">=";
 
@@ -717,6 +720,12 @@ function createGlobalThresholdElement(threshold) {
       sendGlobalThresholdUpdate(thresholdId, "thresholdText", e.target.value);
     }, 300);
   });
+
+  if (readingTypeSelect) {
+    readingTypeSelect.addEventListener("change", function(e) {
+      sendGlobalThresholdUpdate(thresholdId, "thresholdReadingType", e.target.value);
+    });
+  }
 
   operatorSelect.addEventListener("change", function(e) {
     sendGlobalThresholdUpdate(thresholdId, "thresholdOperator", e.target.value);

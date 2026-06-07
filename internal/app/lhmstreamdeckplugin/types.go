@@ -49,6 +49,7 @@ type Threshold struct {
 	ForegroundColor string  `json:"foregroundColor"` // Graph foreground color
 	HighlightColor  string  `json:"highlightColor"`  // Graph highlight color
 	ValueTextColor  string  `json:"valueTextColor"`  // Value text color
+	ReadingType     string  `json:"readingType,omitempty"` // globals only: "Temp","Volt","Fan","Current","Power","Clock","Usage","Other" or "" = all
 }
 
 type actionSettings struct {
@@ -81,10 +82,10 @@ type actionSettings struct {
 	InErrorState              bool    `json:"inErrorState"`
 
 	// Dynamic threshold system
-	Thresholds          []Threshold `json:"thresholds"`
-	GlobalThresholdRefs []string    `json:"globalThresholdRefs,omitempty"`
-	CurrentThresholdID  string      `json:"currentThresholdId"`
-	SnoozeDurations     []int       `json:"snoozeDurations,omitempty"`
+	Thresholds         []Threshold `json:"thresholds"`
+	SuppressedGlobalIDs []string   `json:"suppressedGlobalIDs,omitempty"`
+	CurrentThresholdID  string     `json:"currentThresholdId"`
+	SnoozeDurations     []int      `json:"snoozeDurations,omitempty"`
 
 	// Legacy Warning Threshold Settings (kept for migration, omitempty)
 	WarningEnabled         bool    `json:"warningEnabled,omitempty"`
@@ -194,7 +195,7 @@ type compositeSlotSettings struct {
 	TextStrokeColor    string `json:"textStrokeColor"`
 
 	Thresholds          []Threshold `json:"thresholds,omitempty"`
-	GlobalThresholdRefs []string    `json:"globalThresholdRefs,omitempty"`
+	SuppressedGlobalIDs []string    `json:"suppressedGlobalIDs,omitempty"`
 	CurrentThresholdID  string      `json:"currentThresholdId,omitempty"`
 }
 
@@ -244,7 +245,7 @@ type derivedActionSettings struct {
 	UpdateIntervalOverrideMs int         `json:"updateIntervalOverrideMs"` // 0 = follow global
 	SmoothingAlpha           float64     `json:"smoothingAlpha"`           // 0.1–1.0; 0 = 1.0 (no smoothing)
 	Thresholds          []Threshold `json:"thresholds"`
-	GlobalThresholdRefs []string    `json:"globalThresholdRefs,omitempty"`
+	SuppressedGlobalIDs []string    `json:"suppressedGlobalIDs,omitempty"`
 	CurrentThresholdID  string      `json:"currentThresholdId"`
 	SnoozeDurations     []int       `json:"snoozeDurations,omitempty"`
 }

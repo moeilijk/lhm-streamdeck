@@ -125,6 +125,20 @@
             <input type="text" class="sdpi-item-value threshold-text" placeholder="e.g. HOT or Hot {value}" />
           </div>
           <div class="sdpi-item">
+            <div class="sdpi-item-label">Sensor type</div>
+            <select class="sdpi-item-value threshold-reading-type" style="width: 120px;">
+              <option value="">All types</option>
+              <option value="Temp">Temperature</option>
+              <option value="Volt">Voltage</option>
+              <option value="Fan">Fan</option>
+              <option value="Current">Current</option>
+              <option value="Power">Power</option>
+              <option value="Clock">Clock</option>
+              <option value="Usage">Usage</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="sdpi-item">
             <div class="sdpi-item-label">Condition</div>
             <div class="sdpi-item-value" style="display: flex; align-items: center; gap: 4px;">
               <select class="threshold-operator" style="width: 55px;">

@@ -869,10 +869,10 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 				return
 			}
 			switch sdpi.Key {
-			case "derived_addGlobalRef":
-				p.handleDerivedAddGlobalRef(event, &sdpi)
-			case "derived_removeGlobalRef":
-				p.handleDerivedRemoveGlobalRef(event, &sdpi)
+			case "derived_suppressGlobal":
+				p.handleDerivedSuppressGlobal(event, &sdpi)
+			case "derived_unsuppressGlobal":
+				p.handleDerivedUnsuppressGlobal(event, &sdpi)
 			case "derived_formula", "derived_slotCount", "derived_format", "derived_divisor",
 				"derived_graphUnit", "derived_min", "derived_max",
 				"derived_foregroundColor", "derived_backgroundColor", "derived_highlightColor",
@@ -924,10 +924,10 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 					p.handleCompositeSlotSensorSelect(event, &sdpi, slotIdx)
 				case "readingSelect":
 					p.handleCompositeSlotReadingSelect(event, &sdpi, slotIdx)
-				case "addGlobalRef":
-					p.handleCompositeSlotAddGlobalRef(event, &sdpi, slotIdx)
-				case "removeGlobalRef":
-					p.handleCompositeSlotRemoveGlobalRef(event, &sdpi, slotIdx)
+				case "suppressGlobal":
+					p.handleCompositeSlotSuppressGlobal(event, &sdpi, slotIdx)
+				case "unsuppressGlobal":
+					p.handleCompositeSlotUnsuppressGlobal(event, &sdpi, slotIdx)
 				case "addThreshold":
 					p.handleCompositeAddThreshold(event, &sdpi, slotIdx)
 				case "removeThreshold":
@@ -1083,14 +1083,14 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			if err != nil {
 				log.Println("handleColorChange (threshold)", err)
 			}
-		// Global threshold reference handlers
-		case "addGlobalRef":
-			if err := p.handleAddGlobalRef(event, &sdpi); err != nil {
-				log.Println("handleAddGlobalRef", err)
+		// Global threshold suppress handlers
+		case "suppressGlobal":
+			if err := p.handleSuppressGlobal(event, &sdpi); err != nil {
+				log.Println("handleSuppressGlobal", err)
 			}
-		case "removeGlobalRef":
-			if err := p.handleRemoveGlobalRef(event, &sdpi); err != nil {
-				log.Println("handleRemoveGlobalRef", err)
+		case "unsuppressGlobal":
+			if err := p.handleUnsuppressGlobal(event, &sdpi); err != nil {
+				log.Println("handleUnsuppressGlobal", err)
 			}
 		// Dynamic threshold handlers
 		case "addThreshold":

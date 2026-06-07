@@ -728,7 +728,8 @@ func (p *Plugin) updateTiles(data *actionData) {
 	now := time.Now()
 
 	// Check threshold alerts (evaluate by priority, highest first)
-	activeThreshold := p.evaluateThresholds(data.context, v, s.Thresholds, now)
+	thresholds := p.resolveThresholdsForEval(s.Thresholds, s.SuppressedGlobalIDs, hwsensorsservice.ReadingType(r.TypeI()))
+	activeThreshold := p.evaluateThresholds(data.context, v, thresholds, now)
 
 	newThresholdID := ""
 	alertText := ""
