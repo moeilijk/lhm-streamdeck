@@ -39,19 +39,21 @@
 - Global still fires on unsuppressed reading tile while composite is suppressed
 - Composite slot 0 unsuppress: global fires again
 
-## To be built
+### test-settings-tile.js (5 assertions)
+- connectionStatus = Connected with mock server running
+- currentRate is a positive number
+- sourceProfiles is an array
+- setPollInterval(2000): currentRate reflects change
+- pollInterval=2000 persisted to global settings file
 
-### test-settings-tile.js (key 50)
-- connectionStatus = connected when mock server is running
-- connectionStatus = disconnected when mock server is stopped
-- PollInterval change persisted
+### test-favorites.js (6 assertions)
+- Toggle favorite saves it (count=1, id correct, readingLabel correct)
+- Favorite visible in tile B catalog
+- Apply favorite sets sensorUid on tile B
+- Remove favorite: favorites list empty after remove
 
-### test-favorites.js (keys 60–61)
-- Save a favorite from a reading tile
-- Apply favorite to another reading tile: correct sensor+reading selected
-- Remove favorite: gone from list
-
-### test-source-profiles.js (key 70)
-- Add source profile, set host+port
-- Set as default: tiles switch to that profile
-- Remove profile
+### test-source-profiles.js (7 assertions)
+- Add profile: count +1, default name "New Source"
+- Update profile: name/host/port persisted
+- Set default: defaultSourceProfileId updated + persisted
+- Delete profile: removed from list, count back to initial

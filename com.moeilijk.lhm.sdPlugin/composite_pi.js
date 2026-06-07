@@ -559,7 +559,8 @@ function renderSlotActiveGlobals(slotIdx) {
     btn.textContent = isSuppressed ? "off" : "on";
     (function(gtId, slotI) {
       btn.addEventListener("click", function() {
-        var sl = currentSettings.slots && currentSettings.slots[slotI];
+        var sI = slotI | 0;
+        var sl = currentSettings.slots && currentSettings.slots[sI];
         var sups = (sl && Array.isArray(sl.suppressedGlobalIDs)) ? sl.suppressedGlobalIDs.slice() : [];
         var idx = sups.indexOf(gtId);
         if (idx !== -1) {
