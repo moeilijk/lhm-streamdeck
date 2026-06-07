@@ -90,6 +90,15 @@ func StartService() *Service {
 	}
 }
 
+// NewHTTPService creates a Plugin that polls the given LHM/companion HTTP endpoint.
+// Used on Linux for remote source profiles so no bridge subprocess is needed.
+func NewHTTPService(url string) *Plugin {
+	return &Plugin{Service: &Service{
+		url:    url,
+		client: &http.Client{Timeout: 2 * time.Second},
+	}}
+}
+
 // Recv pulls the latest snapshot from Libre Hardware Monitor.
 func (s *Service) Recv() error {
 	resp, err := s.client.Get(s.url)

@@ -1,59 +1,188 @@
 # Integration test plan
 
-## Already covered
+Each test deletes any leftover slots first, creates new tiles, tests the feature, then removes everything.
 
-### test-global-thresholds.js (10 assertions)
-- Global threshold auto-apply by ReadingType
-- Type filter: Temp global ignored on Load tile
-- Suppress: suppressed global does not fire
-- Unsuppress: global fires after unsuppress
-- PI visibility: lhmTypeToReadingType maps all LHM type strings correctly
+---
 
-### test-per-tile-thresholds.js (8 assertions)
-- Per-tile threshold fires above value, not below
-- Threshold isolation: tile A threshold does not affect tile B
-- smoothingAlpha persisted
-- updateIntervalOverrideMs persisted
-- updateIntervalOverrideMs throttles evaluation (live behavior)
-- graphHeightPct, graphLineThickness, textStroke, textStrokeColor persisted
+### test-global-thresholds.js — keys 0–3
 
-### test-composite-thresholds.js (6 assertions)
-- Composite slot 0 per-slot threshold fires
-- Slot independence: slot 1 (no threshold) not affected while slot 0 fires
-- Composite smoothingAlpha persisted
-- Composite updateIntervalOverrideMs persisted
+**New tiles:** settings (0), reading temp (1), reading load (2), reading suppress (3)
+- Mock source profile configured; tiles set to CPU Package / CPU Total / CPU Package
 
-### test-derived-thresholds.js (7 assertions)
-- Global threshold (readingType="") fires on derived tile at high average
-- Global threshold not active at low average
-- Global threshold also fires on reference reading tile
-- Derived tile suppress: suppressed global does not fire
-- Global still fires on unsuppressed tile while derived is suppressed
-- Unsuppress restores derived tile firing
-- smoothingAlpha, updateIntervalOverrideMs, graphHeightPct, graphLineThickness, textStroke all persisted
+**On:** add global threshold "HighTemp", ReadingType=Temp, operator=>, value=80, enabled=true
 
-### test-composite-global-suppress.js (5 assertions)
-- Global Temp threshold auto-applies to composite slot 0
-- Composite slot 0 not active at 45°C
-- Composite slot 0 suppress: global does not fire
-- Global still fires on unsuppressed reading tile while composite is suppressed
-- Composite slot 0 unsuppress: global fires again
+**Test (10 assertions):**
+1a. Sensor at 45°C → no active threshold on temp tile
+1b. Sensor raised to 90°C → global threshold active on temp tile
+2.  Load at 90% → no active threshold on load tile (type filter)
+3a. Suppress global on suppress tile, sensor at 90°C → suppress tile does not fire
+3b. Temp tile (not suppressed) fires during same period
+4.  Unsuppress suppress tile → fires again
+5a. CPU Package reading received with raw type "Temperature"
+5b. Mapped type "Temp" matches global readingType "Temp" — no "None match"
+5c. CPU Total maps to "Usage", correctly excluded from Temp global
+5d. All LHM type strings map correctly (Voltage→Volt, Load→Usage, etc.)
 
-### test-settings-tile.js (5 assertions)
-- connectionStatus = Connected with mock server running
-- currentRate is a positive number
-- sourceProfiles is an array
-- setPollInterval(2000): currentRate reflects change
-- pollInterval=2000 persisted to global settings file
+**Off:** global threshold deleted, mock reset, all 4 tiles deleted
 
-### test-favorites.js (6 assertions)
-- Toggle favorite saves it (count=1, id correct, readingLabel correct)
-- Favorite visible in tile B catalog
-- Apply favorite sets sensorUid on tile B
-- Remove favorite: favorites list empty after remove
+---
 
-### test-source-profiles.js (7 assertions)
-- Add profile: count +1, default name "New Source"
-- Update profile: name/host/port persisted
-- Set default: defaultSourceProfileId updated + persisted
-- Delete profile: removed from list, count back to initial
+### test-per-tile-thresholds.js — keys 10–13
+
+**New tiles:** settings (10), tile A CPU Package (11), tile B CPU Total (12), tile C CPU Package (13)
+- Mock source profile configured; tiles configured to respective readings
+
+**On:** add per-tile threshold on tile A: "HighTemp", operator=>, value=80, dwellMs=1000, cooldownMs=5000
+
+**Test (8 assertions):**
+1a. Tile A at 45°C → no active threshold
+1b. Tile A at 90°C → per-tile threshold active
+2.  Tile B has no active threshold while tile A fires (isolation)
+3.  smoothingAlpha=0.3 set on tile C → persisted
+4.  updateIntervalOverrideMs=2000 set on tile C → persisted
+5a. Override set to 5000ms; sensor at 90°C; at 2.5s mark → tile C not yet evaluated
+5b. After 5s total → tile C evaluated and threshold fired
+6.  graphHeightPct=60, graphLineThickness=3, textStroke=true, textStrokeColor=#ff0000 on tile C → all persisted
+
+**Off:** updateIntervalOverrideMs reset to 0, mock reset, all 4 tiles deleted
+
+---
+
+### test-composite-thresholds.js — keys 20–21
+
+**New tiles:** settings (20), composite (21)
+- Mock source profile configured
+- Composite slot 0 = CPU Package (temp)
+
+**On:** add threshold on composite slot 0: "SlotHighTemp", operator=>, value=80, dwellMs=1000, cooldownMs=5000
+
+**Test (6 assertions):**
+1a. Slot 0 at 45°C → not active
+1b. Slot 0 at 90°C → slot 0 threshold active
+2a. Slot 0 state confirmed (fires or in cooldown)
+2b. Slot 1 configured (CPU Total), no threshold → slot 1 not active while slot 0 fires
+3.  smoothingAlpha=0.2 on composite → persisted
+4.  updateIntervalOverrideMs=3000 on composite → persisted
+
+**Off:** mock reset, both tiles deleted
+
+---
+
+### test-derived-thresholds.js — keys 30–32
+
+**New tiles:** settings (30), derived (31), reference reading (32)
+- Mock source profile configured
+- Derived tile: slotCount=2, formula=average, slot 0=CPU Package, slot 1=CPU Core 0
+- Reference reading tile: CPU Package
+
+**On:** add global threshold "AllTypesHigh", readingType="" (all types), operator=>, value=80
+
+**Test (7 assertions):**
+1a. Sensors at 45°C/42°C (avg ~43.5°C) → derived tile not active
+1b. Both sensors raised to 90°C → global threshold active on derived tile
+1c. Global threshold also fires on reference reading tile
+2a. Suppress global on derived tile; sensors at 90°C → derived tile does not fire
+2b. Reference tile still fires while derived is suppressed
+3.  Unsuppress derived tile; sensors still at 90°C → derived tile fires again
+4.  smoothingAlpha=0.4, updateIntervalOverrideMs=2500, graphHeightPct=70, graphLineThickness=2, textStroke=true on derived tile → all persisted
+
+**Off:** global threshold deleted, mock reset, all 3 tiles deleted
+
+---
+
+### test-composite-global-suppress.js — keys 40–42
+
+**New tiles:** settings (40), composite (41), reference reading (42)
+- Mock source profile configured
+- Composite slot 0 = CPU Package; reference reading tile = CPU Package
+
+**On:** add global threshold "TempHigh", ReadingType=Temp, operator=>, value=80
+
+**Test (5 assertions):**
+1a. Sensor at 45°C → composite slot 0 not active
+1b. Sensor at 90°C → global threshold active on composite slot 0
+2a. Suppress global on composite slot 0; sensor at 90°C → slot 0 does not fire
+2b. Reference reading tile (not suppressed) still fires
+3.  Unsuppress composite slot 0; sensors still at 90°C → slot 0 fires again
+
+**Off:** sensor reset to 45°C, global threshold deleted, mock reset, all 3 tiles deleted
+
+---
+
+### test-settings-tile.js — key 50
+
+**New tile:** settings (50)
+- Mock source profile configured as default
+
+**On:** settings tile connected with mock sensor server running
+
+**Test (5 assertions):**
+1a. connectionStatus = Connected
+1b. currentRate is a positive number
+1c. sourceProfiles is an array
+2a. setPollInterval(2000) → currentRate = 2000
+2b. pollInterval=2000 persisted to global settings file
+
+**Off:** pollInterval reset to original value, mock reset, settings tile deleted
+
+---
+
+### test-favorites.js — keys 59–61
+
+**New tiles:** settings (59), tile A reading (60), tile B reading (61)
+- Mock source profile configured
+- Tile A configured: sensor /mockcpu/0, reading CPU Package
+- Any pre-existing favorites removed
+
+**On:** toggle favorite on tile A (CPU Package)
+
+**Test (6 assertions):**
+1a. 1 favorite saved after toggle
+1b. Favorite id = /mockcpu/0|<readingId>
+1c. Favorite readingLabel = CPU Package
+2a. Open tile B → 1 favorite visible in catalog
+2b. Apply favorite to tile B → sensorUid = /mockcpu/0
+3.  Remove favorite → favorites list empty
+
+**Off:** favorites list empty, mock reset, all 3 tiles deleted
+
+---
+
+### test-source-profiles.js — key 70
+
+**New tile:** settings (70)
+- Mock source profile configured; initial profile count and default recorded
+
+**On:** add new source profile
+
+**Test (7 assertions):**
+1a. Profile count = initial + 1
+1b. New profile name = "New Source"
+2.  Update: name="Test Profile", host=192.168.1.99, port=8090 → persisted
+3a. Set new profile as default → defaultSourceProfileId updated in plugin
+3b. defaultSourceProfileId persisted to global settings file
+4a. Restore original default; delete new profile → profile removed from list
+4b. Profile count back to initial
+
+**Off:** original default restored, new profile deleted, mock reset, settings tile deleted
+
+---
+
+## Hardware test — #48 Linux hwmon (manual, native Linux only)
+
+DeckBridge on WSL runs the Windows binary; the hwmon code path requires native Linux with a real Stream Deck.
+
+**New tiles:** settings, reading
+
+**On:** add source profile with host empty or 127.0.0.1, set as default
+- Expected: sensors from /sys/class/hwmon visible without lhm-companion running
+
+**Test:**
+- Configure reading tile with a hwmon sensor (e.g. CPU Package temperature)
+- Set a threshold → verify it fires on overshoot
+- Set EMA smoothing → verify value is smooth
+
+**Off:** change source profile host to a remote address (e.g. 192.168.x.x:8085)
+- Expected: plugin switches to HTTP polling, hwmon no longer active
+- Expected: tile shows disconnected until lhm-companion is reachable at that address
+- Delete the local profile, restore original default, delete tiles

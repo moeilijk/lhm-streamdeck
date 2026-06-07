@@ -1286,7 +1286,7 @@ func (p *Plugin) OnDidReceiveGlobalSettings(event *streamdeck.EvDidReceiveGlobal
 	for _, prof := range profiles {
 		rt := p.runtimeForSource(prof.ID)
 		rt.mu.RLock()
-		needsStart := rt.c == nil
+		needsStart := rt.hw == nil
 		rt.mu.RUnlock()
 		if needsStart {
 			go func(r *sourceRuntime) {
