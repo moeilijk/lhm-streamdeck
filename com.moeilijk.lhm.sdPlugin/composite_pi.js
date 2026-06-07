@@ -183,7 +183,7 @@ function populateReadingSelect(slotIdx, readings) {
   el.removeAttribute("disabled");
   // Track reading type for active globals display
   var matched = readings.find(function(r) { return String(r.id) === currentRid; });
-  slotReadingTypes[slotIdx] = matched ? (matched.type || "") : "";
+  slotReadingTypes[slotIdx] = lhmTypeToReadingType(matched ? matched.type : "");
   renderSlotActiveGlobals(slotIdx);
 }
 
