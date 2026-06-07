@@ -80,7 +80,7 @@ I wanted a local, open replacement for Stream Deck hardware monitoring without l
 
 ### Linux (OpenDeck)
 
-A separate `com.moeilijk.lhm-linux.streamDeckPlugin` is published alongside the Windows release for [OpenDeck](https://github.com/nickvdyck/openDeck) users. Install it the same way; configure a source profile pointing to an [lhm-companion](https://github.com/moeilijk/lhm-companion) endpoint.
+A separate `com.moeilijk.lhm-linux.streamDeckPlugin` is published alongside the Windows release for [OpenDeck](https://github.com/nekename/OpenDeck) users. Install it the same way; configure a source profile pointing to an [lhm-companion](https://github.com/moeilijk/lhm-companion) endpoint.
 
 ### Multi-machine source profiles
 
