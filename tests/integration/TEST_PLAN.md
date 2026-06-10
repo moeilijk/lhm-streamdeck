@@ -56,13 +56,14 @@ Each test deletes any leftover slots first, creates new tiles, tests the feature
 
 **On:** add threshold on composite slot 0: "SlotHighTemp", operator=>, value=80, dwellMs=1000, cooldownMs=5000
 
-**Test (6 assertions):**
+**Test (7 assertions):**
 1a. Slot 0 at 45°C → not active
 1b. Slot 0 at 90°C → slot 0 threshold active
 2a. Slot 0 state confirmed (fires or in cooldown)
 2b. Slot 1 configured (CPU Total), no threshold → slot 1 not active while slot 0 fires
 3.  smoothingAlpha=0.2 on composite → persisted
 4.  updateIntervalOverrideMs=3000 on composite → persisted
+5.  slot0 mode Text only and slot1 mode Graph only → persisted
 
 **Off:** mock reset, both tiles deleted
 

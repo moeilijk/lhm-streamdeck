@@ -1,6 +1,7 @@
 'use strict';
 // Composite per-slot threshold tests.
-// Covers: composite slot thresholds (#40/#43), slot independence, smoothingAlpha on composite.
+// Covers: composite slot thresholds (#40/#43), slot independence, smoothingAlpha on composite,
+// per-slot display mode (#57).
 //
 // Key indices 20–21 (do not overlap with other test files).
 
@@ -203,6 +204,23 @@ async function run() {
     pass('test 4 — composite updateIntervalOverrideMs=3000 persisted');
   } else {
     fail(`test 4 — expected 3000, got ${cs.updateIntervalOverrideMs}`);
+  }
+
+  // ── TEST 5: Composite per-slot mode persisted ───────────────────────────────
+  console.log('\n[test 5] composite per-slot display mode persisted');
+  {
+    const { ws } = await connectPI(wsPort, compositeCtx, COMPOSITE_ACTION);
+    sdpi(ws, compositeCtx, COMPOSITE_ACTION, 'slot0_mode', 'text');
+    await sleep(600);
+    sdpi(ws, compositeCtx, COMPOSITE_ACTION, 'slot1_mode', 'graph');
+    await sleep(600);
+    ws.close();
+  }
+  cs = await getCompositeTileSettings(wsPort, compositeCtx);
+  if (cs.slots[0].mode === 'text' && cs.slots[1].mode === 'graph') {
+    pass('test 5 — slot0=text and slot1=graph persisted');
+  } else {
+    fail(`test 5 — expected slot modes text/graph, got ${cs.slots[0].mode || ''}/${cs.slots[1].mode || ''}`);
   }
 
   // ── Cleanup ─────────────────────────────────────────────────────────────────

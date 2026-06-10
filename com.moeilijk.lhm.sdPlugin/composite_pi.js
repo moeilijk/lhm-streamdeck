@@ -202,6 +202,7 @@ function applySettingsToUI(s) {
   for (var i = 0; i < 4; i++) {
     var slot = slots[i] || {};
     setInputValue("slot" + i + "_title", slot.title || "");
+    setSelectValue("slot" + i + "_mode", slot.mode || "");
     setColorValue("slot" + i + "_highlightColor", slot.highlightColor);
     setColorValue("slot" + i + "_foregroundColor", slot.foregroundColor);
     setColorValue("slot" + i + "_valueTextColor", slot.valueTextColor);
@@ -264,6 +265,7 @@ document.addEventListener("DOMContentLoaded", function () {
     wireSensorSelect(i);
     wireReadingSelect(i);
     bindSdpiValue("slot" + i + "_title", sendSdpi, "onchange");
+    bindSdpiValue("slot" + i + "_mode", sendSdpi, onchangeevt);
     bindSdpiValue("slot" + i + "_highlightColor", sendSdpi, onchangeevt);
     bindSdpiValue("slot" + i + "_foregroundColor", sendSdpi, onchangeevt);
     bindSdpiValue("slot" + i + "_valueTextColor", sendSdpi, onchangeevt);
