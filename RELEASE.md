@@ -14,6 +14,13 @@ Wait for explicit approval of that version rationale before making any release-v
 
 When a hardware test has been approved and the related change is committed and pushed, handle the corresponding GitHub issue as part of the same publish flow. Close it when the release/publish completes, or update it with the exact remaining blocker if it cannot be closed yet.
 
+Release notes must follow the same structure as recent releases:
+
+- Use a user-facing feature or "What's changed" heading.
+- Group entries under sections such as "New features", "Improvements", or "Bug fixes" when useful.
+- Always include a "Downloads" section listing both release artifacts.
+- Do not include a validation section; validation belongs in the final assistant summary, not in public release notes.
+
 ## Steps
 
 1. Confirm the release scope and current latest release.
