@@ -23,12 +23,12 @@ type globalSettings struct {
 
 // settingsTileSettings stores per-tile appearance settings for the settings action
 type settingsTileSettings struct {
-	TileBackground          string `json:"tileBackground"`          // hex color for tile background
-	TileTextColor           string `json:"tileTextColor"`           // hex color for tile value text
-	ShowLabel               bool   `json:"showLabel"`               // toggles startup placeholder background
-	Title                   string `json:"title"`                   // title text, like graph tiles
-	TitleColor              string `json:"titleColor"`              // title color, like graph tiles
-	ShowTitleInGraph        *bool  `json:"showTitleInGraph"`        // mirrors graph tile title behavior
+	TileBackground          string `json:"tileBackground"`                    // hex color for tile background
+	TileTextColor           string `json:"tileTextColor"`                     // hex color for tile value text
+	ShowLabel               bool   `json:"showLabel"`                         // toggles startup placeholder background
+	Title                   string `json:"title"`                             // title text, like graph tiles
+	TitleColor              string `json:"titleColor"`                        // title color, like graph tiles
+	ShowTitleInGraph        *bool  `json:"showTitleInGraph"`                  // mirrors graph tile title behavior
 	SelectedSourceProfileID string `json:"selectedSourceProfileId,omitempty"` // which source profile this tile monitors
 }
 
@@ -45,47 +45,47 @@ type Threshold struct {
 	DwellMs         int     `json:"dwellMs,omitempty"`
 	CooldownMs      int     `json:"cooldownMs,omitempty"`
 	Sticky          bool    `json:"sticky,omitempty"`
-	BackgroundColor string  `json:"backgroundColor"` // Background color when triggered
-	ForegroundColor string  `json:"foregroundColor"` // Graph foreground color
-	HighlightColor  string  `json:"highlightColor"`  // Graph highlight color
-	ValueTextColor  string  `json:"valueTextColor"`  // Value text color
+	BackgroundColor string  `json:"backgroundColor"`       // Background color when triggered
+	ForegroundColor string  `json:"foregroundColor"`       // Graph foreground color
+	HighlightColor  string  `json:"highlightColor"`        // Graph highlight color
+	ValueTextColor  string  `json:"valueTextColor"`        // Value text color
 	ReadingType     string  `json:"readingType,omitempty"` // globals only: "Temp","Volt","Fan","Current","Power","Clock","Usage","Other" or "" = all
 }
 
 type actionSettings struct {
-	SourceProfileID  string  `json:"sourceProfileId,omitempty"`
-	SensorUID        string  `json:"sensorUid"`
-	ReadingID        int32   `json:"readingId,string"`
-	ReadingLabel     string  `json:"readingLabel"`
-	Title            string  `json:"title"`
-	TitleFontSize    float64 `json:"titleFontSize"`
-	ValueFontSize    float64 `json:"valueFontSize"`
-	ShowTitleInGraph *bool   `json:"showTitleInGraph"`
-	Min              int     `json:"min"`
-	Max              int     `json:"max"`
-	Format           string  `json:"format"`
-	Divisor          string  `json:"divisor"`
-	GraphUnit        string  `json:"graphUnit"` // B, KB, MB, GB, TB - normalizes graph values to this unit
-	IsValid          bool    `json:"isValid"`
-	TitleColor       string  `json:"titleColor"`
-	ForegroundColor  string  `json:"foregroundColor"`
-	BackgroundColor  string  `json:"backgroundColor"`
-	HighlightColor   string  `json:"highlightColor"`
-	ValueTextColor   string  `json:"valueTextColor"`
-	GraphMode             string `json:"graphMode"`             // "both" (default), "graph", "text"
-	GraphHeightPct        int    `json:"graphHeightPct"`        // 10–100; 0 = 100
-	GraphLineThickness    int    `json:"graphLineThickness"`    // 1–4; 0 = 1
-	TextStroke                bool   `json:"textStroke"`                // outline around labels
-	TextStrokeColor           string `json:"textStrokeColor"`           // hex; empty = use background color
-	UpdateIntervalOverrideMs  int     `json:"updateIntervalOverrideMs"`  // 0 = follow global
-	SmoothingAlpha            float64 `json:"smoothingAlpha"`            // 0.1–1.0; 0 = treat as 1.0 (no smoothing)
-	InErrorState              bool    `json:"inErrorState"`
+	SourceProfileID          string  `json:"sourceProfileId,omitempty"`
+	SensorUID                string  `json:"sensorUid"`
+	ReadingID                int32   `json:"readingId,string"`
+	ReadingLabel             string  `json:"readingLabel"`
+	Title                    string  `json:"title"`
+	TitleFontSize            float64 `json:"titleFontSize"`
+	ValueFontSize            float64 `json:"valueFontSize"`
+	ShowTitleInGraph         *bool   `json:"showTitleInGraph"`
+	Min                      int     `json:"min"`
+	Max                      int     `json:"max"`
+	Format                   string  `json:"format"`
+	Divisor                  string  `json:"divisor"`
+	GraphUnit                string  `json:"graphUnit"` // B, KB, MB, GB, TB - normalizes graph values to this unit
+	IsValid                  bool    `json:"isValid"`
+	TitleColor               string  `json:"titleColor"`
+	ForegroundColor          string  `json:"foregroundColor"`
+	BackgroundColor          string  `json:"backgroundColor"`
+	HighlightColor           string  `json:"highlightColor"`
+	ValueTextColor           string  `json:"valueTextColor"`
+	GraphMode                string  `json:"graphMode"`                // "both" (default), "graph", "text"
+	GraphHeightPct           int     `json:"graphHeightPct"`           // 10–100; 0 = 100
+	GraphLineThickness       int     `json:"graphLineThickness"`       // 1–4; 0 = 1
+	TextStroke               bool    `json:"textStroke"`               // outline around labels
+	TextStrokeColor          string  `json:"textStrokeColor"`          // hex; empty = use background color
+	UpdateIntervalOverrideMs int     `json:"updateIntervalOverrideMs"` // 0 = follow global
+	SmoothingAlpha           float64 `json:"smoothingAlpha"`           // 0.1–1.0; 0 = treat as 1.0 (no smoothing)
+	InErrorState             bool    `json:"inErrorState"`
 
 	// Dynamic threshold system
-	Thresholds         []Threshold `json:"thresholds"`
-	SuppressedGlobalIDs []string   `json:"suppressedGlobalIDs,omitempty"`
-	CurrentThresholdID  string     `json:"currentThresholdId"`
-	SnoozeDurations     []int      `json:"snoozeDurations,omitempty"`
+	Thresholds          []Threshold `json:"thresholds"`
+	SuppressedGlobalIDs []string    `json:"suppressedGlobalIDs,omitempty"`
+	CurrentThresholdID  string      `json:"currentThresholdId"`
+	SnoozeDurations     []int       `json:"snoozeDurations,omitempty"`
 
 	// Legacy Warning Threshold Settings (kept for migration, omitempty)
 	WarningEnabled         bool    `json:"warningEnabled,omitempty"`
@@ -117,11 +117,11 @@ type favoriteReading struct {
 	ID              string `json:"id"`
 	SourceProfileID string `json:"sourceProfileId,omitempty"`
 	SensorUID       string `json:"sensorUid"`
-	SensorName   string `json:"sensorName"`
-	ReadingID    int32  `json:"readingId,string"`
-	ReadingLabel string `json:"readingLabel"`
-	ReadingUnit  string `json:"readingUnit"`
-	Category     string `json:"category,omitempty"`
+	SensorName      string `json:"sensorName"`
+	ReadingID       int32  `json:"readingId,string"`
+	ReadingLabel    string `json:"readingLabel"`
+	ReadingUnit     string `json:"readingUnit"`
+	Category        string `json:"category,omitempty"`
 }
 
 type evStatus struct {
@@ -171,28 +171,29 @@ type evSendCatalogPayload struct {
 }
 
 type compositeSlotSettings struct {
-	SensorUID       string  `json:"sensorUid"`
-	ReadingID       int32   `json:"readingId,string"`
-	ReadingLabel    string  `json:"readingLabel"`
-	IsValid         bool    `json:"isValid"`
-	Title           string  `json:"title"`
-	TitleFontSize   float64 `json:"titleFontSize"`
-	ValueFontSize   float64 `json:"valueFontSize"`
-	ForegroundColor string  `json:"foregroundColor"`
-	BackgroundColor string  `json:"backgroundColor"`
-	HighlightColor  string  `json:"highlightColor"`
-	ValueTextColor  string  `json:"valueTextColor"`
-	TitleColor      string  `json:"titleColor"`
-	FillAlpha       int     `json:"fillAlpha"`
-	Min             int     `json:"min"`
-	Max             int     `json:"max"`
-	Format             string `json:"format"`
-	Divisor            string `json:"divisor"`
-	GraphUnit          string `json:"graphUnit"`
-	GraphHeightPct     int    `json:"graphHeightPct"`
-	GraphLineThickness int    `json:"graphLineThickness"`
-	TextStroke         bool   `json:"textStroke"`
-	TextStrokeColor    string `json:"textStrokeColor"`
+	SensorUID          string  `json:"sensorUid"`
+	ReadingID          int32   `json:"readingId,string"`
+	ReadingLabel       string  `json:"readingLabel"`
+	IsValid            bool    `json:"isValid"`
+	Mode               string  `json:"mode,omitempty"` // "", "text", "graph", "both"; empty = use tile mode
+	Title              string  `json:"title"`
+	TitleFontSize      float64 `json:"titleFontSize"`
+	ValueFontSize      float64 `json:"valueFontSize"`
+	ForegroundColor    string  `json:"foregroundColor"`
+	BackgroundColor    string  `json:"backgroundColor"`
+	HighlightColor     string  `json:"highlightColor"`
+	ValueTextColor     string  `json:"valueTextColor"`
+	TitleColor         string  `json:"titleColor"`
+	FillAlpha          int     `json:"fillAlpha"`
+	Min                int     `json:"min"`
+	Max                int     `json:"max"`
+	Format             string  `json:"format"`
+	Divisor            string  `json:"divisor"`
+	GraphUnit          string  `json:"graphUnit"`
+	GraphHeightPct     int     `json:"graphHeightPct"`
+	GraphLineThickness int     `json:"graphLineThickness"`
+	TextStroke         bool    `json:"textStroke"`
+	TextStrokeColor    string  `json:"textStrokeColor"`
 
 	Thresholds          []Threshold `json:"thresholds,omitempty"`
 	SuppressedGlobalIDs []string    `json:"suppressedGlobalIDs,omitempty"`
@@ -221,33 +222,33 @@ type derivedActionSettings struct {
 	SourceProfileID string                 `json:"sourceProfileId,omitempty"`
 	SlotCount       int                    `json:"slotCount"`
 	Formula         string                 `json:"formula"` // "sum","average","max","min","delta","pct"
-	Slots     [8]derivedSlotSettings `json:"slots"`
+	Slots           [8]derivedSlotSettings `json:"slots"`
 
 	// Tile-level display — mirrors actionSettings so threshold/color/format pipeline works unchanged
-	Title              string      `json:"title"`
-	TitleFontSize      float64     `json:"titleFontSize"`
-	ValueFontSize      float64     `json:"valueFontSize"`
-	ShowTitleInGraph   *bool       `json:"showTitleInGraph"`
-	Min                int         `json:"min"`
-	Max                int         `json:"max"`
-	Format             string      `json:"format"`
-	Divisor            string      `json:"divisor"`
-	GraphUnit          string      `json:"graphUnit"`
-	TitleColor         string      `json:"titleColor"`
-	ForegroundColor    string      `json:"foregroundColor"`
-	BackgroundColor    string      `json:"backgroundColor"`
-	HighlightColor     string      `json:"highlightColor"`
-	ValueTextColor     string      `json:"valueTextColor"`
-	GraphHeightPct     int         `json:"graphHeightPct"`
-	GraphLineThickness int         `json:"graphLineThickness"`
+	Title                    string      `json:"title"`
+	TitleFontSize            float64     `json:"titleFontSize"`
+	ValueFontSize            float64     `json:"valueFontSize"`
+	ShowTitleInGraph         *bool       `json:"showTitleInGraph"`
+	Min                      int         `json:"min"`
+	Max                      int         `json:"max"`
+	Format                   string      `json:"format"`
+	Divisor                  string      `json:"divisor"`
+	GraphUnit                string      `json:"graphUnit"`
+	TitleColor               string      `json:"titleColor"`
+	ForegroundColor          string      `json:"foregroundColor"`
+	BackgroundColor          string      `json:"backgroundColor"`
+	HighlightColor           string      `json:"highlightColor"`
+	ValueTextColor           string      `json:"valueTextColor"`
+	GraphHeightPct           int         `json:"graphHeightPct"`
+	GraphLineThickness       int         `json:"graphLineThickness"`
 	TextStroke               bool        `json:"textStroke"`
 	TextStrokeColor          string      `json:"textStrokeColor"`
 	UpdateIntervalOverrideMs int         `json:"updateIntervalOverrideMs"` // 0 = follow global
 	SmoothingAlpha           float64     `json:"smoothingAlpha"`           // 0.1–1.0; 0 = 1.0 (no smoothing)
-	Thresholds          []Threshold `json:"thresholds"`
-	SuppressedGlobalIDs []string    `json:"suppressedGlobalIDs,omitempty"`
-	CurrentThresholdID  string      `json:"currentThresholdId"`
-	SnoozeDurations     []int       `json:"snoozeDurations,omitempty"`
+	Thresholds               []Threshold `json:"thresholds"`
+	SuppressedGlobalIDs      []string    `json:"suppressedGlobalIDs,omitempty"`
+	CurrentThresholdID       string      `json:"currentThresholdId"`
+	SnoozeDurations          []int       `json:"snoozeDurations,omitempty"`
 }
 
 type evSdpiCollection struct {

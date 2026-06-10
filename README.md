@@ -107,6 +107,7 @@ In its Property Inspector:
 - **Update every** – override the global poll interval for this tile only (`Use global`, `1s`, `2s`, `5s`, `10s`, `30s`, `60s`).
 - **Smoothing** – EMA factor α (0.1–1.0). `1.0` = no smoothing. Threshold evaluation always uses the raw value.
 - Per slot:
+  - **Mode** – optionally override the tile mode for this slot: use the tile mode, `Text only`, `Graph only`, or `Graph + Text`.
   - **Sensor / Reading** – select the sensor and reading to display.
   - **Label** – optional custom label; leave blank to use the reading name.
   - **Highlight / Fill / Value text / Title text / Background** – per-slot colors.

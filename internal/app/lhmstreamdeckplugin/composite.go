@@ -22,6 +22,12 @@ import (
 
 const compositeAction = "com.moeilijk.lhm.composite"
 
+const (
+	compositeModeText  = "text"
+	compositeModeGraph = "graph"
+	compositeModeBoth  = "both"
+)
+
 // compositeSlotDefaults mirrors the original tile colours exactly for slot 0,
 // with a per-slot hue shift for slots 1–3 so readings are distinguishable.
 var compositeSlotDefaults = [4]compositeSlotSettings{
@@ -34,11 +40,11 @@ var compositeSlotDefaults = [4]compositeSlotSettings{
 // compositeState holds runtime state for one composite tile context.
 // One graph.Graph per slot — same object the original tile uses.
 type compositeState struct {
-	graphs          [4]*graph.Graph
-	lastPollTime    uint64
-	divisorCache    [4]divisorCacheEntry
-	smoothedValues  [4]float64
-	smoothedInit    [4]bool
+	graphs         [4]*graph.Graph
+	lastPollTime   uint64
+	divisorCache   [4]divisorCacheEntry
+	smoothedValues [4]float64
+	smoothedInit   [4]bool
 }
 
 // newCompositeGraph creates a graph.Graph for one slot using its settings.
@@ -141,6 +147,28 @@ func decodeCompositeSettings(raw *json.RawMessage) (compositeActionSettings, err
 
 // --- rendering ---
 
+func validCompositeMode(mode string) bool {
+	return mode == compositeModeText || mode == compositeModeGraph || mode == compositeModeBoth
+}
+
+func effectiveCompositeSlotMode(tileMode, slotMode string) string {
+	if validCompositeMode(slotMode) {
+		return slotMode
+	}
+	if validCompositeMode(tileMode) {
+		return tileMode
+	}
+	return compositeModeText
+}
+
+func compositeModeHasGraph(mode string) bool {
+	return mode == compositeModeGraph || mode == compositeModeBoth
+}
+
+func compositeModeHasText(mode string) bool {
+	return mode == compositeModeText || mode == compositeModeBoth
+}
+
 // blendLighten composites src onto dst using per-channel max (lighten/screen blend).
 // Unlike additive blending, background pixels of the same near-black colour don't
 // accumulate across slots, preventing colour-cast tinting on the canvas background.
@@ -239,59 +267,63 @@ func renderCompositeTile(settings *compositeActionSettings, state *compositeStat
 	canvas := image.NewRGBA(image.Rect(0, 0, tileWidth, tileHeight))
 
 	// --- graph layer: render each graph.Graph, blend onto canvas ---
-	if settings.Mode == "graph" || settings.Mode == "both" {
-		for i := 0; i < n; i++ {
-			g := state.graphs[i]
-			if g == nil {
-				continue
-			}
-			b, err := g.EncodePNG()
-			if err != nil {
-				continue
-			}
-			slotImg, err := decodePNGToRGBA(b)
-			if err != nil {
-				continue
-			}
-			blendLighten(canvas, slotImg)
+	for i := 0; i < n; i++ {
+		mode := effectiveCompositeSlotMode(settings.Mode, settings.Slots[i].Mode)
+		if !compositeModeHasGraph(mode) {
+			continue
 		}
+		g := state.graphs[i]
+		if g == nil {
+			continue
+		}
+		b, err := g.EncodePNG()
+		if err != nil {
+			continue
+		}
+		slotImg, err := decodePNGToRGBA(b)
+		if err != nil {
+			continue
+		}
+		blendLighten(canvas, slotImg)
 	}
 
 	// --- text layer: label + value centred per slot zone, drawn over graph ---
-	if settings.Mode == "text" || settings.Mode == "both" {
-		zoneH := float64(tileHeight) / float64(n)
-		for i := 0; i < n; i++ {
-			slot := &settings.Slots[i]
-			mid := float64(i)*zoneH + zoneH/2
-
-			titleSz := slot.TitleFontSize
-			valueSz := slot.ValueFontSize
-			gap := (titleSz + valueSz) / 2
-
-			labelY := int(math.Round(mid - gap*0.3))
-			valueY := int(math.Round(mid + gap*0.85))
-
-			label := slot.Title
-			if label == "" {
-				label = slot.ReadingLabel
-			}
-			var strokeClr *color.RGBA
-			if slot.TextStroke && slot.TextStrokeColor != "" {
-				strokeClr = hexToRGBA(slot.TextStrokeColor)
-			}
-			titleClr := hexToRGBA(slot.TitleColor)
-			valueClr := hexToRGBA(slot.ValueTextColor)
-			if t := activeThresholds[i]; t != nil {
-				if t.TextColor != "" {
-					titleClr = hexToRGBA(t.TextColor)
-				}
-				if t.ValueTextColor != "" {
-					valueClr = hexToRGBA(t.ValueTextColor)
-				}
-			}
-			drawCompositeCenteredText(canvas, label, labelY, titleSz, titleClr, strokeClr)
-			drawCompositeCenteredText(canvas, displayTexts[i], valueY, valueSz, valueClr, strokeClr)
+	zoneH := float64(tileHeight) / float64(n)
+	for i := 0; i < n; i++ {
+		slot := &settings.Slots[i]
+		mode := effectiveCompositeSlotMode(settings.Mode, slot.Mode)
+		if !compositeModeHasText(mode) {
+			continue
 		}
+		mid := float64(i)*zoneH + zoneH/2
+
+		titleSz := slot.TitleFontSize
+		valueSz := slot.ValueFontSize
+		gap := (titleSz + valueSz) / 2
+
+		labelY := int(math.Round(mid - gap*0.3))
+		valueY := int(math.Round(mid + gap*0.85))
+
+		label := slot.Title
+		if label == "" {
+			label = slot.ReadingLabel
+		}
+		var strokeClr *color.RGBA
+		if slot.TextStroke && slot.TextStrokeColor != "" {
+			strokeClr = hexToRGBA(slot.TextStrokeColor)
+		}
+		titleClr := hexToRGBA(slot.TitleColor)
+		valueClr := hexToRGBA(slot.ValueTextColor)
+		if t := activeThresholds[i]; t != nil {
+			if t.TextColor != "" {
+				titleClr = hexToRGBA(t.TextColor)
+			}
+			if t.ValueTextColor != "" {
+				valueClr = hexToRGBA(t.ValueTextColor)
+			}
+		}
+		drawCompositeCenteredText(canvas, label, labelY, titleSz, titleClr, strokeClr)
+		drawCompositeCenteredText(canvas, displayTexts[i], valueY, valueSz, valueClr, strokeClr)
 	}
 
 	var buf bytes.Buffer
@@ -676,6 +708,12 @@ func (p *Plugin) handleCompositeSlotField(event *streamdeck.EvSendToPlugin, sdpi
 	slot := &settings.Slots[slotIdx]
 	rebuildGraph := false
 	switch field {
+	case "mode":
+		if validCompositeMode(sdpi.Value) {
+			slot.Mode = sdpi.Value
+		} else {
+			slot.Mode = ""
+		}
 	case "title":
 		slot.Title = sdpi.Value
 	case "highlightColor":
