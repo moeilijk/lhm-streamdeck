@@ -21,6 +21,25 @@ Release notes must follow the same structure as recent releases:
 - Always include a "Downloads" section listing both release artifacts.
 - Do not include a validation section; validation belongs in the final assistant summary, not in public release notes.
 
+Elgato Marketplace release notes are separate from GitHub release notes. The Marketplace listing is Windows-only for this plugin, so do not mention Linux, OpenDeck, release artifacts, downloads, validation, GitHub tags, commits, or hardware-test details there.
+
+Use the existing Marketplace v1.7 style:
+
+```markdown
+## What's new
+
+### Feature title
+Short user-facing explanation.
+
+### Feature title
+Short user-facing explanation.
+
+## Fixes
+- Short fix or compatibility note.
+```
+
+For Marketplace updates, write only the Windows-relevant delta since the currently published Marketplace version.
+
 ## Steps
 
 1. Confirm the release scope and current latest release.
