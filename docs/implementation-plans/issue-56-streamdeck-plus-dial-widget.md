@@ -2,8 +2,8 @@
 
 **Issue:** [#56 - StreamDeck+ Dial Widget](https://github.com/moeilijk/lhm-streamdeck/issues/56)
 
-**Status:** Prototype branch only. The issue itself is the source of truth; this
-file is only an implementation checklist derived from the issue text.
+**Status:** Prototype branch only. This file tracks the requested behavior,
+acceptance criteria, and hardware validation checklist for the feature branch.
 
 ## Source Request
 
