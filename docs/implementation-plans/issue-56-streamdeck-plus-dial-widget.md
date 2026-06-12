@@ -1,46 +1,118 @@
-# Issue 56 Stream Deck+ Dial Widget Plan
+# Implementation Plan: StreamDeck+ Dial Widget
 
-## Requested Result
+**Issue:** [#56 - StreamDeck+ Dial Widget](https://github.com/moeilijk/lhm-streamdeck/issues/56)
 
-- Build a custom LHM Stream Deck+ dial widget.
-- Configure a list of metrics.
-- Show one metric at a time, large/readable, without Action Wheel neighboring-page previews.
-- Rotate the dial to cycle metrics.
-- Use the Stream Deck+ touch-panel area for the display.
-- Keep existing non-dial LHM actions working.
+**Status:** Prototype branch; real Stream Deck+ validation required.
 
-## Current Implementation Target
+---
 
-- `com.moeilijk.lhm.dial` is the first dial widget action.
-- It is assigned only to Stream Deck+ dial/encoder slots.
-- The touch-panel segment displays the selected metric.
-- The rotary control only changes the selected metric; it is not treated as a display.
-- First version supports normal LHM readings.
-- Composite Dashboard and Derived Metric pages are follow-up work unless hardware testing proves they are required immediately.
+## Issue Request
 
-## Work Items
+The requested feature is a custom LHM Stream Deck+ dial widget.
 
-1. Keep DeckBridge emulation aligned with Stream Deck+ shape:
-   - 4 x 2 key grid;
-   - 4 dial/encoder slots;
-   - separate touch-strip display row;
-   - separate rotary input controls;
-   - no visual display on the rotary itself.
-2. Reject incompatible assignments:
-   - Encoder actions only on valid dial slots;
-   - Keypad actions only on keys;
-   - stale invalid profile slots are removed or hidden.
-3. Validate plugin behavior in DeckBridge:
-   - dial widget can be assigned to each dial;
-   - rotate cycles pages;
-   - display stays readable and does not flicker to fallback text;
-   - normal actions still work.
-4. Hardware validation:
-   - official Stream Deck software shows the action in the dial section;
-   - assigning to a real Stream Deck+ dial works;
-   - rotation direction and display readability are accepted by a hardware tester;
-   - settings persist after Stream Deck restart.
+The reporter describes a Stream Deck+ profile page where normal LHM buttons work
+well for system metrics, but the dial section is unused. The built-in Stream
+Deck Action Wheel can approximate a metric carousel, but it shrinks the display
+and shows neighboring pages darkened in the background, making metrics hard to
+read.
+
+The requested widget should:
+
+- configure a list of metrics;
+- display one metric at a time, fullscreen/readable, like a normal LHM button;
+- cycle through metrics by turning the dial;
+- avoid Action Wheel shrinking and neighboring-page previews;
+- use the wider Stream Deck+ touch-panel area;
+- support use cases such as cycling fan speeds, CPU core percentages, or
+  RAM/VRAM metrics on one dial.
+
+The issue mentions Composite Dashboard and Derived Metric pages as a possible
+"perfect world" extension, while also noting that this would likely be more
+complicated.
+
+---
+
+## V1 Scope
+
+Version 1 should implement the simple metric carousel requested by the issue:
+
+- one new custom LHM dial widget action;
+- configurable list of normal LHM readings;
+- one selected reading displayed large/readable on the Stream Deck+ touch-panel;
+- rotary movement cycles the selected reading;
+- no Action Wheel behavior;
+- no neighboring page previews;
+- existing Reading, Composite Dashboard, Derived Metric, and Settings actions
+  remain unchanged.
+
+Out of scope for V1 unless hardware testing shows it is required immediately:
+
+- Composite Dashboard pages inside the dial carousel;
+- Derived Metric pages inside the dial carousel;
+- a general-purpose action wheel replacement;
+- changing existing non-dial actions.
+
+---
+
+## Technical Implementation
+
+The Stream Deck+ dial widget should be implemented as a Stream Deck+ dial/encoder
+compatible action so it is assignable to the dial section in the official Stream
+Deck software.
+
+Required behavior:
+
+- manifest declares the dial widget as Stream Deck+ dial/encoder compatible;
+- Property Inspector manages the metric page list;
+- settings persist the page list and active page;
+- dial rotation changes the active page by the received tick count;
+- display output renders the selected metric using the Stream Deck+ display area;
+- rotary input is treated as input only, not as a display surface.
+
+DeckBridge emulation must mirror the requested Stream Deck+ shape closely enough
+for compatibility testing:
+
+- 4 x 2 key grid;
+- 4 dial slots;
+- separate touch-strip display area;
+- separate rotary input controls;
+- no display rendered on the rotary itself;
+- Encoder/dial actions only on valid dial slots;
+- Keypad actions only on normal keys;
+- stale invalid profile assignments are rejected, removed, or hidden.
+
+---
+
+## Validation Plan
+
+Local validation:
+
+- plugin builds;
+- Stream Deck manifest validation passes;
+- dial widget can be assigned in DeckBridge to valid dial slots only;
+- rotating left/right cycles through configured readings;
+- display stays readable and does not flicker to fallback text;
+- existing non-dial LHM actions still work.
+
+Hardware validation:
+
+- official Stream Deck software shows the widget in the Stream Deck+ dial section;
+- assigning the action to a real dial works;
+- rotation direction matches user expectation;
+- multi-detent rotation behaves predictably;
+- the displayed metric is readable and uses the touch-panel area better than
+  Action Wheel;
+- settings persist after restarting Stream Deck;
+- existing non-dial LHM actions remain unchanged.
+
+---
 
 ## Done Criteria
 
-The issue is not complete until real Stream Deck+ hardware confirms the widget is readable, assignable, and rotates through configured metrics as requested.
+Issue #56 is complete only after real Stream Deck+ hardware confirms:
+
+- install and assignment work in official Stream Deck software;
+- rotating the dial cycles configured metrics;
+- the display is readable and avoids Action Wheel shrinking/neighbor previews;
+- settings persist;
+- existing LHM actions are not regressed.
