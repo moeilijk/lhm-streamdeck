@@ -23,7 +23,7 @@ function wireRangeOninput(id) {
 function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
   uuid = inUUID;
   actionInfo = JSON.parse(inActionInfo);
-  websocket = new WebSocket("ws://" + location.hostname + ":" + inPort);
+  websocket = new WebSocket("ws://" + ((typeof location !== "undefined" && location.hostname) ? location.hostname : "127.0.0.1") + ":" + inPort);
 
   websocket.onopen = function () {
     websocket.send(JSON.stringify({ event: inRegisterEvent, uuid: inUUID }));

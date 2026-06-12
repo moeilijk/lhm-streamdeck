@@ -9,7 +9,7 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
   uuid = inUUID;
   actionInfo = JSON.parse(inActionInfo);
   var info = JSON.parse(inInfo);
-  websocket = new WebSocket("ws://" + location.hostname + ":" + inPort);
+  websocket = new WebSocket("ws://" + ((typeof location !== "undefined" && location.hostname) ? location.hostname : "127.0.0.1") + ":" + inPort);
 
   websocket.onopen = function () {
     websocket.send(JSON.stringify({ event: inRegisterEvent, uuid: inUUID }));
