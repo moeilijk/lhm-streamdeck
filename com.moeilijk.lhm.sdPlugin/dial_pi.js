@@ -53,12 +53,35 @@ function sendValueToPlugin(value, key) {
 function normalizeSettings(settings) {
   settings = settings || {};
   if (!Array.isArray(settings.pages)) settings.pages = [];
+  settings.pages = settings.pages.map(normalizePage);
   if (typeof settings.activeIndex !== "number") settings.activeIndex = 0;
   if (settings.activeIndex < 0) settings.activeIndex = 0;
   if (settings.pages.length && settings.activeIndex >= settings.pages.length) {
     settings.activeIndex = settings.pages.length - 1;
   }
   return settings;
+}
+
+function normalizePage(page) {
+  page = page || {};
+  if (page.min === undefined || page.min === null || page.min === "") page.min = 0;
+  if (page.max === undefined || page.max === null || page.max === "") page.max = 100;
+  if (!page.format) page.format = "";
+  if (!page.divisor) page.divisor = "";
+  if (!page.graphUnit) page.graphUnit = "";
+  if (!page.titleColor) page.titleColor = "#b7b7b7";
+  if (!page.foregroundColor) page.foregroundColor = "#005128";
+  if (!page.backgroundColor) page.backgroundColor = "#000000";
+  if (!page.highlightColor) page.highlightColor = "#009e00";
+  if (!page.valueTextColor) page.valueTextColor = "#ffffff";
+  if (!page.graphMode) page.graphMode = "both";
+  if (!page.graphHeightPct) page.graphHeightPct = 100;
+  if (!page.graphLineThickness) page.graphLineThickness = 1;
+  if (!page.titleFontSize) page.titleFontSize = 0;
+  if (!page.valueFontSize) page.valueFontSize = 0;
+  if (!page.textStrokeColor) page.textStrokeColor = page.backgroundColor || "#000000";
+  page.textStroke = !!page.textStroke;
+  return page;
 }
 
 function saveSettings() {
@@ -141,6 +164,7 @@ function renderPages() {
     list.appendChild(opt);
   });
   updatePageButtons();
+  renderPageSettings();
 }
 
 function selectedPageIndex() {
@@ -156,11 +180,86 @@ function updatePageButtons() {
   document.getElementById("moveDownBtn").disabled = count === 0 || idx >= count - 1;
 }
 
+function selectedPage() {
+  var idx = selectedPageIndex();
+  if (idx < 0 || idx >= currentSettings.pages.length) return null;
+  currentSettings.pages[idx] = normalizePage(currentSettings.pages[idx]);
+  return currentSettings.pages[idx];
+}
+
+function setValue(id, value) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  if (el.type === "checkbox") el.checked = !!value;
+  else el.value = value === undefined || value === null ? "" : String(value);
+}
+
+function renderPageSettings() {
+  var panel = document.getElementById("pageSettings");
+  var page = selectedPage();
+  panel.hidden = !page;
+  if (!page) return;
+  setValue("pageTitle", page.title || "");
+  setValue("graphMode", page.graphMode || "both");
+  setValue("minValue", page.min);
+  setValue("maxValue", page.max);
+  setValue("formatValue", page.format || "");
+  setValue("divisorValue", page.divisor || "");
+  setValue("graphUnit", page.graphUnit || "");
+  setValue("titleFontSize", page.titleFontSize || 0);
+  setValue("valueFontSize", page.valueFontSize || 0);
+  setValue("graphHeightPct", page.graphHeightPct || 100);
+  setValue("graphLineThickness", page.graphLineThickness || 1);
+  setValue("titleColor", page.titleColor || "#b7b7b7");
+  setValue("valueTextColor", page.valueTextColor || "#ffffff");
+  setValue("backgroundColor", page.backgroundColor || "#000000");
+  setValue("foregroundColor", page.foregroundColor || "#005128");
+  setValue("highlightColor", page.highlightColor || "#009e00");
+  setValue("textStroke", page.textStroke);
+  setValue("textStrokeColor", page.textStrokeColor || page.backgroundColor || "#000000");
+}
+
+function bindPageField(id, key, parser) {
+  var el = document.getElementById(id);
+  if (!el || el.dataset.bound) return;
+  el.dataset.bound = "1";
+  var handler = function () {
+    var page = selectedPage();
+    if (!page) return;
+    var raw = el.type === "checkbox" ? el.checked : el.value;
+    page[key] = parser ? parser(raw) : raw;
+    saveSettings();
+  };
+  el.addEventListener("input", handler);
+  el.addEventListener("change", handler);
+}
+
+function bindPageSettings() {
+  bindPageField("pageTitle", "title");
+  bindPageField("graphMode", "graphMode");
+  bindPageField("minValue", "min", function (v) { return Number(v) || 0; });
+  bindPageField("maxValue", "max", function (v) { return Number(v) || 100; });
+  bindPageField("formatValue", "format");
+  bindPageField("divisorValue", "divisor");
+  bindPageField("graphUnit", "graphUnit");
+  bindPageField("titleFontSize", "titleFontSize", function (v) { return Number(v) || 0; });
+  bindPageField("valueFontSize", "valueFontSize", function (v) { return Number(v) || 0; });
+  bindPageField("graphHeightPct", "graphHeightPct", function (v) { return Number(v) || 100; });
+  bindPageField("graphLineThickness", "graphLineThickness", function (v) { return Number(v) || 1; });
+  bindPageField("titleColor", "titleColor");
+  bindPageField("valueTextColor", "valueTextColor");
+  bindPageField("backgroundColor", "backgroundColor");
+  bindPageField("foregroundColor", "foregroundColor");
+  bindPageField("highlightColor", "highlightColor");
+  bindPageField("textStroke", "textStroke", function (v) { return !!v; });
+  bindPageField("textStrokeColor", "textStrokeColor");
+}
+
 function addSelectedPage() {
   var sel = document.getElementById("readingSelect");
   var reading = filteredReadings[Number(sel.value)];
   if (!reading) return;
-  currentSettings.pages.push({
+  currentSettings.pages.push(normalizePage({
     sourceProfileId: currentSettings.sourceProfileId || "",
     sensorUid: reading.sensorUid,
     readingId: String(reading.id),
@@ -177,8 +276,12 @@ function addSelectedPage() {
     backgroundColor: "#000000",
     highlightColor: "#009e00",
     valueTextColor: "#ffffff",
-    graphMode: "both"
-  });
+    graphMode: "both",
+    graphHeightPct: 100,
+    graphLineThickness: 1,
+    textStroke: false,
+    textStrokeColor: "#000000"
+  }));
   currentSettings.activeIndex = currentSettings.pages.length - 1;
   saveSettings();
 }
@@ -213,5 +316,7 @@ document.addEventListener("DOMContentLoaded", function () {
   document.getElementById("pageList").addEventListener("change", function () {
     currentSettings.activeIndex = selectedPageIndex();
     saveSettings();
+    renderPageSettings();
   });
+  bindPageSettings();
 });

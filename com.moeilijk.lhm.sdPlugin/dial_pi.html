@@ -19,6 +19,7 @@
     }
     .dial-actions { display: flex; gap: 6px; flex-wrap: wrap; }
     .dial-actions button { min-width: 48px; }
+    .page-settings[hidden] { display: none; }
   </style>
 </head>
 
@@ -73,6 +74,109 @@
         <button id="moveUpBtn" type="button" disabled>Up</button>
         <button id="moveDownBtn" type="button" disabled>Down</button>
         <button id="removePageBtn" type="button" disabled>Delete</button>
+      </div>
+    </div>
+
+    <div id="pageSettings" class="page-settings" hidden>
+      <div class="sdpi-heading">Selected Page Style</div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Title</div>
+        <input class="sdpi-item-value" id="pageTitle" type="text" />
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Mode</div>
+        <select class="sdpi-item-value select" id="graphMode">
+          <option value="both">Graph + Text</option>
+          <option value="graph">Graph Only</option>
+          <option value="text">Text Only</option>
+        </select>
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Range</div>
+        <div class="sdpi-item-value">
+          <input id="minValue" type="number" placeholder="Min" />
+          <input id="maxValue" type="number" placeholder="Max" />
+        </div>
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Format</div>
+        <input class="sdpi-item-value" id="formatValue" type="text" placeholder="%.1f" />
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Divisor</div>
+        <input class="sdpi-item-value" id="divisorValue" type="text" placeholder="auto" />
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Graph Unit</div>
+        <select class="sdpi-item-value select" id="graphUnit">
+          <option value="">Native</option>
+          <option value="B">B</option>
+          <option value="KB">KB</option>
+          <option value="MB">MB</option>
+          <option value="GB">GB</option>
+          <option value="TB">TB</option>
+        </select>
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Title Size</div>
+        <input class="sdpi-item-value" id="titleFontSize" type="number" min="0" max="40" step="1" />
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Value Size</div>
+        <input class="sdpi-item-value" id="valueFontSize" type="number" min="0" max="60" step="1" />
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Graph Height</div>
+        <input class="sdpi-item-value" id="graphHeightPct" type="range" min="10" max="100" step="5" />
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Line Width</div>
+        <input class="sdpi-item-value" id="graphLineThickness" type="range" min="1" max="4" step="1" />
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Title Color</div>
+        <input class="sdpi-item-value" id="titleColor" type="color" />
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Value Color</div>
+        <input class="sdpi-item-value" id="valueTextColor" type="color" />
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Background</div>
+        <input class="sdpi-item-value" id="backgroundColor" type="color" />
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Foreground</div>
+        <input class="sdpi-item-value" id="foregroundColor" type="color" />
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Highlight</div>
+        <input class="sdpi-item-value" id="highlightColor" type="color" />
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Text Stroke</div>
+        <input class="sdpi-item-value" id="textStroke" type="checkbox" />
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Stroke Color</div>
+        <input class="sdpi-item-value" id="textStrokeColor" type="color" />
       </div>
     </div>
   </div>
