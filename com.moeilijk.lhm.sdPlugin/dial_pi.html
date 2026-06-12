@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport"
+    content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,minimal-ui,viewport-fit=cover" />
+  <title>LHM Dial Carousel</title>
+  <link rel="stylesheet" href="css/sdpi.css" />
+  <link rel="stylesheet" href="css/local.css" />
+  <style>
+    #error { display: none; }
+    #sensorSearch, #readingSelect, #pageList { max-width: 226px; }
+    #readingSelect, #pageList { font-family: monospace; }
+    .dial-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .dial-actions button { min-width: 48px; }
+  </style>
+</head>
+
+<body>
+  <div id="error" class="sdpi-wrapper localbody hiddenx">
+    <div class="sdpi-heading">Plugin Error</div>
+    <div class="sdpi-item">
+      <details open class="message caution">
+        <summary>Unable To Communicate With Libre Hardware Monitor</summary>
+        <p>Make sure Libre Hardware Monitor is running and its remote web server is enabled.</p>
+      </details>
+    </div>
+  </div>
+
+  <div id="ui" class="sdpi-wrapper localbody hiddenx">
+    <div class="sdpi-heading">Source</div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Profile</div>
+      <select class="sdpi-item-value select" id="sourceProfileSelect"></select>
+    </div>
+
+    <div class="sdpi-heading">Dial Pages</div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Find</div>
+      <input class="sdpi-item-value" id="sensorSearch" type="text" placeholder="Search readings" />
+    </div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Reading</div>
+      <select class="sdpi-item-value select" id="readingSelect" disabled>
+        <option>Loading...</option>
+      </select>
+    </div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label"></div>
+      <div class="sdpi-item-value dial-actions">
+        <button id="addPageBtn" type="button" disabled>Add</button>
+      </div>
+    </div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Pages</div>
+      <select class="sdpi-item-value select" id="pageList" size="8"></select>
+    </div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label"></div>
+      <div class="sdpi-item-value dial-actions">
+        <button id="moveUpBtn" type="button" disabled>Up</button>
+        <button id="moveDownBtn" type="button" disabled>Down</button>
+        <button id="removePageBtn" type="button" disabled>Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="pi_utils.js"></script>
+  <script src="dial_pi.js"></script>
+</body>
+
+</html>

@@ -261,7 +261,7 @@ func (g *Graph) drawGraph(x, vay, maxx int) {
 			} else {
 				clr = g.bgColor
 			}
-			i := g.img.PixOffset(x, g.width-1-y)
+			i := g.img.PixOffset(x, g.height-1-y)
 			g.img.Pix[i+0] = clr.R
 			g.img.Pix[i+1] = clr.G
 			g.img.Pix[i+2] = clr.B

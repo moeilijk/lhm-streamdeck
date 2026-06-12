@@ -19,6 +19,9 @@ node --check com.moeilijk.lhm.sdPlugin/composite_pi.js
 echo "check: derived_pi.js syntax"
 node --check com.moeilijk.lhm.sdPlugin/derived_pi.js
 
+echo "check: dial_pi.js syntax"
+node --check com.moeilijk.lhm.sdPlugin/dial_pi.js
+
 echo "test: settings PI functional script"
 node scripts/test-settings-pi.js
 

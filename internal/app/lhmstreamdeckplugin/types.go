@@ -251,6 +251,12 @@ type derivedActionSettings struct {
 	SnoozeDurations          []int       `json:"snoozeDurations,omitempty"`
 }
 
+type dialActionSettings struct {
+	SourceProfileID string           `json:"sourceProfileId,omitempty"`
+	ActiveIndex     int              `json:"activeIndex"`
+	Pages           []actionSettings `json:"pages"`
+}
+
 type evSdpiCollection struct {
 	Group       bool     `json:"group"`
 	Index       int      `json:"index"`
