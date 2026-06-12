@@ -172,7 +172,7 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
   }
   inInfo = parseJSONOrEmpty(inInfo);
   bindUIHandlers();
-  websocket = new WebSocket("ws://127.0.0.1:" + inPort);
+  websocket = new WebSocket("ws://" + location.hostname + ":" + inPort);
 
   websocket.onopen = function () {
     // Register with Stream Deck
