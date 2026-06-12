@@ -3,7 +3,6 @@ package lhmstreamdeckplugin
 import (
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"image/color"
 	"log"
 	"strings"
@@ -178,7 +177,7 @@ func (p *Plugin) updateDialFeedback(ctx string) {
 		page.SourceProfileID = settings.SourceProfileID
 	}
 	if !page.IsValid {
-		p.showDialMessage(ctx, "LHM Dial", fmt.Sprintf("Page %d empty", settings.ActiveIndex+1))
+		p.showDialMessage(ctx, "LHM Dial", "Page empty")
 		return
 	}
 	if settings.ActiveIndex >= len(state.graphs) || state.graphs[settings.ActiveIndex] == nil {
@@ -305,8 +304,6 @@ func (p *Plugin) updateDialFeedback(ctx string) {
 		_ = g.SetLabelText(1, renderDisplayText)
 		if renderAlertText != "" {
 			_ = g.SetLabelText(2, renderAlertText)
-		} else if len(settings.Pages) > 1 {
-			_ = g.SetLabelText(2, fmt.Sprintf("%d/%d", settings.ActiveIndex+1, len(settings.Pages)))
 		} else {
 			_ = g.SetLabelText(2, "")
 		}
