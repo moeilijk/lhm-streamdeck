@@ -43,13 +43,13 @@ type Plugin struct {
 	mu       sync.RWMutex // protects maps and cached state below
 	sourceMu sync.RWMutex // protects sources map
 
-	sources  map[string]*sourceRuntime
-	sd     *streamdeck.StreamDeck
-	am     *actionManager
-	graphs map[string]*graph.Graph
+	sources map[string]*sourceRuntime
+	sd      *streamdeck.StreamDeck
+	am      *actionManager
+	graphs  map[string]*graph.Graph
 
 	// Cached assets and state for performance
-	placeholderImage []byte            // cached startup chip placeholder image (set once at init, read-only after)
+	placeholderImage []byte               // cached startup chip placeholder image (set once at init, read-only after)
 	lastPollTime     map[string]uint64    // last processed PollTime per context
 	lastRenderTime   map[string]time.Time // wall-time of last render per context (for per-tile interval override)
 	smoothedValues   map[string]float64   // last smoothed graph value per context (for EMA)
@@ -70,6 +70,10 @@ type Plugin struct {
 	// Derived metric tile state
 	derivedSettings map[string]*derivedActionSettings
 	derivedStates   map[string]*derivedState
+
+	// Stream Deck+ dial carousel state
+	dialSettings map[string]*dialActionSettings
+	dialStates   map[string]*dialState
 }
 
 type sensorResult struct {
@@ -371,6 +375,8 @@ func NewPlugin(port, uuid, event, info string) (*Plugin, error) {
 		compositeStates:   make(map[string]*compositeState),
 		derivedSettings:   make(map[string]*derivedActionSettings),
 		derivedStates:     make(map[string]*derivedState),
+		dialSettings:      make(map[string]*dialActionSettings),
+		dialStates:        make(map[string]*dialState),
 	}
 
 	// Cache placeholder image at startup.
@@ -843,6 +849,7 @@ func (p *Plugin) refreshAction(action, context string) {
 func (p *Plugin) updateAuxTiles() {
 	p.updateCompositeTick()
 	p.updateDerivedTick()
+	p.updateDialTick()
 }
 
 func (p *Plugin) applyThresholdText(template, valueTextNoUnit, unit string) string {
