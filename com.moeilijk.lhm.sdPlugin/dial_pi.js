@@ -11,8 +11,6 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
   var info = JSON.parse(inInfo);
   websocket = new WebSocket("ws://" + location.hostname + ":" + inPort);
 
-  if (info.colors) addDynamicStyles(info.colors, "connectSocket");
-
   websocket.onopen = function () {
     websocket.send(JSON.stringify({ event: inRegisterEvent, uuid: inUUID }));
     sendValueToPlugin("propertyInspectorConnected", "property_inspector");
