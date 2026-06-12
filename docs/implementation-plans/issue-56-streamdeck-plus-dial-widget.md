@@ -20,6 +20,7 @@ The requested widget should:
 
 - configure a list of metrics;
 - display one metric at a time, fullscreen/readable, like a normal LHM button;
+- configure the displayed metric with normal tile styling controls per page;
 - cycle through metrics by turning the dial;
 - avoid Action Wheel shrinking and neighboring-page previews;
 - use the wider Stream Deck+ touch-panel area;
@@ -38,6 +39,7 @@ Version 1 should implement the simple metric carousel requested by the issue:
 
 - one new custom LHM dial widget action;
 - configurable list of normal LHM readings;
+- full normal-reading tile presentation settings per page where applicable;
 - one selected reading displayed large/readable on the Stream Deck+ touch-panel;
 - rotary movement cycles the selected reading;
 - no Action Wheel behavior;
@@ -64,7 +66,8 @@ Required behavior:
 
 - manifest declares the dial widget as Stream Deck+ dial/encoder compatible;
 - Property Inspector manages the metric page list;
-- settings persist the page list and active page;
+- Property Inspector manages normal tile styling per page;
+- settings persist the page list, active page, and per-page styling;
 - dial rotation changes the active page by the received tick count;
 - display output renders the selected metric using the Stream Deck+ display area;
 - rotary input is treated as input only, not as a display surface.
@@ -91,6 +94,7 @@ Local validation:
 - Stream Deck manifest validation passes;
 - dial widget can be assigned in DeckBridge to valid dial slots only;
 - rotating left/right cycles through configured readings;
+- each page can be styled independently like a normal reading tile;
 - display stays readable and does not flicker to fallback text;
 - existing non-dial LHM actions still work.
 
@@ -113,6 +117,7 @@ Issue #56 is complete only after real Stream Deck+ hardware confirms:
 
 - install and assignment work in official Stream Deck software;
 - rotating the dial cycles configured metrics;
+- each metric page can be styled independently;
 - the display is readable and avoids Action Wheel shrinking/neighbor previews;
 - settings persist;
 - existing LHM actions are not regressed.
