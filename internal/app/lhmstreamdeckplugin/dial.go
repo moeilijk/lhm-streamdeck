@@ -244,21 +244,68 @@ func (p *Plugin) updateDialFeedback(ctx string) {
 		displayValue = p.normalizeForGraph(v, r.Unit(), page.GraphUnit)
 		displayUnit = page.GraphUnit + "/s"
 	}
-	_, displayText := p.formatDisplayValue(displayValue, displayUnit, page.Format, hwsensorsservice.ReadingType(r.TypeI()))
+	valueTextNoUnit, displayText := p.formatDisplayValue(displayValue, displayUnit, page.Format, hwsensorsservice.ReadingType(r.TypeI()))
+
+	now := time.Now()
+	thresholds := p.resolveThresholdsForEval(page.Thresholds, page.SuppressedGlobalIDs, hwsensorsservice.ReadingType(r.TypeI()))
+	activeThreshold := p.evaluateThresholds(ctx, v, thresholds, now)
+	newThresholdID := ""
+	alertText := ""
+	if activeThreshold != nil {
+		newThresholdID = activeThreshold.ID
+		if activeThreshold.Text != "" {
+			alertText = p.applyThresholdText(activeThreshold.Text, valueTextNoUnit, displayUnit)
+		}
+	}
+
+	snoozeState, snoozed, _ := p.currentThresholdSnoozeState(ctx, now)
+	if activeThreshold == nil {
+		p.clearThresholdSnooze(ctx)
+		snoozed = false
+		snoozeState = thresholdSnoozeState{}
+	}
+	if newThresholdID != page.CurrentThresholdID {
+		if activeThreshold != nil && !snoozed {
+			p.applyThresholdColors(g, activeThreshold)
+		} else {
+			p.applyNormalColors(g, page)
+		}
+		page.CurrentThresholdID = newThresholdID
+		_ = p.sd.SetSettings(ctx, settings)
+	}
+
+	renderDisplayText, renderAlertText, renderGraphValue, freezeGraph := p.resolveThresholdDisplay(
+		ctx,
+		activeThreshold,
+		v,
+		graphValue,
+		displayText,
+		alertText,
+	)
+	if snoozed {
+		renderDisplayText = displayText
+		renderAlertText = thresholdSnoozeText(snoozeState, now)
+		renderGraphValue = graphValue
+		freezeGraph = false
+	}
 
 	switch page.GraphMode {
 	case "text":
 		g.Clear()
 	default:
-		g.Update(graphValue)
+		if !freezeGraph {
+			g.Update(renderGraphValue)
+		}
 	}
 	if page.GraphMode == "graph" {
 		_ = g.SetLabelText(0, "")
 		_ = g.SetLabelText(1, "")
 		_ = g.SetLabelText(2, "")
 	} else {
-		_ = g.SetLabelText(1, displayText)
-		if len(settings.Pages) > 1 {
+		_ = g.SetLabelText(1, renderDisplayText)
+		if renderAlertText != "" {
+			_ = g.SetLabelText(2, renderAlertText)
+		} else if len(settings.Pages) > 1 {
 			_ = g.SetLabelText(2, fmt.Sprintf("%d/%d", settings.ActiveIndex+1, len(settings.Pages)))
 		} else {
 			_ = g.SetLabelText(2, "")
@@ -369,7 +416,50 @@ func (p *Plugin) OnDialDown(event *streamdeck.EvDialDown) {}
 
 func (p *Plugin) OnDialUp(event *streamdeck.EvDialUp) {}
 
-func (p *Plugin) OnTouchTap(event *streamdeck.EvTouchTap) {}
+func (p *Plugin) OnTouchTap(event *streamdeck.EvTouchTap) {
+	if event.Action != dialAction || event.Payload.Controller != "Encoder" {
+		return
+	}
+
+	p.mu.RLock()
+	settings := p.dialSettings[event.Context]
+	p.mu.RUnlock()
+	if settings == nil || len(settings.Pages) == 0 {
+		return
+	}
+	if settings.ActiveIndex < 0 || settings.ActiveIndex >= len(settings.Pages) {
+		settings.ActiveIndex = wrapDialIndex(settings.ActiveIndex, 0, len(settings.Pages))
+	}
+	page := &settings.Pages[settings.ActiveIndex]
+	if page.CurrentThresholdID == "" {
+		return
+	}
+
+	if configured := normalizeThresholdSnoozeDurations(page.SnoozeDurations); len(configured) > 0 {
+		now := time.Now()
+		currentSnooze, snoozed := p.currentThresholdSnooze(event.Context, now)
+		var current *thresholdSnoozeState
+		if snoozed {
+			current = &currentSnooze
+		}
+		if nextDuration, ok := nextThresholdSnoozeDuration(configured, current); ok {
+			p.setThresholdSnooze(event.Context, nextDuration, now)
+		} else if !p.clearThresholdSnooze(event.Context) {
+			return
+		}
+		p.updateDialFeedback(event.Context)
+		return
+	}
+
+	if !p.clearStickyThreshold(event.Context, page.CurrentThresholdID) {
+		return
+	}
+	page.CurrentThresholdID = ""
+	if err := p.sd.SetSettings(event.Context, settings); err != nil {
+		log.Printf("dial touch SetSettings: %v", err)
+	}
+	p.updateDialFeedback(event.Context)
+}
 
 func (p *Plugin) OnDialRotate(event *streamdeck.EvDialRotate) {
 	if event.Action != dialAction || event.Payload.Controller != "Encoder" {
