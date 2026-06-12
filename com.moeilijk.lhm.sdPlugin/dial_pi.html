@@ -20,6 +20,7 @@
     .dial-actions { display: flex; gap: 6px; flex-wrap: wrap; }
     .dial-actions button { min-width: 48px; }
     .page-settings[hidden] { display: none; }
+    .empty-label { visibility: hidden; }
   </style>
 </head>
 
@@ -57,7 +58,7 @@
     </div>
 
     <div class="sdpi-item">
-      <div class="sdpi-item-label"></div>
+      <div class="sdpi-item-label empty-label">Action</div>
       <div class="sdpi-item-value dial-actions">
         <button id="addPageBtn" type="button" disabled>Add</button>
       </div>
@@ -69,7 +70,7 @@
     </div>
 
     <div class="sdpi-item">
-      <div class="sdpi-item-label"></div>
+      <div class="sdpi-item-label empty-label">Actions</div>
       <div class="sdpi-item-value dial-actions">
         <button id="moveUpBtn" type="button" disabled>Up</button>
         <button id="moveDownBtn" type="button" disabled>Down</button>

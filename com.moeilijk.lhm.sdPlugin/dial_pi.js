@@ -95,6 +95,11 @@ function populateProfiles() {
   if (!sel) return;
   var selected = currentSettings.sourceProfileId || "";
   sel.innerHTML = "";
+  var defaultOpt = document.createElement("option");
+  defaultOpt.value = "";
+  defaultOpt.textContent = "Default";
+  if (!selected) defaultOpt.selected = true;
+  sel.appendChild(defaultOpt);
   (currentCatalog.sourceProfiles || []).forEach(function (profile) {
     var opt = document.createElement("option");
     opt.value = profile.id;
