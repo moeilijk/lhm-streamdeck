@@ -2,7 +2,8 @@ var websocket = null,
   uuid = null,
   actionInfo = {},
   currentSettings = { activeIndex: 0, pages: [] },
-  currentCatalog = { sensors: [], readings: [], sourceProfiles: [] };
+  currentCatalog = { sensors: [], readings: [], sourceProfiles: [] },
+  pageSelectionDraft = { sensorUid: "", readingId: "" };
 
 function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
   uuid = inUUID;
@@ -161,6 +162,13 @@ function selectedPage() {
   return currentSettings.pages[idx];
 }
 
+function resetPageSelectionDraft(page) {
+  pageSelectionDraft = {
+    sensorUid: page ? page.sensorUid || "" : "",
+    readingId: page ? String(page.readingId || "") : ""
+  };
+}
+
 function sensorMatchesFilter(sensor, term, category) {
   var searchText = (sensor.searchText || [sensor.name, sensor.category, sensor.uid].join(" ")).toLowerCase();
   var sensorCategory = (sensor.category || "other").toLowerCase();
@@ -179,10 +187,9 @@ function readingsForSensor(sensorUid) {
 }
 
 function populateSelectedPageSensors() {
-  var page = selectedPage();
   var sel = document.getElementById("pageSensorSelect");
   if (!sel) return;
-  var selectedSensorUid = page ? page.sensorUid : sel.value;
+  var selectedSensorUid = pageSelectionDraft.sensorUid || sel.value;
   var search = (document.getElementById("pageSensorSearch").value || "").trim().toLowerCase();
   var category = (document.getElementById("pageSensorCategoryFilter").value || "").trim().toLowerCase();
   var sensors = (currentCatalog.sensors || []).slice().sort(function (a, b) {
@@ -210,12 +217,11 @@ function populateSelectedPageSensors() {
 }
 
 function populateSelectedPageReadings() {
-  var page = selectedPage();
   var sel = document.getElementById("pageReadingSelect");
   if (!sel) return;
   var sensorSel = document.getElementById("pageSensorSelect");
-  var sensorUid = page ? page.sensorUid : (sensorSel ? sensorSel.value : "");
-  var selectedReadingId = page ? page.readingId : sel.value;
+  var sensorUid = pageSelectionDraft.sensorUid || (sensorSel ? sensorSel.value : "");
+  var selectedReadingId = pageSelectionDraft.readingId || sel.value;
   var readings = readingsForSensor(sensorUid);
   sel.innerHTML = "";
   readings.forEach(function (reading) {
@@ -226,7 +232,10 @@ function populateSelectedPageReadings() {
     sel.appendChild(opt);
   });
   sel.disabled = readings.length === 0;
-  if (!selectedReadingId && readings.length > 0) sel.value = String(readings[0].id);
+  if (!selectedReadingId && readings.length > 0) {
+    sel.value = String(readings[0].id);
+    pageSelectionDraft.readingId = sel.value;
+  }
   updatePageButtons();
 }
 
@@ -245,6 +254,7 @@ function setValue(id, value) {
 function renderPageSettings() {
   var panel = document.getElementById("pageSettings");
   var page = selectedPage();
+  resetPageSelectionDraft(page);
   panel.hidden = !page;
   if (!page) return;
   setValue("pageTitle", page.title || "");
@@ -322,41 +332,16 @@ function bindSelectedPageSelection() {
   if (sensor && !sensor.dataset.bound) {
     sensor.dataset.bound = "1";
     sensor.addEventListener("change", function () {
-      var page = selectedPage();
-      if (!page) {
-        populateSelectedPageReadings();
-        return;
-      }
-      page.sensorUid = sensor.value;
-      var readings = readingsForSensor(page.sensorUid);
-      var first = readings[0];
-      if (first) {
-        page.readingId = String(first.id);
-        page.readingLabel = first.label;
-        if (!page.title) page.title = first.label;
-        page.isValid = true;
-      }
-      saveSettings();
-      renderPageSettings();
+      pageSelectionDraft.sensorUid = sensor.value;
+      pageSelectionDraft.readingId = "";
+      populateSelectedPageReadings();
     });
   }
   if (reading && !reading.dataset.bound) {
     reading.dataset.bound = "1";
     reading.addEventListener("change", function () {
-      var page = selectedPage();
-      if (!page) {
-        updatePageButtons();
-        return;
-      }
-      var readings = readingsForSensor(page.sensorUid);
-      var selected = readings.find(function (item) { return String(item.id) === String(reading.value); });
-      if (!selected) return;
-      page.readingId = String(selected.id);
-      page.readingLabel = selected.label;
-      page.title = selected.label;
-      page.isValid = true;
-      saveSettings();
-      renderPages();
+      pageSelectionDraft.readingId = String(reading.value || "");
+      updatePageButtons();
     });
   }
 }
@@ -365,12 +350,14 @@ function addSelectedPage() {
   var sensorSel = document.getElementById("pageSensorSelect");
   var readingSel = document.getElementById("pageReadingSelect");
   if (!sensorSel || !readingSel) return;
-  var readings = readingsForSensor(sensorSel.value);
-  var reading = readings.find(function (item) { return String(item.id) === String(readingSel.value); });
+  var sensorUid = pageSelectionDraft.sensorUid || sensorSel.value;
+  var readingId = pageSelectionDraft.readingId || readingSel.value;
+  var readings = readingsForSensor(sensorUid);
+  var reading = readings.find(function (item) { return String(item.id) === String(readingId); });
   if (!reading) return;
   currentSettings.pages.push(normalizePage({
     sourceProfileId: currentSettings.sourceProfileId || "",
-    sensorUid: sensorSel.value,
+    sensorUid: sensorUid,
     readingId: String(reading.id),
     readingLabel: reading.label,
     title: reading.label,
