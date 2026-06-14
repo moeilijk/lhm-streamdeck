@@ -25,3 +25,33 @@ func TestWrapDialIndex(t *testing.T) {
 		})
 	}
 }
+
+func TestDialOverviewIndices(t *testing.T) {
+	tests := []struct {
+		name   string
+		active int
+		count  int
+		want   []int
+	}{
+		{name: "empty", active: 0, count: 0, want: nil},
+		{name: "single", active: 0, count: 1, want: []int{0}},
+		{name: "two", active: 1, count: 2, want: []int{0, 1}},
+		{name: "middle", active: 2, count: 5, want: []int{1, 2, 3}},
+		{name: "wrap left", active: 0, count: 5, want: []int{4, 0, 1}},
+		{name: "wrap right", active: 4, count: 5, want: []int{3, 4, 0}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := dialOverviewIndices(tt.active, tt.count)
+			if len(got) != len(tt.want) {
+				t.Fatalf("len = %d, want %d (%v)", len(got), len(tt.want), got)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Fatalf("overview indices = %v, want %v", got, tt.want)
+				}
+			}
+		})
+	}
+}
