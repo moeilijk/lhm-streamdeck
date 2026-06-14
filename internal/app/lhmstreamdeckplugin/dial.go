@@ -1,10 +1,14 @@
 package lhmstreamdeckplugin
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
 	"image/color"
+	imagedraw "image/draw"
+	"image/png"
 	"log"
 	"strings"
 	"time"
@@ -12,6 +16,7 @@ import (
 	"github.com/moeilijk/lhm-streamdeck/pkg/graph"
 	hwsensorsservice "github.com/moeilijk/lhm-streamdeck/pkg/service"
 	"github.com/moeilijk/lhm-streamdeck/pkg/streamdeck"
+	xdraw "golang.org/x/image/draw"
 )
 
 const (
@@ -21,7 +26,8 @@ const (
 )
 
 type dialState struct {
-	graphs []*graph.Graph
+	graphs   []*graph.Graph
+	overview bool
 }
 
 type dialPageRender struct {
@@ -127,6 +133,26 @@ func wrapDialIndex(current, ticks, count int) int {
 	return next
 }
 
+func dialOverviewIndices(active, count int) []int {
+	if count <= 0 {
+		return nil
+	}
+	if count == 1 {
+		return []int{active}
+	}
+	if count == 2 {
+		return []int{
+			wrapDialIndex(active, -1, count),
+			wrapDialIndex(active, 0, count),
+		}
+	}
+	return []int{
+		wrapDialIndex(active, -1, count),
+		wrapDialIndex(active, 0, count),
+		wrapDialIndex(active, 1, count),
+	}
+}
+
 func pngDataURL(b []byte) string {
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(b)
 }
@@ -162,6 +188,68 @@ func (p *Plugin) showDialMessage(ctx, title, value string) {
 		return
 	}
 	p.sendDialCanvas(ctx, b)
+}
+
+func fillRect(img *image.RGBA, r image.Rectangle, c color.Color) {
+	imagedraw.Draw(img, r, &image.Uniform{C: c}, image.Point{}, imagedraw.Src)
+}
+
+func strokeRect(img *image.RGBA, r image.Rectangle, c color.Color, width int) {
+	for i := 0; i < width; i++ {
+		rr := r.Inset(i)
+		fillRect(img, image.Rect(rr.Min.X, rr.Min.Y, rr.Max.X, rr.Min.Y+1), c)
+		fillRect(img, image.Rect(rr.Min.X, rr.Max.Y-1, rr.Max.X, rr.Max.Y), c)
+		fillRect(img, image.Rect(rr.Min.X, rr.Min.Y, rr.Min.X+1, rr.Max.Y), c)
+		fillRect(img, image.Rect(rr.Max.X-1, rr.Min.Y, rr.Max.X, rr.Max.Y), c)
+	}
+}
+
+func (p *Plugin) renderDialOverview(settings *dialActionSettings, state *dialState) ([]byte, error) {
+	canvas := image.NewRGBA(image.Rect(0, 0, dialWidth, dialHeight))
+	fillRect(canvas, canvas.Bounds(), color.RGBA{5, 8, 11, 255})
+
+	indices := dialOverviewIndices(settings.ActiveIndex, len(settings.Pages))
+	if len(indices) == 0 {
+		return nil, nil
+	}
+
+	rects := []image.Rectangle{
+		image.Rect(8, 26, 58, 74),
+		image.Rect(60, 12, 140, 88),
+		image.Rect(142, 26, 192, 74),
+	}
+	if len(indices) == 1 {
+		rects = []image.Rectangle{image.Rect(50, 12, 150, 88)}
+	}
+
+	for slot, pageIndex := range indices {
+		if pageIndex < 0 || pageIndex >= len(state.graphs) || state.graphs[pageIndex] == nil {
+			continue
+		}
+		card := rects[slot]
+		fillRect(canvas, card, color.RGBA{14, 18, 24, 255})
+		b, err := state.graphs[pageIndex].EncodePNG()
+		if err != nil {
+			return nil, err
+		}
+		src, err := png.Decode(bytes.NewReader(b))
+		if err != nil {
+			return nil, err
+		}
+		inner := card.Inset(3)
+		xdraw.CatmullRom.Scale(canvas, inner, src, src.Bounds(), xdraw.Over, nil)
+		if pageIndex == settings.ActiveIndex {
+			strokeRect(canvas, card, color.RGBA{0, 150, 255, 255}, 2)
+		} else {
+			strokeRect(canvas, card, color.RGBA{40, 50, 62, 255}, 1)
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, canvas); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 func dialPageContext(ctx string, index int) string {
@@ -362,6 +450,17 @@ func (p *Plugin) updateDialFeedback(ctx string) {
 	if settingsChanged {
 		_ = p.sd.SetSettings(ctx, settings)
 	}
+	if state.overview {
+		b, err := p.renderDialOverview(settings, state)
+		if err != nil {
+			log.Printf("dial overview encode: %v", err)
+			return
+		}
+		if len(b) > 0 {
+			p.sendDialCanvas(ctx, b)
+		}
+		return
+	}
 	if activeRender.messageTitle != "" {
 		p.showDialMessage(ctx, activeRender.messageTitle, activeRender.messageValue)
 		return
@@ -464,7 +563,23 @@ func (p *Plugin) handleDialSendToPlugin(event *streamdeck.EvSendToPlugin, payloa
 	return true
 }
 
-func (p *Plugin) OnDialDown(event *streamdeck.EvDialDown) {}
+func (p *Plugin) OnDialDown(event *streamdeck.EvDialDown) {
+	if event.Action != dialAction || event.Payload.Controller != "Encoder" {
+		return
+	}
+
+	p.mu.Lock()
+	state := p.dialStates[event.Context]
+	settings := p.dialSettings[event.Context]
+	if state == nil || settings == nil || len(settings.Pages) == 0 {
+		p.mu.Unlock()
+		return
+	}
+	state.overview = !state.overview
+	p.mu.Unlock()
+
+	p.updateDialFeedback(event.Context)
+}
 
 func (p *Plugin) OnDialUp(event *streamdeck.EvDialUp) {}
 
