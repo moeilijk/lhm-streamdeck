@@ -3,6 +3,7 @@ package lhmstreamdeckplugin
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"image/color"
 	"log"
 	"strings"
@@ -21,6 +22,12 @@ const (
 
 type dialState struct {
 	graphs []*graph.Graph
+}
+
+type dialPageRender struct {
+	image        []byte
+	messageTitle string
+	messageValue string
 }
 
 func decodeDialSettings(raw *json.RawMessage) (dialActionSettings, error) {
@@ -157,41 +164,44 @@ func (p *Plugin) showDialMessage(ctx, title, value string) {
 	p.sendDialCanvas(ctx, b)
 }
 
-func (p *Plugin) updateDialFeedback(ctx string) {
-	p.mu.RLock()
-	settings := p.dialSettings[ctx]
-	state := p.dialStates[ctx]
-	p.mu.RUnlock()
-	if settings == nil || state == nil {
-		return
+func dialPageContext(ctx string, index int) string {
+	return fmt.Sprintf("%s|dial|page|%d", ctx, index)
+}
+
+func (p *Plugin) updateDialPage(ctx string, settings *dialActionSettings, state *dialState, index int, active bool, now time.Time) (dialPageRender, bool) {
+	var render dialPageRender
+	if index < 0 || index >= len(settings.Pages) {
+		return render, false
 	}
-	if len(settings.Pages) == 0 {
-		p.showDialMessage(ctx, "LHM Dial", "Configure pages")
-		return
+	if index >= len(state.graphs) || state.graphs[index] == nil {
+		return render, false
 	}
-	if settings.ActiveIndex < 0 || settings.ActiveIndex >= len(settings.Pages) {
-		settings.ActiveIndex = wrapDialIndex(settings.ActiveIndex, 0, len(settings.Pages))
-	}
-	page := &settings.Pages[settings.ActiveIndex]
+
+	page := &settings.Pages[index]
 	if settings.SourceProfileID != "" && page.SourceProfileID == "" {
 		page.SourceProfileID = settings.SourceProfileID
 	}
 	if !page.IsValid {
-		p.showDialMessage(ctx, "LHM Dial", "Page empty")
-		return
+		if active {
+			render.messageTitle = "LHM Dial"
+			render.messageValue = "Page empty"
+		}
+		return render, false
 	}
-	if settings.ActiveIndex >= len(state.graphs) || state.graphs[settings.ActiveIndex] == nil {
-		return
-	}
-	g := state.graphs[settings.ActiveIndex]
 
+	pageCtx := dialPageContext(ctx, index)
+	g := state.graphs[index]
 	profileID := p.resolvedSourceProfileID(page.SourceProfileID)
 	pollTime, err := p.getCachedPollTimeForSource(profileID)
 	if err != nil || pollTime == 0 {
-		p.showDialMessage(ctx, "LHM Dial", "LHM unavailable")
-		return
+		if active {
+			render.messageTitle = "LHM Dial"
+			render.messageValue = "LHM unavailable"
+		}
+		return render, false
 	}
 
+	settingsChanged := false
 	r, readings, err := p.getReadingForSource(profileID, page.SensorUID, page.ReadingID)
 	if err != nil && page.ReadingLabel != "" {
 		for _, candidate := range readings {
@@ -199,14 +209,17 @@ func (p *Plugin) updateDialFeedback(ctx string) {
 				page.ReadingID = candidate.ID()
 				r = candidate
 				err = nil
-				_ = p.sd.SetSettings(ctx, settings)
+				settingsChanged = true
 				break
 			}
 		}
 	}
 	if err != nil {
-		p.showDialMessage(ctx, "LHM Dial", "Reading missing")
-		return
+		if active {
+			render.messageTitle = "LHM Dial"
+			render.messageValue = "Reading missing"
+		}
+		return render, settingsChanged
 	}
 
 	title := page.Title
@@ -220,10 +233,10 @@ func (p *Plugin) updateDialFeedback(ctx string) {
 	}
 
 	v := r.Value()
-	divisor, err := p.getCachedDivisor(ctx+"|dial", page.Divisor)
+	divisor, err := p.getCachedDivisor(pageCtx, page.Divisor)
 	if err != nil {
 		log.Printf("dial divisor: %v", err)
-		return
+		return render, settingsChanged
 	}
 	if divisor != 1 {
 		v /= divisor
@@ -245,9 +258,8 @@ func (p *Plugin) updateDialFeedback(ctx string) {
 	}
 	valueTextNoUnit, displayText := p.formatDisplayValue(displayValue, displayUnit, page.Format, hwsensorsservice.ReadingType(r.TypeI()))
 
-	now := time.Now()
 	thresholds := p.resolveThresholdsForEval(page.Thresholds, page.SuppressedGlobalIDs, hwsensorsservice.ReadingType(r.TypeI()))
-	activeThreshold := p.evaluateThresholds(ctx, v, thresholds, now)
+	activeThreshold := p.evaluateThresholds(pageCtx, v, thresholds, now)
 	newThresholdID := ""
 	alertText := ""
 	if activeThreshold != nil {
@@ -257,9 +269,9 @@ func (p *Plugin) updateDialFeedback(ctx string) {
 		}
 	}
 
-	snoozeState, snoozed, _ := p.currentThresholdSnoozeState(ctx, now)
+	snoozeState, snoozed, _ := p.currentThresholdSnoozeState(pageCtx, now)
 	if activeThreshold == nil {
-		p.clearThresholdSnooze(ctx)
+		p.clearThresholdSnooze(pageCtx)
 		snoozed = false
 		snoozeState = thresholdSnoozeState{}
 	}
@@ -270,11 +282,11 @@ func (p *Plugin) updateDialFeedback(ctx string) {
 			p.applyNormalColors(g, page)
 		}
 		page.CurrentThresholdID = newThresholdID
-		_ = p.sd.SetSettings(ctx, settings)
+		settingsChanged = true
 	}
 
 	renderDisplayText, renderAlertText, renderGraphValue, freezeGraph := p.resolveThresholdDisplay(
-		ctx,
+		pageCtx,
 		activeThreshold,
 		v,
 		graphValue,
@@ -309,12 +321,55 @@ func (p *Plugin) updateDialFeedback(ctx string) {
 		}
 	}
 
-	b, err := g.EncodePNG()
-	if err != nil {
-		log.Printf("dial encode: %v", err)
+	if active {
+		b, err := g.EncodePNG()
+		if err != nil {
+			log.Printf("dial encode: %v", err)
+			return render, settingsChanged
+		}
+		render.image = b
+	}
+	return render, settingsChanged
+}
+
+func (p *Plugin) updateDialFeedback(ctx string) {
+	p.mu.RLock()
+	settings := p.dialSettings[ctx]
+	state := p.dialStates[ctx]
+	p.mu.RUnlock()
+	if settings == nil || state == nil {
 		return
 	}
-	p.sendDialCanvas(ctx, b)
+	if len(settings.Pages) == 0 {
+		p.showDialMessage(ctx, "LHM Dial", "Configure pages")
+		return
+	}
+	if settings.ActiveIndex < 0 || settings.ActiveIndex >= len(settings.Pages) {
+		settings.ActiveIndex = wrapDialIndex(settings.ActiveIndex, 0, len(settings.Pages))
+	}
+	now := time.Now()
+	settingsChanged := false
+	var activeRender dialPageRender
+	for i := range settings.Pages {
+		render, changed := p.updateDialPage(ctx, settings, state, i, i == settings.ActiveIndex, now)
+		if changed {
+			settingsChanged = true
+		}
+		if i == settings.ActiveIndex {
+			activeRender = render
+		}
+	}
+	if settingsChanged {
+		_ = p.sd.SetSettings(ctx, settings)
+	}
+	if activeRender.messageTitle != "" {
+		p.showDialMessage(ctx, activeRender.messageTitle, activeRender.messageValue)
+		return
+	}
+	if len(activeRender.image) == 0 {
+		return
+	}
+	p.sendDialCanvas(ctx, activeRender.image)
 }
 
 func (p *Plugin) updateDialTick() {
@@ -432,23 +487,24 @@ func (p *Plugin) OnTouchTap(event *streamdeck.EvTouchTap) {
 		return
 	}
 
+	pageCtx := dialPageContext(event.Context, settings.ActiveIndex)
 	if configured := normalizeThresholdSnoozeDurations(page.SnoozeDurations); len(configured) > 0 {
 		now := time.Now()
-		currentSnooze, snoozed := p.currentThresholdSnooze(event.Context, now)
+		currentSnooze, snoozed := p.currentThresholdSnooze(pageCtx, now)
 		var current *thresholdSnoozeState
 		if snoozed {
 			current = &currentSnooze
 		}
 		if nextDuration, ok := nextThresholdSnoozeDuration(configured, current); ok {
-			p.setThresholdSnooze(event.Context, nextDuration, now)
-		} else if !p.clearThresholdSnooze(event.Context) {
+			p.setThresholdSnooze(pageCtx, nextDuration, now)
+		} else if !p.clearThresholdSnooze(pageCtx) {
 			return
 		}
 		p.updateDialFeedback(event.Context)
 		return
 	}
 
-	if !p.clearStickyThreshold(event.Context, page.CurrentThresholdID) {
+	if !p.clearStickyThreshold(pageCtx, page.CurrentThresholdID) {
 		return
 	}
 	page.CurrentThresholdID = ""
