@@ -123,9 +123,9 @@ architecture:
   using existing Property Inspector or documentation patterns after checking how
   action behavior is documented for normal tiles.
 - **Page position indicator:** add an optional indication of active page and
-  total page count on the touch strip. It should be user-toggleable for
-  fullscreen mode, enabled by default, and always visible while dial-press
-  overview is active.
+  total page count on the touch strip. This is a user preference, not a new
+  default for fullscreen mode. Dial-press overview may show orientation as part
+  of its navigation role.
 - **Default graph scale:** make newly added dial pages use the same default
   min/max behavior as the normal LHM reading action.
 - **DeckBridge touch-strip shape:** fix the local DeckBridge emulation first so
@@ -213,9 +213,10 @@ Apply selected polish in small, reviewable steps:
 2. Page position indicator:
    - add the indicator in render code, not as a separate Stream Deck feedback
      field;
-   - add a setting so the fullscreen indicator can be turned off;
-   - default the fullscreen indicator on;
-   - force the indicator on in dial-press overview mode;
+   - add a setting so the fullscreen indicator can be turned on;
+   - keep the fullscreen indicator off by default;
+   - allow dial-press overview to show orientation as part of the overview
+     navigation UI;
    - prefer small dots for low page counts;
    - prefer `x / y` when dots become unreadable;
    - verify it does not cover title/value text in common display modes.
@@ -300,7 +301,7 @@ Stream Deck+:
 - install and assignment still work;
 - rotation still cycles pages;
 - dial press overview remains responsive;
-- any new page indicator is readable and not distracting;
+- an enabled page indicator is readable and not distracting;
 - default scales are sensible for non-percentage readings;
 - adjacent dial boundaries are visible but not intrusive;
 - graph history is not reset by unrelated page-list edits;
