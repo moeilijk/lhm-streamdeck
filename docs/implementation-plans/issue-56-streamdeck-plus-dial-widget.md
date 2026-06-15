@@ -2,7 +2,7 @@
 
 **Issue:** [#56 - StreamDeck+ Dial Widget](https://github.com/moeilijk/lhm-streamdeck/issues/56)
 
-**Status:** Prototype branch; real Stream Deck+ validation required.
+**Status:** Prototype hardware test passed; release scope and follow-up work need to be separated before finalizing.
 
 ---
 
@@ -33,9 +33,59 @@ complicated.
 
 ---
 
-## V1 Scope
+## Current Branch State
 
-Version 1 should implement the simple metric carousel requested by the issue:
+The prototype branch implements the first custom Stream Deck+ dial action:
+
+- new `com.moeilijk.lhm.dial` action in the manifest;
+- Encoder controller support for Stream Deck+ dial slots;
+- `dial_pi.html` and `dial_pi.js` Property Inspector;
+- configurable normal-reading pages;
+- per-page normal tile styling controls where currently wired;
+- active page persistence;
+- dial rotation to cycle pages;
+- dial press to toggle the overview carousel;
+- touch tap mapped to threshold snooze/clear behavior for the active page;
+- hidden page updates so graph history continues while pages are not active;
+- DeckBridge/probe support for Stream Deck+ shape validation;
+- unit and harness coverage for dial behavior and supporting protocol changes.
+
+The current branch intentionally does not implement Composite Dashboard pages or
+Derived Metric pages inside the dial carousel.
+
+---
+
+## Hardware Test Result
+
+The reporter tested the prerelease build on real hardware:
+
+- Windows 11;
+- Stream Deck software 7.4.2 (22730);
+- original Stream Deck+ hardware.
+
+Validated behavior:
+
+- preview build installs;
+- dial actions can be added;
+- pages can be added, reordered, configured, and removed;
+- multiple dial actions do not interfere with each other;
+- dial rotation cycles pages;
+- rotation direction feels intuitive to the tester;
+- dial press switches view mode;
+- hardware response is prompt;
+- no lag, delay, or rendering artifacts were reported;
+- touch tap did not cause unexpected behavior in the tester's scenario;
+- touchscreen swipe still switches Stream Deck pages as expected.
+
+This satisfies the original hardware blocker for the first simple metric
+carousel. Remaining feedback should be triaged as release polish versus follow-up
+work.
+
+---
+
+## V1 Release Scope
+
+V1 should remain the simple metric carousel requested by the issue:
 
 - one new custom LHM dial widget action;
 - configurable list of normal LHM readings;
@@ -43,81 +93,171 @@ Version 1 should implement the simple metric carousel requested by the issue:
 - one selected reading displayed large/readable on the Stream Deck+ touch-panel;
 - rotary movement cycles the selected reading;
 - no Action Wheel behavior;
-- no neighboring page previews;
+- no neighboring page previews in the primary fullscreen display;
 - existing Reading, Composite Dashboard, Derived Metric, and Settings actions
   remain unchanged.
 
-Out of scope for V1 unless hardware testing shows it is required immediately:
-
-- Composite Dashboard pages inside the dial carousel;
-- Derived Metric pages inside the dial carousel;
-- a general-purpose action wheel replacement;
-- changing existing non-dial actions.
+V1 may include small polish changes from the hardware feedback only when they are
+low risk, localized, and do not introduce new Property Inspector patterns.
 
 ---
 
-## Technical Implementation
+## Feedback Triage
 
-The Stream Deck+ dial widget should be implemented as a Stream Deck+ dial/encoder
-compatible action so it is assignable to the dial section in the official Stream
-Deck software.
+### Candidate V1 Polish
 
-Required behavior:
+These items directly improve the first release without changing the feature's
+architecture:
 
-- manifest declares the dial widget as Stream Deck+ dial/encoder compatible;
-- Property Inspector manages the metric page list;
-- Property Inspector manages normal tile styling per page;
-- settings persist the page list, active page, and per-page styling;
-- dial rotation changes the active page by the received tick count;
-- display output renders the selected metric using the Stream Deck+ display area;
-- rotary input is treated as input only, not as a display surface.
+- **Dial press discoverability:** expose that pressing the dial toggles overview,
+  using the existing Property Inspector layout style.
+- **Page position indicator:** add an unobtrusive indication of active page and
+  total page count on the touch strip if it does not reduce readability.
+- **Default graph scale:** make newly added dial pages use the same default
+  min/max behavior as the normal LHM reading action.
+- **Preview readability:** reduce overview preview distortion if it can be done
+  in the existing overview render code without changing the primary fullscreen
+  behavior.
+- **Default page colors:** consider cycling through the same kind of small
+  hardcoded palette already used by Composite Dashboard slots, if it remains
+  predictable and easy to override.
 
-DeckBridge emulation must mirror the requested Stream Deck+ shape closely enough
-for compatibility testing:
+Before implementation, each candidate must be checked against the existing UI
+rules for this repository. The Property Inspector should keep the same
+`sdpi-item`, `details`, input, and button patterns already used by comparable
+screens.
 
-- 4 x 2 key grid;
-- 4 dial slots;
-- separate touch-strip display area;
-- separate rotary input controls;
-- no display rendered on the rotary itself;
-- Encoder/dial actions only on valid dial slots;
-- Keypad actions only on normal keys;
-- stale invalid profile assignments are rejected, removed, or hidden.
+### Follow-Up Work
+
+These items are useful but should not block V1:
+
+- Derived Metric support inside dial pages;
+- Composite Dashboard support inside dial pages;
+- a bulk page assistant or presets for adding many related metrics;
+- making overview carousel the default display mode;
+- configurable page indicator style;
+- dedicated border/theming controls for adjacent dial displays;
+- broader touch interaction behavior beyond threshold snooze/clear;
+- any larger redesign of the dial Property Inspector.
+
+Follow-up issues should be created after the V1 release scope is agreed, so the
+main issue can close cleanly when the simple metric carousel ships.
 
 ---
 
-## Validation Plan
+## Proposed Execution Plan
 
-Local validation:
+### 1. Freeze The V1 Scope
 
-- plugin builds;
-- Stream Deck manifest validation passes;
-- dial widget can be assigned in DeckBridge to valid dial slots only;
-- rotating left/right cycles through configured readings;
-- each page can be styled independently like a normal reading tile;
-- display stays readable and does not flicker to fallback text;
-- existing non-dial LHM actions still work.
+Confirm that issue #56 will ship as the simple metric carousel:
 
-Hardware validation:
+- normal readings only;
+- one dial action;
+- per-page styling;
+- rotation cycles pages;
+- dial press overview remains a navigation aid;
+- no Derived or Composite pages in V1.
 
-- official Stream Deck software shows the widget in the Stream Deck+ dial section;
-- assigning the action to a real dial works;
-- rotation direction matches user expectation;
-- multi-detent rotation behaves predictably;
-- the displayed metric is readable and uses the touch-panel area better than
-  Action Wheel;
-- settings persist after restarting Stream Deck;
-- existing non-dial LHM actions remain unchanged.
+Record the scope decision in the issue before release work starts.
+
+### 2. Implement Only Approved V1 Polish
+
+Apply selected polish in small, reviewable steps:
+
+1. Dial press discoverability:
+   - add a concise label or static value in the existing Display section;
+   - do not add a new help block unless the same pattern already exists nearby.
+
+2. Page position indicator:
+   - add the indicator in render code, not as a separate Stream Deck feedback
+     field;
+   - prefer small dots for up to a modest page count;
+   - prefer `x / y` for larger page counts if dots become unreadable;
+   - verify it does not cover title/value text in common display modes.
+
+3. Default graph scale:
+   - reuse the existing `getDefaultMinMaxForReading` behavior;
+   - expose required min/max metadata through the existing catalog payload only
+     if the Property Inspector needs it while creating pages;
+   - keep older settings compatible.
+
+4. Overview preview readability:
+   - keep fullscreen mode as the primary readable mode;
+   - adjust only the overview preview scaling/cropping if this improves
+     readability without changing the purpose of overview mode.
+
+5. Default page colors:
+   - only use a small deterministic palette;
+   - keep every color user-editable with existing controls;
+   - avoid adding new color controls.
+
+### 3. Tests And Verification
+
+Run the automated checks first:
+
+- `go test ./...`;
+- `scripts/verify-settings-pi.sh`;
+- targeted Node syntax checks for touched Property Inspector files if not already
+  covered by the script.
+
+Add focused tests when logic is introduced:
+
+- default min/max propagation for dial page creation or catalog payload;
+- pure helper behavior for page indicator thresholds or overview crop selection;
+- no regression to existing dial index wrapping tests.
+
+### 4. Local Deploy
+
+After automated checks pass, run:
+
+- `scripts/deploy-local.sh`
+
+This is the final local validation step before asking for a physical Stream Deck
+test. No commit, push, release, or tag should happen before this deploy and the
+explicit hardware test approval.
+
+### 5. Hardware Approval
+
+Ask the tester or maintainer to validate the locally deployed build on a real
+Stream Deck+:
+
+- install and assignment still work;
+- rotation still cycles pages;
+- dial press overview remains responsive;
+- any new page indicator is readable and not distracting;
+- default scales are sensible for non-percentage readings;
+- existing non-dial actions still behave normally.
+
+Only after explicit approval should release preparation continue.
+
+### 6. Release Preparation
+
+Before changing `manifest.json`, tagging, or publishing:
+
+- state the proposed next version;
+- compare it with the current latest release;
+- justify the version using semantic versioning and the feature scope;
+- wait for explicit approval.
+
+After approval:
+
+- commit the final changes;
+- push the branch;
+- publish the release according to the approved version plan;
+- update or close issue #56 depending on release outcome;
+- create follow-up issues for all deferred feedback.
 
 ---
 
 ## Done Criteria
 
-Issue #56 is complete only after real Stream Deck+ hardware confirms:
+Issue #56 can be closed when:
 
-- install and assignment work in official Stream Deck software;
-- rotating the dial cycles configured metrics;
-- each metric page can be styled independently;
-- the display is readable and avoids Action Wheel shrinking/neighbor previews;
+- the simple metric carousel is released;
+- real Stream Deck+ hardware validation has approved the release candidate;
+- normal reading pages can be configured and styled independently;
+- rotating the dial cycles configured readings;
+- the selected reading is readable on the touch strip;
 - settings persist;
-- existing LHM actions are not regressed.
+- existing non-dial LHM actions are not regressed;
+- out-of-scope enhancements are tracked separately.
