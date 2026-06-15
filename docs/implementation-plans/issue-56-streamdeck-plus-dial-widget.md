@@ -95,6 +95,170 @@ This ledger is the stable numbered source of truth for issue #56 follow-up. It
 combines the original issue request, the reporter's hardware-test feedback, and
 owner triage decisions made during follow-up planning.
 
+### Raw Issue Extraction
+
+This extraction lists each distinct point from the issue body and comments before
+triage. It exists to prevent source feedback from disappearing into summaries.
+
+1. Reporter uses LHM and the plugin successfully.
+2. Reporter likes the Composite Dashboard action for combining related metrics.
+3. Reporter has a Stream Deck+ profile page dedicated to system metrics.
+4. Reporter sees the Stream Deck+ dial section as unused/wasted by the current
+   plugin.
+5. Requested widget: configure a list of metrics.
+6. Requested widget: display one metric fullscreen instead of stacking metrics.
+7. Requested widget: use a display style like the normal LHM button.
+8. Requested widget: turn the dial to cycle through the configured metrics.
+9. Example use case: cycle through all fan speeds on one dial slot.
+10. Example use case: cycle through duty percentages for individual CPU cores.
+11. Example use case: create a memory dial cycling RAM and VRAM metrics.
+12. Perfect-world extension: allow each dial page to be a Composite Dashboard.
+13. Perfect-world extension: allow each dial page to be a Derived Metric.
+14. Reporter expects Composite/Derived dial pages to be more complicated.
+15. Existing workaround: put normal LHM buttons inside Stream Deck Action Wheel.
+16. Action Wheel problem: it shrinks the display.
+17. Action Wheel problem: it shows neighboring pages darkened in the background.
+18. Action Wheel problem: this makes readings hard to read.
+19. Custom widget goal: avoid Action Wheel shrinking.
+20. Custom widget goal: use the wider Stream Deck+ touch panel.
+21. Reporter offered to test on real Stream Deck+ hardware.
+22. Reporter has limited Go/JavaScript experience and does not expect to
+    contribute much code.
+23. Maintainer response: without hardware access, the feature needed external
+    hardware validation.
+24. Maintainer V1 proposal: one custom LHM dial action.
+25. Maintainer V1 proposal: configurable list of normal readings.
+26. Maintainer V1 proposal: turning the dial cycles the active reading.
+27. Maintainer V1 proposal: touch display renders one reading fullscreen using
+    existing normal tile style where possible.
+28. Maintainer V1 non-goal: avoid Composite Dashboard pages in first version.
+29. Maintainer V1 non-goal: avoid Derived Metric pages in first version.
+30. Reporter suggested planning multiple versions from the start.
+31. Reporter suggested a "Simple Metric Carousel" dial action.
+32. Reporter suggested a later "Extended Carousel" if feasible and worthwhile.
+33. Reporter noted a new action avoids backwards compatibility concerns.
+34. Reporter noted a new action allows different internal architecture later.
+35. Prototype branch existed before hardware validation.
+36. Prototype still required real Stream Deck+ validation before being marked
+    implemented.
+37. Hardware test build was published as prerelease
+    `issue-56-streamdeck-plus-test-20260614-0225`.
+38. Hardware test artifact was
+    `com.moeilijk.lhm.issue-56-hardware-test.streamDeckPlugin`.
+39. Hardware test scope: validate first Stream Deck+ Dial Carousel on real
+    hardware.
+40. Hardware test scope: confirm dial press behavior.
+41. Hardware test scope: confirm dial rotate behavior.
+42. Hardware test scope: confirm touch behavior.
+43. Hardware test scope: confirm overview carousel behavior.
+44. Hardware test scope: confirm hidden-page updates.
+45. Maintainer stated successful hardware test alone does not close #56.
+46. Maintainer stated Derived Metric support should become separate follow-up.
+47. Maintainer stated Composite Dashboard support should become separate
+    follow-up.
+48. Reporter created a new profile for hardware testing.
+49. Reporter uninstalled the official release before installing the preview.
+50. Reporter installed the preview build.
+51. Hardware result: adding dial actions worked.
+52. Hardware result: adding pages worked.
+53. Hardware result: reordering pages worked.
+54. Hardware result: configuring pages worked.
+55. Hardware result: multiple dials did not interfere with each other.
+56. Hardware result: hardware interaction had no obvious problems.
+57. Hardware result: inputs responded promptly.
+58. Hardware result: no lag/delay was observed.
+59. Hardware result: no rendering artifacts were observed.
+60. Hardware result: turning the dial cycles pages.
+61. Hardware result: dial rotation direction felt intuitive to the tester.
+62. Hardware result: pressing the knob switches view mode.
+63. Hardware result: tapping the touchscreen did not appear to do anything.
+64. Hardware result: swiping the touchscreen still switches Stream Deck pages.
+65. Feedback: dial press view-mode switching is not advertised in the UI.
+66. Feedback: two adjacent carousels have no visible border.
+67. Feedback: missing border makes it difficult to see where one graph ends and
+    the other begins.
+68. Feedback: add a thin border on both sides.
+69. Feedback: font sizes in the UI are set to 0 by default.
+70. Feedback: rendered text appears around font size 14 despite UI value 0.
+71. Feedback: if 0 means automatic size, that is not obvious.
+72. Feedback: automatic font size should be communicated better.
+73. Feedback: fullscreen view has no active page/page count indication.
+74. Feedback: carousel view has no active page/page count indication.
+75. Feedback: fullscreen gives no indication that more pages exist.
+76. Feedback: suggested row of gray dots at the bottom.
+77. Feedback: suggested active dot slightly brighter.
+78. Feedback: suggested active dot stretched sideways.
+79. Feedback: for many pages, replace dots with explicit `x / y` text.
+80. Feedback: tester was unsure whether dot/text switching should be automatic
+    or manual.
+81. Feedback: Action Wheel normally shows 9 points before making outer ones
+    smaller.
+82. Feedback: tester would set dot/text threshold around 9 pages.
+83. Feedback: carousel previews are distorted.
+84. Feedback: distorted previews are barely readable.
+85. Feedback: carousel view is probably intended as navigation.
+86. Feedback: users might want carousel view to show 3 pages at the same time.
+87. Feedback: reduce preview height slightly while keeping width.
+88. Feedback: reducing preview height would bring aspect ratio closer to the
+    original.
+89. Feedback: maybe crop the sides of the preview image.
+90. Feedback: cropping sides may reduce distortion and improve readability.
+91. Feedback: add option to select carousel/overview as default view.
+92. Feedback: default view option would promote overview from navigation tool to
+    alternative view mode.
+93. Feedback: graphs appear hardcoded to default scale 0-100.
+94. Feedback: normal LHM action appears to calculate default scale from selected
+    reading.
+95. Feedback: maybe each page could get a different default graph color.
+96. Feedback: suggested hardcoded list of around 5 colors with wrap-around.
+97. Feedback: color variation could help navigating the list.
+98. Feedback: page/page-list changes make the UI-selected page display on the
+    device.
+99. Feedback: tester found selected page display unexpected but understandable.
+100. Feedback: page/page-list changes reset all graphs.
+101. Feedback: user expectation is that graphs persist while cycling pages.
+102. Feedback: graph reset is a minor annoyance while setting graph scale.
+103. Feedback: adding many pages is tedious.
+104. Example tedious case: frequency for all 8 cores.
+105. Example tedious case: duty cycle for all 16 virtual cores.
+106. Feedback: maybe presets or assistant can add pages by rule.
+107. Suggested bulk rule: reading X of all cores of the selected processor.
+108. Suggested bulk rule: all readings from the selected sensor.
+109. Hardware environment: Windows 11.
+110. Hardware environment: Stream Deck software 7.4.2 (22730).
+111. Hardware environment: original Stream Deck+ hardware.
+112. Maintainer follow-up: hardware validation confirmed core behavior.
+113. Maintainer follow-up: V1 remains simple metric carousel for normal LHM
+     readings.
+114. Maintainer follow-up: Derived Metric pages remain out of V1.
+115. Maintainer follow-up: Composite Dashboard pages remain out of V1.
+116. Maintainer follow-up: hardware feedback must be triaged into V1 polish or
+     follow-up issues.
+117. Maintainer follow-up: no release/version changes until local deploy and
+     explicit hardware approval.
+118. DeckBridge follow-up: touch strip emulation needed correction to match real
+     Stream Deck+ shape.
+119. DeckBridge follow-up: dashboard persistence needed fixing because state was
+     not remembered reliably during testing.
+120. Owner triage: page indicator is a switchable wish, not a default fullscreen
+     requirement.
+121. Owner triage: one tester does not define the end goal.
+122. Owner triage: default colors must not be invented or agreed without proof.
+123. Owner triage: same measurement should keep the same color.
+124. Owner triage: per-new-page color rotation is not an existing theme rule.
+125. Owner triage: adjacent dials need one pixel column removed/reserved on both
+     left and right edges.
+126. Owner triage: bulk page creation belongs to V2 planning.
+127. Owner triage: some unclear feedback items must be explained from the issue
+     feedback before execution.
+128. Owner triage: items 9 and 10 from the earlier working list are parked for
+     V2.
+129. Owner triage: item 11 from the earlier working list is V1.
+130. Owner workflow: stop implementing before the feedback extraction and plan
+     are complete and accepted.
+
+### Triage Mapping
+
 1. **Create one custom LHM Stream Deck+ dial action.**
    - Source: original issue request and first maintainer scope reply.
    - Scope: V1.
