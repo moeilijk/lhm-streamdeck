@@ -89,6 +89,255 @@ work.
 
 ---
 
+## Feedback Ledger
+
+This ledger is the stable numbered source of truth for issue #56 follow-up. It
+combines the original issue request, the reporter's hardware-test feedback, and
+owner triage decisions made during follow-up planning.
+
+1. **Create one custom LHM Stream Deck+ dial action.**
+   - Source: original issue request and first maintainer scope reply.
+   - Scope: V1.
+   - Plan: keep one `LHM Dial Carousel` action for V1.
+   - Motivation: this avoids changing existing Reading, Composite Dashboard, or
+     Derived Metric actions and avoids migration/backwards-compatibility work.
+
+2. **Support a configurable list of normal LHM readings.**
+   - Source: original issue request.
+   - Scope: V1.
+   - Plan: pages in the dial action are normal reading pages only.
+   - Motivation: this is the smallest implementation that satisfies the primary
+     request and was the hardware-test target.
+
+3. **Display one selected reading fullscreen/readable on the touch strip.**
+   - Source: original issue request; Action Wheel comparison.
+   - Scope: V1.
+   - Plan: fullscreen remains the primary display mode.
+   - Motivation: the issue exists because Action Wheel shrinks readings and
+     makes them hard to read.
+
+4. **Cycle readings by rotating the dial.**
+   - Source: original issue request and hardware validation feedback.
+   - Scope: V1.
+   - Plan: dial rotation cycles the active page.
+   - Motivation: this is core hardware behavior and was reported as intuitive in
+     testing.
+
+5. **Keep Composite Dashboard pages out of V1.**
+   - Source: original issue "perfect world" note and maintainer scope replies.
+   - Scope: V2.
+   - Plan: create a follow-up issue after V1 if still desired.
+   - Motivation: Composite pages would expand the data model and rendering
+     contract beyond the simple metric carousel.
+
+6. **Keep Derived Metric pages out of V1.**
+   - Source: original issue "perfect world" note and maintainer scope replies.
+   - Scope: V2.
+   - Plan: create a follow-up issue after V1 if still desired.
+   - Motivation: Derived pages require separate selection, formula, and graph
+     state handling.
+
+7. **Plan versions explicitly: simple first, extended later.**
+   - Source: reporter follow-up suggesting a "Simple Metric Carousel" and later
+     "Extended Carousel".
+   - Scope: planning rule.
+   - Plan: V1 is the simple metric carousel; V2 tracks larger extensions.
+   - Motivation: separate actions/versions avoid compatibility and migration
+     risk.
+
+8. **Use real Stream Deck+ hardware validation before release.**
+   - Source: reporter offer to test and maintainer validation blocker.
+   - Scope: release gate.
+   - Plan: do not mark implemented or release final without hardware approval.
+   - Motivation: the maintainer does not have the hardware locally.
+
+9. **Dial press toggles view mode.**
+   - Source: hardware test result confirmed pressing the knob switches
+     view-mode.
+   - Scope: V1 behavior.
+   - Plan: keep dial press as the overview toggle.
+   - Motivation: hardware validation reported the behavior working.
+
+10. **Dial press discoverability is missing.**
+    - Source: hardware feedback: dial press switches view mode but is not
+      advertised in the UI.
+    - Scope: V1.
+    - Plan: inspect existing PI/documentation patterns, then document the press
+      behavior using the same pattern. Do not invent a new default-open help
+      block for this action.
+    - Motivation: users cannot discover a hidden press action from the current
+      UI.
+
+11. **Touch tap should not become an unsolicited default goal.**
+    - Source: hardware feedback observed touch tap did nothing; owner triage
+      says user-requested extras may be supported but must be scoped by the
+      maintainer.
+    - Scope: V1 only if kept as explicit/safe behavior.
+    - Plan: keep any touch/snooze behavior controlled by existing threshold
+      semantics and document or gate it if it is exposed.
+    - Motivation: one tester's preference must not redefine the release goal.
+
+12. **Touchscreen swipe must continue switching Stream Deck pages.**
+    - Source: hardware test result.
+    - Scope: regression guard.
+    - Plan: do not consume swipe gestures in the plugin.
+    - Motivation: hardware test confirmed expected Stream Deck page navigation.
+
+13. **Adjacent dial carousels need a visible boundary.**
+    - Source: hardware feedback: two carousels next to each other have no
+      visible border.
+    - Scope: V1.
+    - Plan: reserve or draw one pixel column on the left and right edge of each
+      dial canvas. Keep it non-configurable in V1.
+    - Motivation: owner triage selected the exact V1 shape: one pixel column on
+      both sides, not a broader theme system.
+
+14. **Font-size controls showing `0` are confusing.**
+    - Source: hardware feedback: UI shows font size 0 while text appears around
+      14 px.
+    - Scope: V1.
+    - Plan: make automatic font size clear using an existing PI pattern.
+    - Motivation: `0` is currently an implementation sentinel for automatic size
+      but reads as an actual size to users.
+
+15. **Page position indicator is missing.**
+    - Source: hardware feedback: fullscreen and carousel view do not show page
+      position or page count.
+    - Scope: V1 as optional behavior only.
+    - Plan: add a switchable indicator. Fullscreen indicator stays off by
+      default. Overview may show orientation as part of its navigation role.
+    - Motivation: owner triage rejected making one tester's preference the
+      default end state while still allowing the requested affordance.
+
+16. **Page indicator visual form should start from dots, then `x / y` when
+    dots become unreadable.**
+    - Source: hardware feedback suggested Action Wheel-like dots and `x / y`
+      for many pages.
+    - Scope: V1 if page indicator is implemented.
+    - Plan: use compact dots for low page counts and text when dots would not
+      fit/read clearly.
+    - Motivation: indicator must not cover title/value text or become clutter.
+
+17. **DeckBridge must emulate the real Stream Deck+ touch-strip shape before
+    judging preview rendering.**
+    - Source: owner triage and hardware distortion feedback.
+    - Scope: V1 support work outside this repo.
+    - Plan: use the DeckBridge Stream Deck+ shape fix as the local validation
+      baseline before tuning overview rendering.
+    - Motivation: the old emulation could hide real hardware aspect-ratio
+      problems.
+
+18. **Overview preview distortion must be reduced after DeckBridge shape is
+    corrected.**
+    - Source: hardware feedback: carousel previews are distorted and barely
+      readable.
+    - Scope: V1.
+    - Plan: fit/crop page previews against the real touch-strip aspect ratio
+      instead of freely scaling near-square cards.
+    - Motivation: overview is a navigation aid, but it should not make previews
+      misleading or unreadable.
+
+19. **Overview as default display mode is not V1.**
+    - Source: hardware feedback suggested an option to make carousel view the
+      default; owner triage moved this to V2.
+    - Scope: V2.
+    - Plan: track separately after V1.
+    - Motivation: default overview changes the primary display contract.
+
+20. **Default graph scale must be derived from the original normal tile logic.**
+    - Source: hardware feedback: dial graphs look hardcoded to 0-100 while the
+      normal LHM action derives the default value from the selected reading.
+    - Scope: V1.
+    - Plan: reuse `getDefaultMinMaxForReading` for newly added dial pages and
+      reading changes.
+    - Motivation: V1 must preserve the normal tile contract for the same
+      reading instead of hardcoding dial-specific defaults.
+
+21. **Do not add rotating hardcoded default colors per dial page in V1.**
+    - Source: hardware feedback suggested different default graph colors; owner
+      triage rejected hardcoded color rotation.
+    - Scope: not V1.
+    - Plan: keep normal tile defaults unless the user explicitly changes page
+      styling.
+    - Motivation: the existing theme rule is that the same measurement keeps
+      the same color; Composite per-slot colors are not a precedent for dial
+      page color rotation.
+
+22. **Verify exact default colors rather than assuming them.**
+    - Source: owner triage asked whether defaults actually exist and rejected
+      agreeing without proof.
+    - Scope: V1 verification.
+    - Plan: compare dial page defaults against the normal Reading action defaults
+      and align any differences.
+    - Motivation: V1 should inherit the original tile appearance, not a copied
+      approximation.
+
+23. **Changing page selection may update the device display.**
+    - Source: hardware feedback: selecting a page in the UI becomes the page
+      displayed on-device; tester called it unexpected but understandable.
+    - Scope: acceptable V1 behavior unless it causes another issue.
+    - Plan: keep current behavior unless implementation work reveals a
+      regression.
+    - Motivation: direct preview of selected page is useful during setup and was
+      not raised as a blocker.
+
+24. **Graph history must not reset on every page or settings change.**
+    - Source: hardware feedback: all graphs reset when changing a page/page
+      list.
+    - Scope: V1.
+    - Plan: preserve graph state for unchanged pages and rebuild only pages
+      whose reading identity or visual graph settings changed.
+    - Motivation: users expect graph history to persist while cycling through
+      configured pages.
+
+25. **Bulk page creation is tedious for many cores/fans.**
+    - Source: hardware feedback: adding 8/16+ pages is tedious.
+    - Scope: V2.
+    - Plan: design a bulk helper separately.
+    - Motivation: useful but larger than release polish.
+
+26. **Bulk helper should support rule-based selection.**
+    - Source: hardware feedback examples: all cores, all readings from selected
+      sensor, all matching readings.
+    - Scope: V2.
+    - Plan: include rule selection, preview, deselection, and naming template in
+      V2 design.
+    - Motivation: bulk creation must be controllable to avoid generating noisy
+      pages.
+
+27. **DeckBridge persistence must be reliable for testing.**
+    - Source: owner feedback during follow-up testing.
+    - Scope: V1 support work outside this repo.
+    - Plan: use the DeckBridge persistence fix before further local dashboard
+      validation.
+    - Motivation: if DeckBridge forgets state, local validation cannot be
+      trusted.
+
+28. **No release/version change before local deploy and hardware approval.**
+    - Source: repository instructions and issue plan.
+    - Scope: release gate.
+    - Plan: run automated checks, then `scripts/deploy-local.sh`, then wait for
+      explicit hardware-test approval before commit/push/release code changes.
+    - Motivation: this repo's release flow requires physical Stream Deck
+      validation for code changes.
+
+29. **V1 implementation must stay within existing PI patterns.**
+    - Source: repository instructions and plan.
+    - Scope: implementation constraint.
+    - Plan: use existing `sdpi-item`, `details`, input, checkbox, range, and
+      button patterns only.
+    - Motivation: avoid introducing new UI conventions in this repo for one
+      action.
+
+30. **No unapproved code work before the feedback ledger and V1 plan are
+    accepted.**
+    - Source: owner instruction during follow-up.
+    - Scope: workflow rule.
+    - Plan: treat this ledger as the stop point before more implementation.
+    - Motivation: previous work skipped the requested planning checkpoint.
+
+---
+
 ## V1 Release Scope
 
 V1 should remain the simple metric carousel requested by the issue:
