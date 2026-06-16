@@ -56,6 +56,27 @@ func TestDialOverviewIndices(t *testing.T) {
 	}
 }
 
+func TestEmaSmooth(t *testing.T) {
+	tests := []struct {
+		name             string
+		alpha, value     float64
+		prev, want       float64
+	}{
+		{name: "alpha 1 follows value", alpha: 1, value: 50, prev: 10, want: 50},
+		{name: "alpha 0.5 halfway", alpha: 0.5, value: 100, prev: 0, want: 50},
+		{name: "alpha 0.2 mostly prev", alpha: 0.2, value: 100, prev: 0, want: 20},
+		{name: "stable when equal", alpha: 0.3, value: 42, prev: 42, want: 42},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := emaSmooth(tt.alpha, tt.value, tt.prev)
+			if got != tt.want {
+				t.Fatalf("emaSmooth(%v,%v,%v) = %v, want %v", tt.alpha, tt.value, tt.prev, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestDialGraphScale(t *testing.T) {
 	tests := []struct {
 		name             string

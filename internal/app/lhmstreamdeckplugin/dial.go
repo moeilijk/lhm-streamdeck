@@ -52,6 +52,12 @@ func decodeDialSettings(raw *json.RawMessage) (dialActionSettings, error) {
 	return s, nil
 }
 
+// emaSmooth applies one exponential-moving-average step, shared by the reading
+// tile and the dial so both smooth a graph value identically.
+func emaSmooth(alpha, value, prev float64) float64 {
+	return alpha*value + (1-alpha)*prev
+}
+
 func dialGraphScale(s *actionSettings) (int, int) {
 	minValue, maxValue := s.Min, s.Max
 	if maxValue <= minValue {
@@ -389,7 +395,7 @@ func (p *Plugin) updateDialPage(ctx string, settings *dialActionSettings, state 
 		if !ok {
 			prev = graphValue
 		}
-		smoothed := alpha*graphValue + (1-alpha)*prev
+		smoothed := emaSmooth(alpha, graphValue, prev)
 		p.smoothedValues[pageCtx] = smoothed
 		p.mu.Unlock()
 		if graphValue != 0 {
