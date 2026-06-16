@@ -1,6 +1,10 @@
 package lhmstreamdeckplugin
 
-import "testing"
+import (
+	"encoding/json"
+	"image/color"
+	"testing"
+)
 
 func TestWrapDialIndex(t *testing.T) {
 	tests := []struct {
@@ -74,6 +78,58 @@ func TestEmaSmooth(t *testing.T) {
 				t.Fatalf("emaSmooth(%v,%v,%v) = %v, want %v", tt.alpha, tt.value, tt.prev, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestDecodeDialSettings(t *testing.T) {
+	raw := json.RawMessage(`{"activeIndex":5,"pages":[{},{},{}]}`)
+	s, err := decodeDialSettings(&raw)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if s.ActiveIndex != 2 {
+		t.Errorf("activeIndex = %d, want 2 (5 mod 3)", s.ActiveIndex)
+	}
+	neg := json.RawMessage(`{"activeIndex":-1,"pages":[{}]}`)
+	if s2, _ := decodeDialSettings(&neg); s2.ActiveIndex != 0 {
+		t.Errorf("negative activeIndex = %d, want 0", s2.ActiveIndex)
+	}
+	if s3, _ := decodeDialSettings(nil); s3.ActiveIndex != 0 || len(s3.Pages) != 0 {
+		t.Errorf("nil raw should decode empty, got %+v", s3)
+	}
+}
+
+func TestDialColor(t *testing.T) {
+	def := color.RGBA{1, 2, 3, 255}
+	if c := dialColor("#ff0000", def); c == nil || c.R != 255 || c.G != 0 || c.B != 0 {
+		t.Errorf("valid hex = %+v, want red", c)
+	}
+	if c := dialColor("", def); c == nil || *c != def {
+		t.Errorf("empty hex = %+v, want default %+v", c, def)
+	}
+}
+
+func TestDefaultDialFontSizes(t *testing.T) {
+	if got := defaultDialTitleFontSize(0); got != 14 {
+		t.Errorf("title 0 -> %v, want 14", got)
+	}
+	if got := defaultDialTitleFontSize(9); got != 9 {
+		t.Errorf("title 9 -> %v, want 9", got)
+	}
+	if got := defaultDialValueFontSize(0); got != 18 {
+		t.Errorf("value 0 -> %v, want 18", got)
+	}
+	if got := defaultDialValueFontSize(22); got != 22 {
+		t.Errorf("value 22 -> %v, want 22", got)
+	}
+}
+
+func TestDialPageContext(t *testing.T) {
+	if got := dialPageContext("abc", 2); got != "abc|dial|page|2" {
+		t.Errorf("dialPageContext = %q, want abc|dial|page|2", got)
+	}
+	if dialPageContext("x", 0) == dialPageContext("x", 1) {
+		t.Errorf("different page indices must produce different contexts")
 	}
 }
 

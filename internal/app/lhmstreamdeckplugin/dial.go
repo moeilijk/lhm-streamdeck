@@ -67,11 +67,13 @@ func dialGraphScale(s *actionSettings) (int, int) {
 }
 
 func dialColor(hex string, def color.RGBA) *color.RGBA {
-	if c := hexToRGBA(hex); c != nil {
-		return c
+	// hexToRGBA never returns nil (unparseable input yields black), so an unset
+	// color must fall back to the default explicitly.
+	if hex == "" {
+		d := def
+		return &d
 	}
-	d := def
-	return &d
+	return hexToRGBA(hex)
 }
 
 // applyDialGraphSettings updates an existing graph in place to match the page
