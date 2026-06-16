@@ -52,41 +52,38 @@ func decodeDialSettings(raw *json.RawMessage) (dialActionSettings, error) {
 	return s, nil
 }
 
-func newDialGraph(s *actionSettings) *graph.Graph {
-	minValue := s.Min
-	maxValue := s.Max
+func dialGraphScale(s *actionSettings) (int, int) {
+	minValue, maxValue := s.Min, s.Max
 	if maxValue <= minValue {
-		minValue = 0
-		maxValue = 100
+		minValue, maxValue = 0, 100
 	}
-	fg := hexToRGBA(s.ForegroundColor)
-	if fg == nil {
-		fg = &color.RGBA{0, 81, 40, 255}
-	}
-	bg := hexToRGBA(s.BackgroundColor)
-	if bg == nil {
-		bg = &color.RGBA{0, 0, 0, 255}
-	}
-	hl := hexToRGBA(s.HighlightColor)
-	if hl == nil {
-		hl = &color.RGBA{0, 158, 0, 255}
-	}
-	title := hexToRGBA(s.TitleColor)
-	if title == nil {
-		title = &color.RGBA{183, 183, 183, 255}
-	}
-	value := hexToRGBA(s.ValueTextColor)
-	if value == nil {
-		value = &color.RGBA{255, 255, 255, 255}
-	}
+	return minValue, maxValue
+}
 
-	g := graph.NewGraph(dialWidth, dialHeight, minValue, maxValue, fg, bg, hl)
-	g.SetLabel(0, "", 24, title)
-	g.SetLabelFontSize(0, defaultDialTitleFontSize(s.TitleFontSize))
-	g.SetLabel(1, "", 58, value)
-	g.SetLabelFontSize(1, defaultDialValueFontSize(s.ValueFontSize))
-	g.SetLabel(2, "", 82, value)
-	g.SetLabelFontSize(2, 10.5)
+func dialColor(hex string, def color.RGBA) *color.RGBA {
+	if c := hexToRGBA(hex); c != nil {
+		return c
+	}
+	d := def
+	return &d
+}
+
+// applyDialGraphSettings updates an existing graph in place to match the page
+// settings. Keeping the graph object lets its plotted history survive page or
+// style edits; only a reading change rebuilds it (see buildDialGraphs).
+func applyDialGraphSettings(g *graph.Graph, s *actionSettings) {
+	minValue, maxValue := dialGraphScale(s)
+	g.SetMin(minValue)
+	g.SetMax(maxValue)
+	g.SetForegroundColor(dialColor(s.ForegroundColor, color.RGBA{0, 81, 40, 255}))
+	g.SetBackgroundColor(dialColor(s.BackgroundColor, color.RGBA{0, 0, 0, 255}))
+	g.SetHighlightColor(dialColor(s.HighlightColor, color.RGBA{0, 158, 0, 255}))
+	_ = g.SetLabelColor(0, dialColor(s.TitleColor, color.RGBA{183, 183, 183, 255}))
+	_ = g.SetLabelColor(1, dialColor(s.ValueTextColor, color.RGBA{255, 255, 255, 255}))
+	_ = g.SetLabelColor(2, dialColor(s.ValueTextColor, color.RGBA{255, 255, 255, 255}))
+	_ = g.SetLabelFontSize(0, defaultDialTitleFontSize(s.TitleFontSize))
+	_ = g.SetLabelFontSize(1, defaultDialValueFontSize(s.ValueFontSize))
+	_ = g.SetLabelFontSize(2, 10.5)
 	if s.GraphHeightPct > 0 {
 		g.SetHeightPct(s.GraphHeightPct)
 	}
@@ -97,7 +94,46 @@ func newDialGraph(s *actionSettings) *graph.Graph {
 	if s.TextStrokeColor != "" {
 		g.SetTextStrokeColor(hexToRGBA(s.TextStrokeColor))
 	}
+}
+
+func newDialGraph(s *actionSettings) *graph.Graph {
+	minValue, maxValue := dialGraphScale(s)
+	g := graph.NewGraph(dialWidth, dialHeight, minValue, maxValue,
+		dialColor(s.ForegroundColor, color.RGBA{0, 81, 40, 255}),
+		dialColor(s.BackgroundColor, color.RGBA{0, 0, 0, 255}),
+		dialColor(s.HighlightColor, color.RGBA{0, 158, 0, 255}))
+	g.SetLabel(0, "", 24, dialColor(s.TitleColor, color.RGBA{183, 183, 183, 255}))
+	g.SetLabel(1, "", 58, dialColor(s.ValueTextColor, color.RGBA{255, 255, 255, 255}))
+	g.SetLabel(2, "", 82, dialColor(s.ValueTextColor, color.RGBA{255, 255, 255, 255}))
+	applyDialGraphSettings(g, s)
 	return g
+}
+
+// dialPageSameReading reports whether two pages plot the same data series, so a
+// graph (and its history) can be reused across a settings save.
+func dialPageSameReading(a, b *actionSettings) bool {
+	return a.SensorUID == b.SensorUID && a.ReadingID == b.ReadingID
+}
+
+// buildDialGraphs builds the graph slice for new settings, reusing each existing
+// graph (preserving its plotted history) when the page at that index still plots
+// the same reading, and only rebuilding pages whose reading changed or that are
+// new. This stops every graph from resetting on any page/style edit.
+func buildDialGraphs(oldSettings *dialActionSettings, oldState *dialState, s *dialActionSettings) []*graph.Graph {
+	graphs := make([]*graph.Graph, len(s.Pages))
+	for i := range s.Pages {
+		reuse := oldState != nil && i < len(oldState.graphs) && oldState.graphs[i] != nil &&
+			oldSettings != nil && i < len(oldSettings.Pages) &&
+			dialPageSameReading(&oldSettings.Pages[i], &s.Pages[i])
+		if reuse {
+			g := oldState.graphs[i]
+			applyDialGraphSettings(g, &s.Pages[i])
+			graphs[i] = g
+		} else {
+			graphs[i] = newDialGraph(&s.Pages[i])
+		}
+	}
+	return graphs
 }
 
 func defaultDialTitleFontSize(v float64) float64 {
@@ -531,6 +567,32 @@ func (p *Plugin) handleDialPropertyInspectorConnected(event *streamdeck.EvSendTo
 	_ = p.sd.SendToPropertyInspector(event.Action, event.Context, map[string]interface{}{"dialSettings": settingsCopy})
 }
 
+// deriveDialPageScales fills in a default graph scale (min/max) for any page that
+// has none yet (max <= min), using the same logic as the normal reading tile
+// (getDefaultMinMaxForReading). Returns true if any page scale changed.
+func (p *Plugin) deriveDialPageScales(settings *dialActionSettings) bool {
+	if settings == nil {
+		return false
+	}
+	profileID := p.resolvedSourceProfileID(settings.SourceProfileID)
+	changed := false
+	for i := range settings.Pages {
+		pg := &settings.Pages[i]
+		if pg.Max > pg.Min {
+			continue
+		}
+		min, max := 0, 100
+		if r, _, err := p.getReadingForSource(profileID, pg.SensorUID, pg.ReadingID); err == nil {
+			min, max = getDefaultMinMaxForReading(r)
+		}
+		if pg.Min != min || pg.Max != max {
+			pg.Min, pg.Max = min, max
+			changed = true
+		}
+	}
+	return changed
+}
+
 func (p *Plugin) handleDialSendToPlugin(event *streamdeck.EvSendToPlugin, payload map[string]*json.RawMessage) bool {
 	if event.Action != dialAction {
 		return false
@@ -546,12 +608,26 @@ func (p *Plugin) handleDialSendToPlugin(event *streamdeck.EvSendToPlugin, payloa
 		} else {
 			settings.ActiveIndex = 0
 		}
+		// Derive a sensible default graph scale from the selected reading for any
+		// page that has no explicit scale yet (max <= min), mirroring the normal
+		// reading tile (getDefaultMinMaxForReading) instead of hardcoding 0-100.
+		scalesDerived := p.deriveDialPageScales(&settings)
 		p.mu.Lock()
+		oldSettings := p.dialSettings[event.Context]
+		oldState := p.dialStates[event.Context]
+		newState := &dialState{
+			graphs:   buildDialGraphs(oldSettings, oldState, &settings),
+			overview: oldState != nil && oldState.overview,
+		}
 		p.dialSettings[event.Context] = &settings
-		p.dialStates[event.Context] = initDialState(&settings)
+		p.dialStates[event.Context] = newState
 		p.mu.Unlock()
 		if err := p.sd.SetSettings(event.Context, &settings); err != nil {
 			log.Printf("dialSetSettings SetSettings: %v", err)
+		}
+		// Echo corrected settings back so the PI reflects the derived scale.
+		if scalesDerived {
+			_ = p.sd.SendToPropertyInspector(event.Action, event.Context, map[string]interface{}{"dialSettings": settings})
 		}
 		p.updateDialFeedback(event.Context)
 		return true
@@ -650,5 +726,8 @@ func (p *Plugin) OnDialRotate(event *streamdeck.EvDialRotate) {
 	if err := p.sd.SetSettings(event.Context, &settingsCopy); err != nil {
 		log.Printf("dial SetSettings: %v", err)
 	}
+	// Keep the Property Inspector in sync with the active page so its selected
+	// page and edited settings follow what the dial now shows.
+	_ = p.sd.SendToPropertyInspector(event.Action, event.Context, map[string]interface{}{"dialSettings": settingsCopy})
 	p.updateDialFeedback(event.Context)
 }
