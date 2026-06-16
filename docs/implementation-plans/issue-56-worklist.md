@@ -67,6 +67,29 @@ Basis-doel is de **metric-carousel** voor normale LHM-readings: fullscreen
 leesbaar, rotatie cyclet, multi-preview overview. Geen Composite/Derived pagina's
 in deze ronde.
 
+## Kernprincipe: tile-pariteit = hergebruik, geen heruitvinding
+
+**Harde eis (ook voor derived & composite later):** hergebruik de bestaande,
+goedgekeurde/released **tile-controls verbatim** (zelfde markup, ranges, defaults,
+gedeelde `pi_utils.js`-helpers). Codex' parallelle, afwijkende controls in
+`dial_pi.*` (en straks `derived_pi`/`composite_pi`) zijn **hallucinaties die eruit
+moeten**. **Alleen afwijken waar de dial/touch-hardware het echt vereist**
+(pagina-carousel, rotate, touch, strip-canvas-formaat). Waar de dial-render een
+veld nog niet honoreert, hergebruik de **bestaande** tile-render-logica (bv.
+`plugin.go` EMA) i.p.v. iets nieuws te schrijven.
+
+Voorbeeld (gat A, gedaan): font-control = tile-slider-patroon (range-wrap + step
+0.5 + gedeelde `positionRangeVal`). Dial-aanpassingen (toegestaan, canvas is
+breder/hoger dan een tile-key): range **8–30** i.p.v. tile 8–20, defaults 14/18
+i.p.v. 10.5. Codex' number-input met `0=auto` is verwijderd.
+
+Voorbeeld (gat B, gedaan): Smoothing = tile-control verbatim (0.1–1, 1 = uit) +
+de **bestaande** EMA uit `plugin.go` toegepast in `dial.go` (keyed op `pageCtx`,
+gedeelde `smoothedValues`). "Update every" weggelaten — de dial draait op één
+tick, dus per-pagina-interval is een dial-eigenschap, geen parity-gat. Wiring
+gemeten (smoothingAlpha round-trip PI→Go→persist→PI). → **Stap 3 (Display-
+pariteit) compleet; nog niet gecommit (wacht op emu-check).**
+
 ## Kernprincipe: dial-pagina = tile, per pagina
 
 Een dial-pagina hoort **dezelfde configuratie te hebben als een normale tile**

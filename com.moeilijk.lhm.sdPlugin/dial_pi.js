@@ -77,6 +77,7 @@ function normalizePage(page) {
   if (!page.graphMode) page.graphMode = "both";
   if (!page.graphHeightPct) page.graphHeightPct = 100;
   if (!page.graphLineThickness) page.graphLineThickness = 1;
+  if (page.smoothingAlpha === undefined || page.smoothingAlpha === null || page.smoothingAlpha === "") page.smoothingAlpha = 0;
   if (!page.titleFontSize) page.titleFontSize = 0;
   if (!page.valueFontSize) page.valueFontSize = 0;
   if (!page.textStrokeColor) page.textStrokeColor = page.backgroundColor || "#000000";
@@ -244,11 +245,20 @@ function renderSelectedPageSelection() {
   populateSelectedPageReadings();
 }
 
+// For range sliders that reuse the tile range-wrap markup, the real <input> is
+// nested inside the #id container; return it so the shared helpers work as-is.
+function fieldInput(host) {
+  if (!host) return null;
+  if (host.tagName === "INPUT" || host.tagName === "SELECT" || host.tagName === "TEXTAREA") return host;
+  return host.querySelector("input[type=range]") || host;
+}
+
 function setValue(id, value) {
-  var el = document.getElementById(id);
+  var el = fieldInput(document.getElementById(id));
   if (!el) return;
   if (el.type === "checkbox") el.checked = !!value;
   else el.value = value === undefined || value === null ? "" : String(value);
+  if (el.type === "range" && typeof positionRangeVal === "function") positionRangeVal(el);
 }
 
 function renderPageSettings() {
@@ -265,8 +275,9 @@ function renderPageSettings() {
   setValue("formatValue", page.format || "");
   setValue("divisorValue", page.divisor || "");
   setValue("graphUnit", page.graphUnit || "");
-  setValue("titleFontSize", page.titleFontSize || 0);
-  setValue("valueFontSize", page.valueFontSize || 0);
+  setValue("titleFontSize", page.titleFontSize || 14);
+  setValue("valueFontSize", page.valueFontSize || 18);
+  setValue("smoothingAlpha", page.smoothingAlpha > 0 ? page.smoothingAlpha : 1);
   setValue("graphHeightPct", page.graphHeightPct || 100);
   setValue("graphLineThickness", page.graphLineThickness || 1);
   setValue("titleColor", page.titleColor || "#b7b7b7");
@@ -280,7 +291,7 @@ function renderPageSettings() {
 }
 
 function bindPageField(id, key, parser) {
-  var el = document.getElementById(id);
+  var el = fieldInput(document.getElementById(id));
   if (!el || el.dataset.bound) return;
   el.dataset.bound = "1";
   var handler = function () {
@@ -288,6 +299,7 @@ function bindPageField(id, key, parser) {
     if (!page) return;
     var raw = el.type === "checkbox" ? el.checked : el.value;
     page[key] = parser ? parser(raw) : raw;
+    if (el.type === "range" && typeof positionRangeVal === "function") positionRangeVal(el);
     saveSettings();
   };
   el.addEventListener("input", handler);
@@ -307,6 +319,7 @@ function bindPageSettings() {
   bindPageField("valueFontSize", "valueFontSize", function (v) { return Number(v) || 0; });
   bindPageField("graphHeightPct", "graphHeightPct", function (v) { return Number(v) || 100; });
   bindPageField("graphLineThickness", "graphLineThickness", function (v) { return Number(v) || 1; });
+  bindPageField("smoothingAlpha", "smoothingAlpha", function (v) { return Number(v) || 0; });
   bindPageField("titleColor", "titleColor");
   bindPageField("valueTextColor", "valueTextColor");
   bindPageField("backgroundColor", "backgroundColor");

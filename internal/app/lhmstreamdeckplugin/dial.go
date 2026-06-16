@@ -380,6 +380,25 @@ func (p *Plugin) updateDialPage(ctx string, settings *dialActionSettings, state 
 		displayValue = p.normalizeForGraph(v, r.Unit(), page.GraphUnit)
 		displayUnit = page.GraphUnit + "/s"
 	}
+
+	// EMA smoothing — same behavior as the normal reading tile (plugin.go),
+	// keyed per page. Threshold eval uses raw v; smoothing affects graph/display.
+	if alpha := page.SmoothingAlpha; alpha > 0 && alpha < 1.0 {
+		p.mu.Lock()
+		prev, ok := p.smoothedValues[pageCtx]
+		if !ok {
+			prev = graphValue
+		}
+		smoothed := alpha*graphValue + (1-alpha)*prev
+		p.smoothedValues[pageCtx] = smoothed
+		p.mu.Unlock()
+		if graphValue != 0 {
+			ratio := smoothed / graphValue
+			graphValue = smoothed
+			displayValue *= ratio
+		}
+	}
+
 	valueTextNoUnit, displayText := p.formatDisplayValue(displayValue, displayUnit, page.Format, hwsensorsservice.ReadingType(r.TypeI()))
 
 	thresholds := p.resolveThresholdsForEval(page.Thresholds, page.SuppressedGlobalIDs, hwsensorsservice.ReadingType(r.TypeI()))
