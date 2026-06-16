@@ -722,7 +722,7 @@ func (p *Plugin) updateTiles(data *actionData) {
 		if !ok {
 			prev = graphValue
 		}
-		smoothed := alpha*graphValue + (1-alpha)*prev
+		smoothed := emaSmooth(alpha, graphValue, prev)
 		p.smoothedValues[data.context] = smoothed
 		p.mu.Unlock()
 		if graphValue != 0 {
