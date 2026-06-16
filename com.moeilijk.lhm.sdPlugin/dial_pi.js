@@ -362,7 +362,7 @@ function addSelectedPage() {
     readingLabel: reading.label,
     title: reading.label,
     min: 0,
-    max: 100,
+    max: 0,
     format: "",
     divisor: "",
     graphUnit: "",

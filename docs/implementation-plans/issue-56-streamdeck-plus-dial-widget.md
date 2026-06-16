@@ -2,8 +2,12 @@
 
 **Issue:** [#56 - StreamDeck+ Dial Widget](https://github.com/moeilijk/lhm-streamdeck/issues/56)
 
-**Status:** Prototype hardware test passed; release scope is being narrowed to
-V1 fixes and clearly separated V2 work.
+**Status:** Prototype hardware test passed on the **14 June prototype only**.
+Code and DeckBridge changes made after that test are **not yet validated**, so no
+feedback item counts as resolved until it is re-validated end-to-end (local
+deploy + hardware approval). This file is the triage archive; the leading,
+validation-driven worklist is
+[issue-56-worklist.md](issue-56-worklist.md).
 
 ---
 
@@ -332,14 +336,15 @@ triage. It exists to prevent source feedback from disappearing into summaries.
     - Motivation: users cannot discover a hidden press action from the current
       UI.
 
-11. **Touch tap should not become an unsolicited default goal.**
-    - Source: hardware feedback observed touch tap did nothing; owner triage
-      says user-requested extras may be supported but must be scoped by the
-      maintainer.
-    - Scope: V1 only if kept as explicit/safe behavior.
-    - Plan: keep any touch/snooze behavior controlled by existing threshold
-      semantics and document or gate it if it is exposed.
-    - Motivation: one tester's preference must not redefine the release goal.
+11. **Touch tap must do the same thing as pressing a tile.**
+    - Source: hardware feedback observed touch tap did nothing; owner decision:
+      a touch tap should have the same function as pressing a normal tile.
+    - Scope: V1 confirmed behavior.
+    - Plan: touch tap snoozes/resumes the active page's threshold alert,
+      identical to the tile `OnKeyDown` behavior. Already implemented in
+      `OnTouchTap`; keep it in sync with the tile press.
+    - Motivation: touch should behave consistently with the rest of the plugin
+      so users do not see a dead touch strip.
 
 12. **Touchscreen swipe must continue switching Stream Deck pages.**
     - Source: hardware test result.
@@ -417,15 +422,14 @@ triage. It exists to prevent source feedback from disappearing into summaries.
     - Motivation: V1 must preserve the normal tile contract for the same
       reading instead of hardcoding dial-specific defaults.
 
-21. **Do not add rotating hardcoded default colors per dial page in V1.**
-    - Source: hardware feedback suggested different default graph colors; owner
-      triage rejected hardcoded color rotation.
-    - Scope: not V1.
-    - Plan: keep normal tile defaults unless the user explicitly changes page
-      styling.
-    - Motivation: the existing theme rule is that the same measurement keeps
-      the same color; Composite per-slot colors are not a precedent for dial
-      page color rotation.
+21. **Per-page default graph color rotation IS in scope.**
+    - Source: reporter suggested each page get a different default graph color
+      (small hardcoded palette, wrap-around) to help navigate the list.
+    - Scope: base functionality (V1).
+    - Plan: assign each dial page a default graph color from a small palette with
+      wrap-around; the user can still override per page.
+    - Correction: an earlier triage wrongly marked this as rejected. That was an
+      incorrect codex triage and is reversed — the feature is wanted.
 
 22. **Verify exact default colors rather than assuming them.**
     - Source: owner triage asked whether defaults actually exist and rejected
@@ -560,10 +564,10 @@ rules for this repository. The Property Inspector should keep the same
 `sdpi-item`, `details`, input, and button patterns already used by comparable
 screens.
 
-Default page color rotation is not a V1 candidate. Normal tiles use one default
-appearance, while Composite Dashboard uses per-slot defaults only to distinguish
-slots inside one composite tile. Dial pages should keep the normal tile defaults
-or explicit user-selected styling.
+Per-page default graph color rotation **is** in scope (base functionality): each
+dial page gets a default color from a small palette with wrap-around, as the
+reporter requested, with per-page override still possible. An earlier triage that
+called this "not a V1 candidate" was an incorrect codex triage and is reversed.
 
 ### Follow-Up Work
 
