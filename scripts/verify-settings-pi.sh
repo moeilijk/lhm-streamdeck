@@ -28,6 +28,9 @@ node scripts/test-settings-pi.js
 echo "test: reading PI functional script"
 node scripts/test-reading-pi.js
 
+echo "test: dial PI functional script"
+node scripts/test-dial-pi.js
+
 echo "test: Go targets (windows)"
 GOOS=windows GOARCH=amd64 GOCACHE=/tmp/go-build go test \
   ./cmd/lhm_streamdeck_plugin \
