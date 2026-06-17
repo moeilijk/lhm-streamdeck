@@ -60,6 +60,38 @@ func TestApplyReadingSettingsUsesSelectedSourceProfile(t *testing.T) {
 	}
 }
 
+func TestRuntimeForSourceReconcilesLoadedSourceProfile(t *testing.T) {
+	const profileID = "companion_wsl"
+
+	p := &Plugin{
+		sources: make(map[string]*sourceRuntime),
+		globalSettings: globalSettings{
+			SourceProfiles: []lhmSourceProfile{
+				{ID: profileID, Name: "Companion WSL", Host: "172.18.175.238", Port: 8085},
+			},
+			DefaultSourceProfileID: profileID,
+		},
+	}
+	p.sources[profileID] = &sourceRuntime{
+		profile: lhmSourceProfile{ID: profileID},
+		hw:      stubHardwareService{},
+	}
+
+	rt := p.runtimeForSource(profileID)
+
+	rt.mu.RLock()
+	profile := rt.profile
+	hw := rt.hw
+	rt.mu.RUnlock()
+
+	if profile.Host != "172.18.175.238" || profile.Port != 8085 {
+		t.Fatalf("runtime profile = %+v, want companion HTTP endpoint", profile)
+	}
+	if hw != nil {
+		t.Fatalf("runtime hardware service was kept after endpoint reconciliation")
+	}
+}
+
 type stubHardwareService struct {
 	readingsBySensor map[string][]hwsensorsservice.Reading
 }

@@ -7,13 +7,25 @@ var websocket = null,
   thresholdAdvancedOpen = {};
 
 var globalThresholds = [];
+var bulkPreviewCandidates = [];
 var snoozeDurationOptions = [300000, 900000, 3600000, 0];
 var dialPageColorPalette = [
   { foregroundColor: "#005128", highlightColor: "#009e00" },
   { foregroundColor: "#003f73", highlightColor: "#00a2ff" },
   { foregroundColor: "#5a3b87", highlightColor: "#b06cff" },
   { foregroundColor: "#6a4a00", highlightColor: "#ffbf33" },
-  { foregroundColor: "#6f1d1b", highlightColor: "#ff5a4f" }
+  { foregroundColor: "#6f1d1b", highlightColor: "#ff5a4f" },
+  { foregroundColor: "#004b50", highlightColor: "#00d6d6" },
+  { foregroundColor: "#4d3d00", highlightColor: "#d8d000" },
+  { foregroundColor: "#00421f", highlightColor: "#39d98a" },
+  { foregroundColor: "#4b184f", highlightColor: "#ff66d8" },
+  { foregroundColor: "#5b2b00", highlightColor: "#ff8a1f" },
+  { foregroundColor: "#173b64", highlightColor: "#66c2ff" },
+  { foregroundColor: "#3f4f13", highlightColor: "#b5e853" },
+  { foregroundColor: "#4f2333", highlightColor: "#ff7aa8" },
+  { foregroundColor: "#1d4a45", highlightColor: "#5ef2c2" },
+  { foregroundColor: "#2f2d6b", highlightColor: "#8f8cff" },
+  { foregroundColor: "#5a3216", highlightColor: "#d98b45" }
 ];
 
 function dialDefaultPageColors(index) {
@@ -170,6 +182,8 @@ function renderPages() {
 
 // Action-level (whole-dial) settings, separate from the per-page settings.
 function renderDialSettings() {
+  setValue("defaultView", currentSettings.defaultView || "fullscreen");
+  setValue("indicatorStyle", currentSettings.indicatorStyle || "auto");
   setValue("separatorWidth", currentSettings.separatorWidth != null ? currentSettings.separatorWidth : 3);
   setValue("separatorColor", currentSettings.separatorColor || "#363e46");
 }
@@ -188,6 +202,8 @@ function updatePageButtons() {
   var addBtn = document.getElementById("addPageBtn");
   var reading = document.getElementById("pageReadingSelect");
   if (addBtn && reading) addBtn.disabled = reading.disabled || !reading.value;
+  var bulkPreviewBtn = document.getElementById("bulkPreviewBtn");
+  if (bulkPreviewBtn && reading) bulkPreviewBtn.disabled = reading.disabled || !reading.value;
 }
 
 function selectedPage() {
@@ -359,6 +375,8 @@ function bindActionField(id, key, parser) {
 }
 
 function bindDialSettings() {
+  bindActionField("defaultView", "defaultView");
+  bindActionField("indicatorStyle", "indicatorStyle");
   bindActionField("separatorWidth", "separatorWidth", function (v) { return Number(v) || 0; });
   bindActionField("separatorColor", "separatorColor");
 }
@@ -805,6 +823,7 @@ function bindSelectedPageSelection() {
   if (sensor && !sensor.dataset.bound) {
     sensor.dataset.bound = "1";
     sensor.addEventListener("change", function () {
+      clearBulkPreview();
       pageSelectionDraft.sensorUid = sensor.value;
       pageSelectionDraft.readingId = "";
       populateSelectedPageReadings();
@@ -813,25 +832,16 @@ function bindSelectedPageSelection() {
   if (reading && !reading.dataset.bound) {
     reading.dataset.bound = "1";
     reading.addEventListener("change", function () {
+      clearBulkPreview();
       pageSelectionDraft.readingId = String(reading.value || "");
       updatePageButtons();
     });
   }
 }
 
-function addSelectedPage(event) {
-  if (event && typeof event.preventDefault === "function") event.preventDefault();
-  if (event && typeof event.stopPropagation === "function") event.stopPropagation();
-  var sensorSel = document.getElementById("pageSensorSelect");
-  var readingSel = document.getElementById("pageReadingSelect");
-  if (!sensorSel || !readingSel) return;
-  var sensorUid = pageSelectionDraft.sensorUid || sensorSel.value;
-  var readingId = pageSelectionDraft.readingId || readingSel.value;
-  var readings = readingsForSensor(sensorUid);
-  var reading = readings.find(function (item) { return String(item.id) === String(readingId); });
-  if (!reading) return;
-  var pageColors = dialDefaultPageColors(currentSettings.pages.length);
-  currentSettings.pages.push(normalizePage({
+function pageFromReading(sensorUid, reading, index) {
+  var pageColors = dialDefaultPageColors(index);
+  return normalizePage({
     sourceProfileId: currentSettings.sourceProfileId || "",
     sensorUid: sensorUid,
     readingId: String(reading.id),
@@ -857,7 +867,25 @@ function addSelectedPage(event) {
     currentThresholdId: "",
     textStroke: false,
     textStrokeColor: "#000000"
-  }));
+  });
+}
+
+function selectedDraftReading() {
+  var sensorSel = document.getElementById("pageSensorSelect");
+  var readingSel = document.getElementById("pageReadingSelect");
+  if (!sensorSel || !readingSel) return null;
+  var sensorUid = pageSelectionDraft.sensorUid || sensorSel.value;
+  var readingId = pageSelectionDraft.readingId || readingSel.value;
+  var reading = readingsForSensor(sensorUid).find(function (item) { return String(item.id) === String(readingId); });
+  return reading ? { sensorUid: sensorUid, reading: reading } : null;
+}
+
+function addSelectedPage(event) {
+  if (event && typeof event.preventDefault === "function") event.preventDefault();
+  if (event && typeof event.stopPropagation === "function") event.stopPropagation();
+  var selected = selectedDraftReading();
+  if (!selected) return;
+  currentSettings.pages.push(pageFromReading(selected.sensorUid, selected.reading, currentSettings.pages.length));
   currentSettings.activeIndex = currentSettings.pages.length - 1;
   saveSettings();
 }
@@ -867,6 +895,178 @@ function bindAddPageControl() {
   if (!addBtn || addBtn.dataset.bound) return;
   addBtn.dataset.bound = "1";
   addBtn.addEventListener("click", addSelectedPage);
+}
+
+function sensorByUid(uid) {
+  return (currentCatalog.sensors || []).find(function (sensor) {
+    return sensor.uid === uid;
+  }) || null;
+}
+
+function bulkMatchText(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function bulkNumberedReadingStem(label) {
+  var normalized = bulkMatchText(label);
+  var match = normalized.match(/^(.*?)(?:\s*#\s*|\s+)(\d+)$/);
+  if (!match) return "";
+  return match[1].trim();
+}
+
+function sameBulkField(left, right) {
+  var l = bulkMatchText(left);
+  var r = bulkMatchText(right);
+  return !l || !r || l === r;
+}
+
+function isMatchingBulkReading(selected, reading) {
+  var selectedLabel = bulkMatchText(selected.label);
+  var readingLabel = bulkMatchText(reading.label);
+  if (selectedLabel && readingLabel === selectedLabel) {
+    return sameBulkField(selected.type, reading.type) && sameBulkField(selected.unit, reading.unit);
+  }
+
+  return false;
+}
+
+function isMatchingNumberedBulkReading(selected, reading) {
+  var selectedStem = bulkNumberedReadingStem(selected.label);
+  if (!selectedStem) return false;
+  return bulkNumberedReadingStem(reading.label) === selectedStem &&
+    sameBulkField(selected.type, reading.type) &&
+    sameBulkField(selected.unit, reading.unit);
+}
+
+function bulkCandidateKey(sensorUid, readingId, sourceProfileId) {
+  return (sourceProfileId || currentSettings.sourceProfileId || "") + ":" + sensorUid + ":" + String(readingId);
+}
+
+function isSelectedBulkCandidate(selected, sensorUid, reading) {
+  return selected &&
+    selected.sensorUid === sensorUid &&
+    String(selected.reading.id) === String(reading.id);
+}
+
+function existingBulkPageKeys() {
+  var seen = {};
+  (currentSettings.pages || []).forEach(function (page) {
+    if (!page || !page.sensorUid || page.readingId == null) return;
+    seen[bulkCandidateKey(page.sensorUid, page.readingId, page.sourceProfileId)] = true;
+  });
+  return seen;
+}
+
+function buildBulkCandidates(rule) {
+  var selected = selectedDraftReading();
+  if (!selected) return [];
+  var seen = existingBulkPageKeys();
+  var candidates = [];
+  function addCandidate(sensorUid, reading) {
+    var key = bulkCandidateKey(sensorUid, reading.id, currentSettings.sourceProfileId);
+    if (seen[key]) return;
+    seen[key] = true;
+    var sensor = sensorByUid(sensorUid) || {};
+    candidates.push({
+      sensorUid: sensorUid,
+      reading: reading,
+      label: (sensor.name || sensorUid) + " — " + (reading.label || reading.id)
+    });
+  }
+
+  if (rule === "matching-reading") {
+    (currentCatalog.readings || []).forEach(function (reading) {
+      if (isSelectedBulkCandidate(selected, reading.sensorUid, reading)) return;
+      if (isMatchingBulkReading(selected.reading, reading)) addCandidate(reading.sensorUid, reading);
+    });
+    return candidates;
+  }
+
+  if (rule === "matching-numbered-readings") {
+    (currentCatalog.readings || []).forEach(function (reading) {
+      if (isSelectedBulkCandidate(selected, reading.sensorUid, reading)) return;
+      if (isMatchingNumberedBulkReading(selected.reading, reading)) addCandidate(reading.sensorUid, reading);
+    });
+    return candidates;
+  }
+
+  readingsForSensor(selected.sensorUid).forEach(function (reading) {
+    addCandidate(selected.sensorUid, reading);
+  });
+  return candidates;
+}
+
+function renderBulkPreview(candidates) {
+  bulkPreviewCandidates = candidates || [];
+  var list = document.getElementById("bulkPreviewList");
+  var addBtn = document.getElementById("bulkAddBtn");
+  if (!list) return;
+  list.innerHTML = "";
+  bulkPreviewCandidates.forEach(function (candidate, index) {
+    var opt = document.createElement("option");
+    opt.value = String(index);
+    opt.textContent = candidate.label;
+    opt.selected = true;
+    list.appendChild(opt);
+  });
+  if (addBtn) addBtn.disabled = bulkPreviewCandidates.length === 0;
+}
+
+function clearBulkPreview() {
+  renderBulkPreview([]);
+}
+
+function generateBulkPreview() {
+  var rule = document.getElementById("bulkRule");
+  renderBulkPreview(buildBulkCandidates(rule ? rule.value : "sensor-readings"));
+}
+
+function addBulkSelectedPages() {
+  var list = document.getElementById("bulkPreviewList");
+  if (!list) return;
+  var selected = Array.from(list.options).filter(function (opt) { return opt.selected; });
+  if (selected.length === 0) return;
+  var firstIndex = currentSettings.pages.length;
+  var seen = existingBulkPageKeys();
+  var added = 0;
+  selected.forEach(function (opt) {
+    var candidate = bulkPreviewCandidates[parseInt(opt.value, 10)];
+    if (!candidate) return;
+    var key = bulkCandidateKey(candidate.sensorUid, candidate.reading.id, currentSettings.sourceProfileId);
+    if (seen[key]) return;
+    seen[key] = true;
+    currentSettings.pages.push(pageFromReading(candidate.sensorUid, candidate.reading, currentSettings.pages.length));
+    added++;
+  });
+  if (added > 0) {
+    currentSettings.activeIndex = firstIndex;
+    saveSettings();
+  }
+  renderBulkPreview([]);
+}
+
+function bindBulkControls() {
+  var previewBtn = document.getElementById("bulkPreviewBtn");
+  var addBtn = document.getElementById("bulkAddBtn");
+  var rule = document.getElementById("bulkRule");
+  if (rule && !rule.dataset.bound) {
+    rule.dataset.bound = "1";
+    rule.addEventListener("change", clearBulkPreview);
+  }
+  if (previewBtn && !previewBtn.dataset.bound) {
+    previewBtn.dataset.bound = "1";
+    previewBtn.addEventListener("click", function (e) {
+      e.preventDefault();
+      generateBulkPreview();
+    });
+  }
+  if (addBtn && !addBtn.dataset.bound) {
+    addBtn.dataset.bound = "1";
+    addBtn.addEventListener("click", function (e) {
+      e.preventDefault();
+      addBulkSelectedPages();
+    });
+  }
 }
 
 function removeSelectedPage() {
@@ -905,4 +1105,5 @@ document.addEventListener("DOMContentLoaded", function () {
   bindSnoozeControls();
   bindThresholdControls();
   bindSelectedPageSelection();
+  bindBulkControls();
 });

@@ -34,6 +34,12 @@ node scripts/test-dial-pi.js
 if curl -fsS "${DECKBRIDGE_URL:-http://127.0.0.1:34075}/api/state" >/dev/null 2>&1; then
   echo "test: DeckBridge live dial e2e flow"
   node scripts/test-deckbridge-dial-live.js
+  if command -v powershell.exe >/dev/null 2>&1 && curl -fsS "http://127.0.0.1:9998/data.json" >/dev/null 2>&1; then
+    echo "test: DeckBridge browser bulk e2e flow"
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-deckbridge-bulk-browser-e2e.ps1
+  else
+    echo "skip: DeckBridge browser bulk e2e flow (PowerShell or Bulk E2E source not reachable)"
+  fi
 else
   echo "skip: DeckBridge live dial e2e flow (DeckBridge not reachable)"
 fi

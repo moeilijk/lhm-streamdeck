@@ -10,10 +10,18 @@
   <link rel="stylesheet" href="css/local.css" />
   <style>
     #error { display: none; }
-    #sensorSearch, #readingSelect, #pageList { max-width: 226px; }
-    #readingSelect, #pageList { font-family: monospace; }
-    #pageList option { color: #d8d8d8; }
-    #pageList option:checked {
+    #sensorSearch, #readingSelect, #pageList, #bulkPreviewList { max-width: 226px; }
+    #readingSelect, #pageList, #bulkPreviewList { font-family: monospace; }
+    #pageList, #bulkPreviewList {
+      background: #3d3d3d;
+      color: #d8d8d8;
+      border: 1px solid #555;
+    }
+    #pageList option, #bulkPreviewList option {
+      background: #3d3d3d;
+      color: #d8d8d8;
+    }
+    #pageList option:checked, #bulkPreviewList option:checked {
       background: #007aff linear-gradient(0deg, #007aff 0%, #007aff 100%);
       color: #ffffff;
     }
@@ -40,7 +48,7 @@
 
     <div class="sdpi-item" id="pluginBuildRef">
       <div class="sdpi-item-label">Build</div>
-      <div class="sdpi-item-value" title="Plugin V3 feature commit 251dff3 plus marker update">251dff3 + V3</div>
+      <div class="sdpi-item-value" title="Plugin commit 3c5e9b5 plus local V5 prep fixes">3c5e9b5 + V5-prep.12</div>
     </div>
 
     <div class="sdpi-item">
@@ -92,6 +100,32 @@
       </div>
     </div>
 
+    <details>
+      <summary>Bulk Add</summary>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Rule</div>
+        <select class="sdpi-item-value select" id="bulkRule">
+          <option value="sensor-readings">All readings from sensor</option>
+          <option value="matching-reading">This reading across sensors</option>
+          <option value="matching-numbered-readings">Matching numbered readings</option>
+        </select>
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label empty-label">Action</div>
+        <div class="sdpi-item-value dial-actions">
+          <button id="bulkPreviewBtn" type="button" disabled>Preview</button>
+          <button id="bulkAddBtn" type="button" disabled>Add Selected</button>
+        </div>
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Preview</div>
+        <select class="sdpi-item-value select" id="bulkPreviewList" size="6" multiple></select>
+      </div>
+    </details>
+
     <div class="sdpi-item">
       <div class="sdpi-item-label">Pages</div>
       <select class="sdpi-item-value select" id="pageList" size="8"></select>
@@ -100,6 +134,24 @@
     <div class="sdpi-item">
       <div class="sdpi-item-label">Dial press</div>
       <div class="sdpi-item-value">Toggle overview</div>
+    </div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Default view</div>
+      <select class="sdpi-item-value select" id="defaultView">
+        <option value="fullscreen">Fullscreen</option>
+        <option value="overview">Overview</option>
+      </select>
+    </div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Indicator</div>
+      <select class="sdpi-item-value select" id="indicatorStyle">
+        <option value="auto">Auto</option>
+        <option value="dots">Dots</option>
+        <option value="count">Count</option>
+        <option value="off">Off</option>
+      </select>
     </div>
 
     <div class="sdpi-item">
@@ -433,8 +485,8 @@
     </template>
   </div>
 
-  <script src="pi_utils.js"></script>
-  <script src="dial_pi.js"></script>
+  <script src="pi_utils.js?v=V5-prep.12"></script>
+  <script src="dial_pi.js?v=V5-prep.12"></script>
 </body>
 
 </html>

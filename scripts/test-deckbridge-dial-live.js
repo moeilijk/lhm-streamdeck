@@ -75,6 +75,17 @@ function paletteColor(index) {
     { foregroundColor: "#5a3b87", highlightColor: "#b06cff" },
     { foregroundColor: "#6a4a00", highlightColor: "#ffbf33" },
     { foregroundColor: "#6f1d1b", highlightColor: "#ff5a4f" },
+    { foregroundColor: "#004b50", highlightColor: "#00d6d6" },
+    { foregroundColor: "#4d3d00", highlightColor: "#d8d000" },
+    { foregroundColor: "#00421f", highlightColor: "#39d98a" },
+    { foregroundColor: "#4b184f", highlightColor: "#ff66d8" },
+    { foregroundColor: "#5b2b00", highlightColor: "#ff8a1f" },
+    { foregroundColor: "#173b64", highlightColor: "#66c2ff" },
+    { foregroundColor: "#3f4f13", highlightColor: "#b5e853" },
+    { foregroundColor: "#4f2333", highlightColor: "#ff7aa8" },
+    { foregroundColor: "#1d4a45", highlightColor: "#5ef2c2" },
+    { foregroundColor: "#2f2d6b", highlightColor: "#8f8cff" },
+    { foregroundColor: "#5a3216", highlightColor: "#d98b45" },
   ];
   return palette[index % palette.length];
 }
@@ -479,6 +490,249 @@ async function testPiThresholdAddFlow(ws, slot) {
   }, "PI threshold Add to persist through DeckBridge state");
 }
 
+async function testPiViewOptionsFlow(ws, slot) {
+  const state = await fetchJson("/api/state");
+  const liveSlot = findSlot(state, slot.context);
+  assert(liveSlot, "dial slot missing before view options test");
+  const next = clone(liveSlot.settings || { activeIndex: 0, pages: [] });
+  next.defaultView = "overview";
+  next.indicatorStyle = "count";
+  await sendDialSettings(ws, slot, next);
+  await waitForSlot(slot.context, (updated) => {
+    return updated.settings &&
+      updated.settings.defaultView === "overview" &&
+      updated.settings.indicatorStyle === "count";
+  }, "PI view options persist through DeckBridge state");
+}
+
+async function testPiBulkAddFlow(ws, slot, sourcePage) {
+  const state = await fetchJson("/api/state");
+  const liveSlot = findSlot(state, slot.context);
+  assert(liveSlot, "dial slot missing before bulk Add test");
+  const original = { activeIndex: 0, pages: [] };
+  await sendDialSettings(ws, slot, original);
+  await waitForSlot(slot.context, (updated) => {
+    const pages = (updated.settings && updated.settings.pages) || [];
+    return pages.length === 0 && updated.settings.activeIndex === 0;
+  }, "PI bulk Add empty start state");
+  const originalCount = (original.pages || []).length;
+  const piUtils = await fetchText("/com.moeilijk.lhm/pi_utils.js");
+  const dialPi = await fetchText("/com.moeilijk.lhm/dial_pi.js");
+  const listeners = {};
+  const bulkPreviewBtn = {
+    dataset: {},
+    addEventListener(type, handler) { listeners["preview:" + type] = handler; },
+  };
+  const bulkAddBtn = {
+    dataset: {},
+    disabled: true,
+    addEventListener(type, handler) { listeners["add:" + type] = handler; },
+  };
+  const bulkRule = {
+    value: "sensor-readings",
+    dataset: {},
+    addEventListener(type, handler) { listeners["rule:" + type] = handler; },
+  };
+  const pageSensorSelect = { value: sourcePage.sensorUid };
+  const pageReadingSelect = { value: String(sourcePage.readingId), disabled: false };
+  const previewOptions = [];
+  const bulkPreviewList = {
+    options: previewOptions,
+    appendChild(option) { previewOptions.push(option); },
+  };
+  Object.defineProperty(bulkPreviewList, "innerHTML", {
+    set() { previewOptions.length = 0; },
+    get() { return ""; },
+  });
+  const sandbox = {
+    console,
+    JSON,
+    setTimeout,
+    clearTimeout,
+    navigator: { appVersion: "DeckBridgeLiveTest" },
+    location: { hostname: "127.0.0.1" },
+    document: {
+      querySelector() { return null; },
+      querySelectorAll() { return []; },
+      getElementById(id) {
+        if (id === "bulkPreviewBtn") return bulkPreviewBtn;
+        if (id === "bulkAddBtn") return bulkAddBtn;
+        if (id === "bulkRule") return bulkRule;
+        if (id === "bulkPreviewList") return bulkPreviewList;
+        if (id === "pageSensorSelect") return pageSensorSelect;
+        if (id === "pageReadingSelect") return pageReadingSelect;
+        if (id === "pageList") return { selectedIndex: 0 };
+        return null;
+      },
+      createElement() { return { value: "", textContent: "", selected: false }; },
+      addEventListener() {},
+      body: { appendChild() {} },
+    },
+    window: null,
+    websocket: ws,
+    uuid: slot.context,
+    actionInfo: { action: slot.actionId },
+    currentSettings: clone(original),
+    currentCatalog: {
+      sensors: [{ uid: sourcePage.sensorUid, name: "E2E Sensor" }],
+      readings: [
+        {
+          id: String(sourcePage.readingId),
+          sensorUid: sourcePage.sensorUid,
+          label: (sourcePage.readingLabel || sourcePage.title) + " Bulk A",
+          unit: "%",
+          type: "Usage",
+        },
+        {
+          id: String(Number(sourcePage.readingId) + 1),
+          sensorUid: sourcePage.sensorUid,
+          label: (sourcePage.readingLabel || sourcePage.title) + " Bulk B",
+          unit: "%",
+          type: "Usage",
+        },
+      ],
+    },
+    pageSelectionDraft: {
+      sensorUid: sourcePage.sensorUid,
+      readingId: String(sourcePage.readingId),
+    },
+    renderPages() {},
+  };
+  sandbox.window = sandbox;
+  sandbox.addEventListener = () => {};
+  vm.createContext(sandbox);
+  vm.runInContext(piUtils, sandbox);
+  vm.runInContext(dialPi, sandbox);
+  sandbox.websocket = ws;
+  sandbox.uuid = slot.context;
+  sandbox.actionInfo = { action: slot.actionId };
+  sandbox.currentSettings = clone(original);
+  const selectedLabel = (sourcePage.readingLabel || sourcePage.title) + " Bulk #1";
+  const otherLabel = (sourcePage.readingLabel || sourcePage.title) + " Bulk #2";
+  const otherSensorUid = sourcePage.sensorUid + "-other";
+  const wrongUnitSensorUid = sourcePage.sensorUid + "-wrong-unit";
+  sandbox.currentCatalog = {
+    sensors: [
+      { uid: sourcePage.sensorUid, name: "E2E Sensor" },
+      { uid: otherSensorUid, name: "E2E Sensor Other" },
+      { uid: wrongUnitSensorUid, name: "E2E Sensor Wrong Unit" },
+    ],
+    readings: [
+      {
+        id: String(sourcePage.readingId),
+        sensorUid: sourcePage.sensorUid,
+        label: selectedLabel,
+        unit: "%",
+        type: "Usage",
+      },
+      {
+        id: String(Number(sourcePage.readingId) + 1),
+        sensorUid: sourcePage.sensorUid,
+        label: otherLabel,
+        unit: "%",
+        type: "Usage",
+      },
+      {
+        id: String(Number(sourcePage.readingId) + 100),
+        sensorUid: otherSensorUid,
+        label: selectedLabel,
+        unit: "%",
+        type: "Usage",
+      },
+      {
+        id: String(Number(sourcePage.readingId) + 101),
+        sensorUid: otherSensorUid,
+        label: otherLabel,
+        unit: "%",
+        type: "Usage",
+      },
+      {
+        id: String(Number(sourcePage.readingId) + 200),
+        sensorUid: wrongUnitSensorUid,
+        label: selectedLabel,
+        unit: "W",
+        type: "Power",
+      },
+    ],
+  };
+  sandbox.pageSelectionDraft = {
+    sensorUid: sourcePage.sensorUid,
+    readingId: String(sourcePage.readingId),
+  };
+  sandbox.renderPages = () => {};
+
+  sandbox.bindBulkControls();
+  assert(typeof listeners["preview:click"] === "function", "Bulk Preview click handler was not bound");
+  assert(typeof listeners["add:click"] === "function", "Bulk Add click handler was not bound");
+  listeners["preview:click"]({ preventDefault() {} });
+  assert(previewOptions.length === 2, "All-readings preview did not render selected-sensor candidates");
+  assert(previewOptions.every((option) => option.textContent.indexOf("E2E Sensor — ") === 0), "All-readings preview included another sensor");
+  assert(previewOptions.some((option) => option.textContent.endsWith(selectedLabel)), "All-readings preview missing selected reading");
+  assert(previewOptions.some((option) => option.textContent.endsWith(otherLabel)), "All-readings preview missing other selected-sensor reading");
+
+  bulkRule.value = "matching-reading";
+  listeners["rule:change"]();
+  assert(previewOptions.length === 0, "Bulk rule change did not clear stale preview");
+  assert(bulkAddBtn.disabled === true, "Bulk rule change did not disable stale Add");
+  listeners["add:click"]({ preventDefault() {} });
+
+  bulkRule.value = "sensor-readings";
+  listeners["rule:change"]();
+  listeners["preview:click"]({ preventDefault() {} });
+  assert(previewOptions.length === 2, "All-readings preview did not regenerate after rule invalidation");
+  previewOptions[1].selected = false;
+  listeners["add:click"]({ preventDefault() {} });
+
+  const afterAllReadings = await waitForSlot(slot.context, (updated) => {
+    const pages = (updated.settings && updated.settings.pages) || [];
+    return pages.length === originalCount + 1 &&
+      pages.some((page) => (page.readingLabel || "") === selectedLabel) &&
+      !pages.some((page) => (page.readingLabel || "") === otherLabel);
+  }, "PI bulk Add to persist selected preview through DeckBridge state");
+
+  sandbox.currentSettings = clone(afterAllReadings.settings);
+  bulkRule.value = "matching-reading";
+  listeners["preview:click"]({ preventDefault() {} });
+  const matchingLabels = previewOptions.map((option) => option.textContent).join("|");
+  assert(previewOptions.length === 1, "Matching-reading preview did not exclude already configured exact candidate");
+  assert(!matchingLabels.includes("E2E Sensor — " + selectedLabel), "Matching-reading preview still included configured selected sensor reading");
+  assert(matchingLabels.includes("E2E Sensor Other — " + selectedLabel), "Matching-reading preview missing other sensor same reading");
+  assert(!matchingLabels.includes(otherLabel), "Matching-reading preview included another reading");
+  assert(!matchingLabels.includes("Wrong Unit"), "Matching-reading preview included same label with different type/unit");
+  listeners["add:click"]({ preventDefault() {} });
+
+  await waitForSlot(slot.context, (updated) => {
+    const added = ((updated.settings && updated.settings.pages) || []).slice(originalCount);
+    return added.length === 2 &&
+      added.filter((page) => (page.readingLabel || "") === selectedLabel).length === 2 &&
+      !added.some((page) => (page.readingLabel || "") === otherLabel);
+  }, "PI matching-reading bulk Add to persist exact cross-sensor pages");
+
+  const afterExact = await waitForSlot(slot.context, (updated) => {
+    const pages = (updated.settings && updated.settings.pages) || [];
+    return pages.length === originalCount + 2;
+  }, "PI exact bulk Add state settled");
+
+  sandbox.currentSettings = clone(afterExact.settings);
+  bulkRule.value = "matching-numbered-readings";
+  listeners["rule:change"]();
+  listeners["preview:click"]({ preventDefault() {} });
+  const numberedLabels = previewOptions.map((option) => option.textContent).join("|");
+  assert(previewOptions.length === 2, "Matching-numbered preview did not exclude already configured numbered candidates");
+  assert(!numberedLabels.includes("E2E Sensor — " + selectedLabel), "Matching-numbered preview still included selected sensor #1");
+  assert(numberedLabels.includes("E2E Sensor — " + otherLabel), "Matching-numbered preview missing selected sensor #2");
+  assert(!numberedLabels.includes("E2E Sensor Other — " + selectedLabel), "Matching-numbered preview still included other sensor #1");
+  assert(numberedLabels.includes("E2E Sensor Other — " + otherLabel), "Matching-numbered preview missing other sensor #2");
+  assert(!numberedLabels.includes("Wrong Unit"), "Matching-numbered preview included same numbered label with different type/unit");
+  listeners["add:click"]({ preventDefault() {} });
+
+  await waitForSlot(slot.context, (updated) => {
+    const added = ((updated.settings && updated.settings.pages) || []).slice(originalCount + 2);
+    return added.length === 2 &&
+      added.every((page) => (page.readingLabel || "") === otherLabel);
+  }, "PI matching-numbered bulk Add to persist selected numbered pages");
+}
+
 async function testGlobalThresholdFlow(settingsWs, settingsSlot, dialWs, dialSlot, sourcePage) {
   const name = "E2E Global Threshold";
   let globalId = "";
@@ -557,6 +811,8 @@ async function main() {
   const settingsWs = await openPropertyInspectorSocket(settingsSlot.context);
   try {
     await testPiAddFlow(ws, slot, sourcePage);
+    await testPiViewOptionsFlow(ws, slot);
+    await testPiBulkAddFlow(ws, slot, sourcePage);
 
     const controlled = controlledSettings(sourcePage);
     await sendDialSettings(ws, slot, controlled);

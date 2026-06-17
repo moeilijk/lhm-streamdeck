@@ -66,6 +66,45 @@ func TestDialOverviewIndices(t *testing.T) {
 	}
 }
 
+func TestDialOverviewRectsKeepPreviewAspect(t *testing.T) {
+	for _, count := range []int{1, 2, 3} {
+		rects := dialOverviewRects(count)
+		if len(rects) != count {
+			t.Fatalf("count %d returned %d rects", count, len(rects))
+		}
+		for _, rect := range rects {
+			inner := rect.Inset(3)
+			if inner.Dx() != 2*inner.Dy() {
+				t.Fatalf("inner rect %v ratio = %d:%d, want 2:1", inner, inner.Dx(), inner.Dy())
+			}
+		}
+		for i := 1; i < len(rects); i++ {
+			if rects[i-1].Max.X > rects[i].Min.X {
+				t.Fatalf("overview rects overlap: %v then %v", rects[i-1], rects[i])
+			}
+		}
+	}
+	rects := dialOverviewRects(3)
+	active := rects[1]
+	if active.Min.X+active.Dx()/2 != dialWidth/2 {
+		t.Fatalf("active overview rect %v is not centered on the dial canvas", active)
+	}
+}
+
+func TestCenteredAspectCrop(t *testing.T) {
+	src := image.Rect(0, 0, 200, 100)
+	if got := centeredAspectCrop(src, image.Rect(0, 0, 100, 50)); got != src {
+		t.Fatalf("same ratio crop = %v, want %v", got, src)
+	}
+	if got := centeredAspectCrop(src, image.Rect(0, 0, 100, 100)); got != image.Rect(50, 0, 150, 100) {
+		t.Fatalf("square target crop = %v, want centered width crop", got)
+	}
+	tallSrc := image.Rect(0, 0, 100, 100)
+	if got := centeredAspectCrop(tallSrc, image.Rect(0, 0, 200, 100)); got != image.Rect(0, 25, 100, 75) {
+		t.Fatalf("wide target crop = %v, want centered height crop", got)
+	}
+}
+
 func TestEmaSmooth(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -118,7 +157,6 @@ func TestDialColor(t *testing.T) {
 func TestDialDefaultPageColors(t *testing.T) {
 	firstFG, firstHL := dialDefaultPageColors(0)
 	secondFG, secondHL := dialDefaultPageColors(1)
-	wrappedFG, wrappedHL := dialDefaultPageColors(len(dialPageColorPalette))
 
 	if firstFG == "" || firstHL == "" {
 		t.Fatalf("first page colors must be set")
@@ -126,6 +164,16 @@ func TestDialDefaultPageColors(t *testing.T) {
 	if firstFG == secondFG || firstHL == secondHL {
 		t.Fatalf("second page should get a different default color")
 	}
+	seen := make(map[string]bool)
+	for i := 0; i < 16; i++ {
+		fg, hl := dialDefaultPageColors(i)
+		key := fg + "|" + hl
+		if seen[key] {
+			t.Fatalf("page color %d repeated too early: %s", i, key)
+		}
+		seen[key] = true
+	}
+	wrappedFG, wrappedHL := dialDefaultPageColors(16)
 	if wrappedFG != firstFG || wrappedHL != firstHL {
 		t.Fatalf("palette wrap = (%s,%s), want first (%s,%s)", wrappedFG, wrappedHL, firstFG, firstHL)
 	}
@@ -168,7 +216,7 @@ func TestDialSeparatorDynamicWidthAndColor(t *testing.T) {
 	y := dialHeight / 2
 
 	// width 0 = off: edges keep the original graph pixels.
-	off, err := decorateDialImage(fixture(), 0, 1, false, 0, sep)
+	off, err := decorateDialImage(fixture(), 0, 1, false, "auto", 0, sep)
 	if err != nil {
 		t.Fatalf("decorate off: %v", err)
 	}
@@ -177,7 +225,7 @@ func TestDialSeparatorDynamicWidthAndColor(t *testing.T) {
 	}
 
 	// width 5 + color: a 5px band of that color on each edge, center untouched.
-	on, err := decorateDialImage(fixture(), 0, 1, false, 5, sep)
+	on, err := decorateDialImage(fixture(), 0, 1, false, "auto", 5, sep)
 	if err != nil {
 		t.Fatalf("decorate on: %v", err)
 	}
@@ -217,11 +265,29 @@ func TestDialSeparatorResolve(t *testing.T) {
 	}
 }
 
+func TestDialViewOptionsResolve(t *testing.T) {
+	if got := dialIndicatorStyle(&dialActionSettings{}); got != "auto" {
+		t.Fatalf("unset indicator style = %q, want auto", got)
+	}
+	if got := dialIndicatorStyle(&dialActionSettings{IndicatorStyle: "count"}); got != "count" {
+		t.Fatalf("count indicator style = %q", got)
+	}
+	if got := dialIndicatorStyle(&dialActionSettings{IndicatorStyle: "bad"}); got != "auto" {
+		t.Fatalf("bad indicator style = %q, want auto", got)
+	}
+	if dialDefaultOverview(&dialActionSettings{}) {
+		t.Fatalf("unset default view must start fullscreen")
+	}
+	if !dialDefaultOverview(&dialActionSettings{DefaultView: "overview"}) {
+		t.Fatalf("overview default view must start in overview")
+	}
+}
+
 func TestDrawDialPageIndicatorUsesDotsForSmallPageCounts(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, dialWidth, dialHeight))
 	fillRect(img, img.Bounds(), color.RGBA{0, 0, 0, 255})
 
-	drawDialPageIndicator(img, 1, 3)
+	drawDialPageIndicator(img, 1, 3, "auto")
 
 	activePixel := color.RGBAModel.Convert(img.At(dialWidth/2, dialHeight-6)).(color.RGBA)
 	if activePixel == (color.RGBA{0, 0, 0, 255}) {

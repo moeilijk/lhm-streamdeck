@@ -45,6 +45,17 @@ var dialPageColorPalette = []struct {
 	{foreground: "#5a3b87", highlight: "#b06cff"},
 	{foreground: "#6a4a00", highlight: "#ffbf33"},
 	{foreground: "#6f1d1b", highlight: "#ff5a4f"},
+	{foreground: "#004b50", highlight: "#00d6d6"},
+	{foreground: "#4d3d00", highlight: "#d8d000"},
+	{foreground: "#00421f", highlight: "#39d98a"},
+	{foreground: "#4b184f", highlight: "#ff66d8"},
+	{foreground: "#5b2b00", highlight: "#ff8a1f"},
+	{foreground: "#173b64", highlight: "#66c2ff"},
+	{foreground: "#3f4f13", highlight: "#b5e853"},
+	{foreground: "#4f2333", highlight: "#ff7aa8"},
+	{foreground: "#1d4a45", highlight: "#5ef2c2"},
+	{foreground: "#2f2d6b", highlight: "#8f8cff"},
+	{foreground: "#5a3216", highlight: "#d98b45"},
 }
 
 func decodeDialSettings(raw *json.RawMessage) (dialActionSettings, error) {
@@ -311,8 +322,24 @@ func dialSeparatorColor(s *dialActionSettings) color.RGBA {
 	return *dialColor(hex, color.RGBA{54, 62, 70, 255})
 }
 
-func drawDialPageIndicator(img *image.RGBA, active, count int) {
-	if count <= 1 {
+func dialIndicatorStyle(s *dialActionSettings) string {
+	if s == nil {
+		return "auto"
+	}
+	switch s.IndicatorStyle {
+	case "off", "dots", "count", "auto":
+		return s.IndicatorStyle
+	default:
+		return "auto"
+	}
+}
+
+func dialDefaultOverview(s *dialActionSettings) bool {
+	return s != nil && s.DefaultView == "overview"
+}
+
+func drawDialPageIndicator(img *image.RGBA, active, count int, style string) {
+	if count <= 1 || style == "off" {
 		return
 	}
 	if active < 0 {
@@ -324,7 +351,10 @@ func drawDialPageIndicator(img *image.RGBA, active, count int) {
 	inactive := color.RGBA{100, 108, 116, 255}
 	activeColor := color.RGBA{190, 198, 206, 255}
 	y := dialHeight - 7
-	if count <= 9 {
+	if style == "" {
+		style = "auto"
+	}
+	if style == "dots" || (style == "auto" && count <= 9) {
 		dotW, dotH, gap := 4, 3, 4
 		activeW := 10
 		total := 0
@@ -338,17 +368,24 @@ func drawDialPageIndicator(img *image.RGBA, active, count int) {
 				total += dotW
 			}
 		}
-		x := (dialWidth - total) / 2
-		for i := 0; i < count; i++ {
-			w := dotW
-			c := inactive
-			if i == active {
-				w = activeW
-				c = activeColor
+		if total > dialWidth-20 {
+			style = "count"
+		} else {
+			x := (dialWidth - total) / 2
+			for i := 0; i < count; i++ {
+				w := dotW
+				c := inactive
+				if i == active {
+					w = activeW
+					c = activeColor
+				}
+				fillRect(img, image.Rect(x, y, x+w, y+dotH), c)
+				x += w + gap
 			}
-			fillRect(img, image.Rect(x, y, x+w, y+dotH), c)
-			x += w + gap
+			return
 		}
+	}
+	if style != "count" && style != "auto" {
 		return
 	}
 
@@ -359,7 +396,46 @@ func drawDialPageIndicator(img *image.RGBA, active, count int) {
 	drawCenteredText(img, face, &activeColor, fmt.Sprintf("%d/%d", active+1, count), dialHeight-3)
 }
 
-func decorateDialImage(b []byte, active, count int, showIndicator bool, sepWidth int, sepColor color.RGBA) ([]byte, error) {
+func centeredAspectCrop(src image.Rectangle, dst image.Rectangle) image.Rectangle {
+	if src.Empty() || dst.Empty() {
+		return src
+	}
+	srcW, srcH := src.Dx(), src.Dy()
+	dstW, dstH := dst.Dx(), dst.Dy()
+	if srcW*dstH > dstW*srcH {
+		cropW := srcH * dstW / dstH
+		x0 := src.Min.X + (srcW-cropW)/2
+		return image.Rect(x0, src.Min.Y, x0+cropW, src.Max.Y)
+	}
+	if srcW*dstH < dstW*srcH {
+		cropH := srcW * dstH / dstW
+		y0 := src.Min.Y + (srcH-cropH)/2
+		return image.Rect(src.Min.X, y0, src.Max.X, y0+cropH)
+	}
+	return src
+}
+
+func dialOverviewRects(count int) []image.Rectangle {
+	if count <= 0 {
+		return nil
+	}
+	if count == 1 {
+		return []image.Rectangle{image.Rect(17, 8, 183, 94)}
+	}
+	if count == 2 {
+		return []image.Rectangle{
+			image.Rect(7, 23, 93, 69),
+			image.Rect(107, 23, 193, 69),
+		}
+	}
+	return []image.Rectangle{
+		image.Rect(1, 30, 57, 61),
+		image.Rect(59, 14, 141, 58),
+		image.Rect(143, 30, 199, 61),
+	}
+}
+
+func decorateDialImage(b []byte, active, count int, showIndicator bool, indicatorStyle string, sepWidth int, sepColor color.RGBA) ([]byte, error) {
 	src, err := png.Decode(bytes.NewReader(b))
 	if err != nil {
 		return nil, err
@@ -368,7 +444,7 @@ func decorateDialImage(b []byte, active, count int, showIndicator bool, sepWidth
 	imagedraw.Draw(canvas, canvas.Bounds(), src, image.Point{}, imagedraw.Src)
 	drawDialEdgeSeparators(canvas, sepWidth, sepColor)
 	if showIndicator {
-		drawDialPageIndicator(canvas, active, count)
+		drawDialPageIndicator(canvas, active, count, indicatorStyle)
 	}
 	var out bytes.Buffer
 	if err := png.Encode(&out, canvas); err != nil {
@@ -386,14 +462,7 @@ func (p *Plugin) renderDialOverview(settings *dialActionSettings, state *dialSta
 		return nil, nil
 	}
 
-	rects := []image.Rectangle{
-		image.Rect(8, 26, 58, 74),
-		image.Rect(60, 12, 140, 88),
-		image.Rect(142, 26, 192, 74),
-	}
-	if len(indices) == 1 {
-		rects = []image.Rectangle{image.Rect(50, 12, 150, 88)}
-	}
+	rects := dialOverviewRects(len(indices))
 
 	for slot, pageIndex := range indices {
 		if pageIndex < 0 || pageIndex >= len(state.graphs) || state.graphs[pageIndex] == nil {
@@ -410,7 +479,7 @@ func (p *Plugin) renderDialOverview(settings *dialActionSettings, state *dialSta
 			return nil, err
 		}
 		inner := card.Inset(3)
-		xdraw.CatmullRom.Scale(canvas, inner, src, src.Bounds(), xdraw.Over, nil)
+		xdraw.CatmullRom.Scale(canvas, inner, src, centeredAspectCrop(src.Bounds(), inner), xdraw.Over, nil)
 		if pageIndex == settings.ActiveIndex {
 			strokeRect(canvas, card, color.RGBA{0, 150, 255, 255}, 2)
 		} else {
@@ -419,7 +488,7 @@ func (p *Plugin) renderDialOverview(settings *dialActionSettings, state *dialSta
 	}
 
 	drawDialEdgeSeparators(canvas, dialSeparatorWidth(settings), dialSeparatorColor(settings))
-	drawDialPageIndicator(canvas, settings.ActiveIndex, len(settings.Pages))
+	drawDialPageIndicator(canvas, settings.ActiveIndex, len(settings.Pages), dialIndicatorStyle(settings))
 
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, canvas); err != nil {
@@ -606,7 +675,7 @@ func (p *Plugin) updateDialPage(ctx string, settings *dialActionSettings, state 
 			log.Printf("dial encode: %v", err)
 			return render, settingsChanged
 		}
-		b, err = decorateDialImage(b, settings.ActiveIndex, len(settings.Pages), false, dialSeparatorWidth(settings), dialSeparatorColor(settings))
+		b, err = decorateDialImage(b, settings.ActiveIndex, len(settings.Pages), false, dialIndicatorStyle(settings), dialSeparatorWidth(settings), dialSeparatorColor(settings))
 		if err != nil {
 			log.Printf("dial decorate: %v", err)
 			return render, settingsChanged
@@ -685,6 +754,7 @@ func (p *Plugin) handleDialWillAppear(event *streamdeck.EvWillAppear) {
 		log.Printf("dial settings unmarshal: %v", err)
 	}
 	state := initDialState(&settings)
+	state.overview = dialDefaultOverview(&settings)
 	p.mu.Lock()
 	p.dialSettings[event.Context] = &settings
 	p.dialStates[event.Context] = state
@@ -780,9 +850,13 @@ func (p *Plugin) handleDialSendToPlugin(event *streamdeck.EvSendToPlugin, payloa
 		p.mu.Lock()
 		oldSettings := p.dialSettings[event.Context]
 		oldState := p.dialStates[event.Context]
+		overview := oldState != nil && oldState.overview
+		if oldSettings == nil || oldSettings.DefaultView != settings.DefaultView {
+			overview = dialDefaultOverview(&settings)
+		}
 		newState := &dialState{
 			graphs:   buildDialGraphs(oldSettings, oldState, &settings),
-			overview: oldState != nil && oldState.overview,
+			overview: overview,
 		}
 		p.dialSettings[event.Context] = &settings
 		p.dialStates[event.Context] = newState
