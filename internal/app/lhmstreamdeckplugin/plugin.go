@@ -176,18 +176,11 @@ func (p *Plugin) runtimeForSource(profileID string) *sourceRuntime {
 	rt := p.sources[profileID]
 	p.sourceMu.RUnlock()
 	if rt != nil {
+		p.reconcileSourceRuntime(profileID, rt)
 		return rt
 	}
 
-	p.mu.RLock()
-	var prof lhmSourceProfile
-	for _, sp := range p.globalSettings.SourceProfiles {
-		if sp.ID == profileID {
-			prof = sp
-			break
-		}
-	}
-	p.mu.RUnlock()
+	prof, _ := p.sourceProfileByID(profileID)
 
 	p.sourceMu.Lock()
 	// double-check after acquiring write lock
@@ -196,7 +189,48 @@ func (p *Plugin) runtimeForSource(profileID string) *sourceRuntime {
 		p.sources[profileID] = rt
 	}
 	p.sourceMu.Unlock()
+	p.reconcileSourceRuntime(profileID, rt)
 	return rt
+}
+
+func (p *Plugin) sourceProfileByID(profileID string) (lhmSourceProfile, bool) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	for _, sp := range p.globalSettings.SourceProfiles {
+		if sp.ID == profileID {
+			return sp, true
+		}
+	}
+	return lhmSourceProfile{}, false
+}
+
+func sameSourceProfileEndpoint(a, b lhmSourceProfile) bool {
+	return a.ID == b.ID && a.Host == b.Host && a.Port == b.Port
+}
+
+func (p *Plugin) reconcileSourceRuntime(profileID string, rt *sourceRuntime) {
+	prof, ok := p.sourceProfileByID(profileID)
+	if !ok {
+		return
+	}
+
+	rt.mu.Lock()
+	changed := !sameSourceProfileEndpoint(rt.profile, prof)
+	if changed {
+		if rt.c != nil {
+			rt.c.Kill()
+		}
+		rt.profile = prof
+		rt.c = nil
+		rt.hw = nil
+	}
+	rt.mu.Unlock()
+
+	if changed {
+		p.mu.Lock()
+		invalidatePollCacheForRuntime(rt)
+		p.mu.Unlock()
+	}
 }
 
 func bridgeBinaryName() string {

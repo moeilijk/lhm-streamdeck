@@ -285,7 +285,10 @@ voorwaarden):
 - **V3** ✅ emu-akkoord, klaar voor commit: dynamische separator, page-indicator,
   dial-press uitleg, per-pagina default-kleur en graph-label sanitize met Go-, PI-
   en DeckBridge-live-e2e-tests.
-- **V4/V5** ⬜ nog niet begonnen.
+- **V4** ✅ emu-akkoord (`3c5e9b5 + V4-prep`): overview multi-preview zonder
+  overlap, tests groen.
+- **V5** ⚠️ code in emu gedeployed (`3c5e9b5 + V5-prep`), tests groen; gebruiker
+  emu-check nog pending.
 
 ### V2 — alerts/interactie per pagina (valideren + testen)
 - [ ] Alert Snooze, Thresholds, Global-threshold-suppressie per pagina werken,
@@ -308,15 +311,21 @@ voorwaarden):
   page indicator, dial press, touch/snooze, global-threshold cleanup en live movement.
 
 ### V4 — overview multi-preview
-- [ ] Overview toont ~3 pagina's (actieve gecentreerd), tegen echte touch-strip-aspect.
-- **Klaar wanneer (extra):** test dat de overview-render N pagina's plaatst zonder
-  distortie-aanname; geen freeze met PI open (liveness-e2e).
+- [x] Overview toont ~3 pagina's (actieve gecentreerd), tegen echte touch-strip-aspect.
+- **Getest:** Go-tests voor preview-rect aspect/centrering + centered crop zonder
+  vervormende schaal; `scripts/verify-settings-pi.sh` met DeckBridge live e2e;
+  `make verify`.
+- **Emu-akkoord:** gebruiker bevestigde "functioneel prima".
 
 ### V5 — bulk & extra's
-- [ ] Bulk-pagina-aanmaak via regel (alle cores / alle readings van sensor) + preview + deselect.
-- [ ] Overview-als-default-toggle; configureerbare indicator-stijl.
-- **Klaar wanneer (extra):** PI-test die bulk-generatie de juiste pagina's laat
-  produceren; toggle-persistentie getest.
+- [x] Bulk-pagina-aanmaak via regel: alle readings van sensor, of geselecteerde
+  reading over sensors; preview + deselect via multi-select.
+- [x] Overview-als-default-toggle; configureerbare indicator-stijl.
+- **Getest:** PI-test voor bulk-generatie + deselect + pagina-aanmaak; PI-test
+  voor action-level default view/indicatorstijl; Go-tests voor renderer-resolve;
+  DeckBridge live e2e voor view-opties en bulk-add; `scripts/verify-settings-pi.sh`;
+  `make verify`.
+- **Pending:** gebruiker emu-check op V5-controls.
 
 ## Te (her)valideren — niet-gaten
 
