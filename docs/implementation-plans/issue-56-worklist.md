@@ -120,7 +120,7 @@ blijven aanvullingen bovenop de tile-pariteit.
 | # | Onderwerp | Code-staat | Validatie-staat |
 |---|-----------|-----------|-----------------|
 | A | Kern: actie toevoegen, pagina's beheren, rotatie, dial-press | aanwezig, maar gewijzigd na 14-juni-test | **her-valideren** op hardware |
-| B | Touch = tile-druk (snooze/clear) | aanwezig (`OnTouchTap`) | **onbevestigd** — tester zag touch "niks doen" |
+| B | Touch = tile-druk (snooze/clear) | aanwezig (`OnTouchTap`) + DeckBridge display-click → touch | **emu-akkoord in V2.4** |
 | C | DeckBridge touch-strip vorm (8:1) | relurl-1767 | afmetingen kloppen (8:1, 200×100/dial); randen weg → doorlopend zoals HW. Visueel eindoordeel = gebruiker |
 | D | DeckBridge persistence | commit aanwezig | **emu-geverifieerd**: restart-restore op 34075, profiel md5 identiek vóór/na, slots + activeDeviceId behouden, geen wipe |
 | 1 | Default graph-scale uit reading | niet geïmplementeerd | open |
@@ -196,11 +196,23 @@ het blijft: check of `#pageList` een zichtbare listbox is (size) en of een
 re-render de selectie reset; eventueel "bewerkte pagina" loskoppelen van
 "actieve pagina op device".
 
+**V2 — emu-akkoord (17 juni 2026, build `c56a229 + V2.4`):**
+
+- **Thresholds per dial-pagina** — akkoord. Add-knop-regressie gefixt
+  (`type="button"` + test: één click voegt exact één threshold toe).
+- **Alert Snooze per dial-pagina** — akkoord. Touch start/cyclet/cleart snooze op
+  de dial-pagina; regressies getest voor threshold-flap en lege
+  `CurrentThresholdID`.
+- **Global Thresholds per dial-pagina** — akkoord. Lege global-sectie wordt in de
+  dial-PI verborgen; Settings-PI toont nieuw toegevoegde globals direct/open en
+  dial-PI toont alleen matchende globals voor de geselecteerde pagina.
+- **DeckBridge touch-emulatie** — akkoord voor V2: klik op de zichtbare
+  dial-strip (`dial-display`) verstuurt nu ook touch; de losse `Touch`-knop blijft
+  werken.
+
 **Ongecommit (na akkoord committen):**
-- lhm-repo: `internal/app/lhmstreamdeckplugin/dial.go`, `dial_test.go`,
-  `com.moeilijk.lhm.sdPlugin/dial_pi.js` + worklist-docs.
-- DeckBridge-repo: `src/core/pi/PropertyInspectorServer.ts` (flicker-fix,
-  relurl-1769).
+- lhm-repo: V2.4 alert/snooze/global-threshold PI + runtime + tests.
+- DeckBridge-repo: zichtbare dial-strip click stuurt touch-event + test.
 
 **Resterend V1:** Display-pariteit (dial-PI Display-sectie = tile: font-sliders
 8–20 i.p.v. `0=auto`-number, graphmode/height/thickness/stroke); item 6; A (kern)
@@ -209,6 +221,20 @@ mee-valideren; dan V1 emu-akkoord.
 **Open infra-punt:** DeckBridge graceful shutdown (SIGTERM) **hangt** → steeds
 SIGKILL nodig, deploy-restart onbetrouwbaar. Kandidaat-fix vóór verder iteratief
 deployen.
+
+**V2.4 emu-test buildreferentie (plugin):** basiscommit
+`c56a229b8d745fef3776cbf49c5b01db016855fe` met lokale V2-diff in
+`com.moeilijk.lhm.sdPlugin/dial_pi.html`,
+`com.moeilijk.lhm.sdPlugin/dial_pi.js`,
+`com.moeilijk.lhm.sdPlugin/settings_pi.html`,
+`com.moeilijk.lhm.sdPlugin/settings_pi.js`,
+`internal/app/lhmstreamdeckplugin/dial.go`,
+`internal/app/lhmstreamdeckplugin/dial_test.go`,
+`internal/app/lhmstreamdeckplugin/threshold_state.go`,
+`internal/app/lhmstreamdeckplugin/threshold_state_test.go`,
+`scripts/test-dial-pi.js` en `scripts/test-settings-pi.js`.
+DeckBridge lokaal: touch op de zichtbare dial-strip (`dial-display`) stuurt nu
+ook `/api/dials/touch`; de losse `Touch`-knop blijft werken.
 
 ## Emu-test blokken (Vx)
 

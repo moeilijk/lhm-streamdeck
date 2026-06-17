@@ -3,7 +3,11 @@ var websocket = null,
   actionInfo = {},
   currentSettings = { activeIndex: 0, pages: [] },
   currentCatalog = { sensors: [], readings: [], sourceProfiles: [] },
-  pageSelectionDraft = { sensorUid: "", readingId: "" };
+  pageSelectionDraft = { sensorUid: "", readingId: "" },
+  thresholdAdvancedOpen = {};
+
+var globalThresholds = [];
+var snoozeDurationOptions = [300000, 900000, 3600000, 0];
 
 function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
   uuid = inUUID;
@@ -31,6 +35,11 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       currentCatalog = payload.catalog;
       populateProfiles();
       renderSelectedPageSelection();
+      renderActiveGlobals();
+    }
+    if (Array.isArray(payload.globalThresholds)) {
+      globalThresholds = payload.globalThresholds;
+      renderActiveGlobals();
     }
     if (payload.dialSettings) {
       currentSettings = normalizeSettings(payload.dialSettings);
@@ -78,6 +87,10 @@ function normalizePage(page) {
   if (!page.graphHeightPct) page.graphHeightPct = 100;
   if (!page.graphLineThickness) page.graphLineThickness = 1;
   if (page.smoothingAlpha === undefined || page.smoothingAlpha === null || page.smoothingAlpha === "") page.smoothingAlpha = 0;
+  if (!Array.isArray(page.thresholds)) page.thresholds = [];
+  if (!Array.isArray(page.suppressedGlobalIDs)) page.suppressedGlobalIDs = [];
+  page.snoozeDurations = normalizeSnoozeDurations(page.snoozeDurations);
+  if (!page.currentThresholdId) page.currentThresholdId = "";
   if (!page.titleFontSize) page.titleFontSize = 0;
   if (!page.valueFontSize) page.valueFontSize = 0;
   if (!page.textStrokeColor) page.textStrokeColor = page.backgroundColor || "#000000";
@@ -287,6 +300,9 @@ function renderPageSettings() {
   setValue("highlightColor", page.highlightColor || "#009e00");
   setValue("textStroke", page.textStroke);
   setValue("textStrokeColor", page.textStrokeColor || page.backgroundColor || "#000000");
+  applySnoozeDurationsToUI(page);
+  renderThresholds(page.thresholds || []);
+  renderActiveGlobals();
   renderSelectedPageSelection();
 }
 
@@ -327,6 +343,409 @@ function bindPageSettings() {
   bindPageField("highlightColor", "highlightColor");
   bindPageField("textStroke", "textStroke", function (v) { return !!v; });
   bindPageField("textStrokeColor", "textStrokeColor");
+}
+
+function normalizeSnoozeDurations(values) {
+  if (!Array.isArray(values)) return [];
+  var seen = {};
+  values.forEach(function (value) {
+    var parsed = parseInt(value, 10);
+    if (!isNaN(parsed)) seen[parsed] = true;
+  });
+  return snoozeDurationOptions.filter(function (value) {
+    return seen[value] === true;
+  });
+}
+
+function readSnoozeDurationsFromUI() {
+  var selected = [];
+  Array.from(document.querySelectorAll(".snooze-duration")).forEach(function (button) {
+    if (button.classList.contains("is-selected")) {
+      selected.push(parseInt(button.dataset.value, 10));
+    }
+  });
+  return normalizeSnoozeDurations(selected);
+}
+
+function setSnoozePresetSelected(button, selected) {
+  if (!button || !button.classList) return;
+  button.classList.toggle("is-selected", selected === true);
+}
+
+function applySnoozeDurationsToUI(page) {
+  var selected = normalizeSnoozeDurations(page && page.snoozeDurations ? page.snoozeDurations : []);
+  var selectedMap = {};
+  selected.forEach(function (value) {
+    selectedMap[String(value)] = true;
+  });
+  Array.from(document.querySelectorAll(".snooze-duration")).forEach(function (button) {
+    setSnoozePresetSelected(button, selectedMap[button.dataset.value] === true);
+  });
+}
+
+function bindSnoozeControls() {
+  Array.from(document.querySelectorAll(".snooze-duration")).forEach(function (button) {
+    if (button.dataset.bound) return;
+    button.dataset.bound = "1";
+    button.addEventListener("click", function () {
+      var page = selectedPage();
+      if (!page) return;
+      setSnoozePresetSelected(button, !button.classList.contains("is-selected"));
+      page.snoozeDurations = readSnoozeDurationsFromUI();
+      saveSettings();
+    });
+  });
+}
+
+function parseOptionalNumber(value) {
+  if (value === undefined || value === null || value === "") return 0;
+  var parsed = Number(value);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+function parseOptionalInt(value) {
+  return Math.round(parseOptionalNumber(value));
+}
+
+function createThreshold(name) {
+  var id = "threshold-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+  return {
+    id: id,
+    name: name || "New Threshold",
+    text: "",
+    textColor: "#ffffff",
+    enabled: true,
+    operator: ">=",
+    value: 0,
+    hysteresis: 0,
+    dwellMs: 0,
+    cooldownMs: 0,
+    sticky: false,
+    backgroundColor: "#333300",
+    foregroundColor: "#999900",
+    highlightColor: "#ffff00",
+    valueTextColor: "#ffff00"
+  };
+}
+
+function updateThresholdField(threshold, key, value) {
+  if (!threshold) return;
+  if (key === "enabled" || key === "sticky") {
+    threshold[key] = value === true || value === "true";
+    return;
+  }
+  if (key === "value" || key === "hysteresis") {
+    threshold[key] = parseOptionalNumber(value);
+    return;
+  }
+  if (key === "dwellMs" || key === "cooldownMs") {
+    threshold[key] = parseOptionalInt(value);
+    return;
+  }
+  threshold[key] = value;
+}
+
+function findThreshold(page, thresholdId) {
+  if (!page || !Array.isArray(page.thresholds)) return null;
+  return page.thresholds.find(function (threshold) {
+    return threshold.id === thresholdId;
+  }) || null;
+}
+
+function addThresholdToSelectedPage(name) {
+  var page = selectedPage();
+  if (!page) return null;
+  page.thresholds.push(createThreshold(name));
+  saveSettings();
+  return page.thresholds[page.thresholds.length - 1];
+}
+
+function removeThresholdFromSelectedPage(thresholdId) {
+  var page = selectedPage();
+  if (!page) return;
+  page.thresholds = page.thresholds.filter(function (threshold) {
+    return threshold.id !== thresholdId;
+  });
+  if (page.currentThresholdId === thresholdId) page.currentThresholdId = "";
+  delete thresholdAdvancedOpen[thresholdId];
+  saveSettings();
+}
+
+function reorderSelectedPageThreshold(thresholdId, direction) {
+  var page = selectedPage();
+  if (!page) return;
+  var idx = page.thresholds.findIndex(function (threshold) {
+    return threshold.id === thresholdId;
+  });
+  var next = direction === "up" ? idx - 1 : idx + 1;
+  if (idx < 0 || next < 0 || next >= page.thresholds.length) return;
+  var threshold = page.thresholds[idx];
+  page.thresholds[idx] = page.thresholds[next];
+  page.thresholds[next] = threshold;
+  saveSettings();
+}
+
+function updateSelectedPageThreshold(thresholdId, key, value) {
+  var page = selectedPage();
+  var threshold = findThreshold(page, thresholdId);
+  if (!threshold) return;
+  updateThresholdField(threshold, key, value);
+  saveSettings();
+}
+
+function bindThresholdControls() {
+  var addThresholdBtn = document.querySelector("#addThresholdBtn");
+  var newThresholdName = document.querySelector("#newThresholdName");
+  if (addThresholdBtn && !addThresholdBtn.dataset.bound) {
+    addThresholdBtn.dataset.bound = "1";
+    addThresholdBtn.addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var name = newThresholdName && newThresholdName.value.trim() ? newThresholdName.value.trim() : "New Threshold";
+      addThresholdToSelectedPage(name);
+      if (newThresholdName) newThresholdName.value = "";
+    });
+  }
+  if (newThresholdName && !newThresholdName.dataset.bound) {
+    newThresholdName.dataset.bound = "1";
+    newThresholdName.addEventListener("keypress", function (e) {
+      if (e.key === "Enter" && addThresholdBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        addThresholdBtn.click();
+      }
+    });
+  }
+}
+
+function renderThresholds(thresholds) {
+  var container = document.querySelector("#thresholdsContainer");
+  if (!container) return;
+  thresholds = Array.isArray(thresholds) ? thresholds : [];
+
+  var existingItems = container.querySelectorAll(".threshold-item");
+  var existingIds = Array.prototype.map.call(existingItems, function (el) { return el.dataset.thresholdId; });
+  var incomingIds = thresholds.map(function (t) { return t.id; });
+
+  if (JSON.stringify(existingIds) !== JSON.stringify(incomingIds)) {
+    container.innerHTML = "";
+    thresholds.forEach(function (threshold, index) {
+      container.appendChild(createThresholdElement(threshold, index, thresholds.length));
+    });
+    return;
+  }
+
+  var active = document.activeElement;
+  thresholds.forEach(function (t) {
+    var item = container.querySelector('.threshold-item[data-threshold-id="' + t.id + '"]');
+    if (!item || (active && item.contains(active))) return;
+    var set = function (sel, val) {
+      var el = item.querySelector(sel);
+      if (el && el.value !== String(val == null ? "" : val)) el.value = val == null ? "" : val;
+    };
+    set(".threshold-name", t.name || "");
+    set(".threshold-text", t.text || "");
+    set(".threshold-value", t.value != null ? t.value : "");
+    set(".threshold-hysteresis", t.hysteresis != null ? t.hysteresis : "");
+    set(".threshold-dwell", t.dwellMs != null ? t.dwellMs : "");
+    set(".threshold-cooldown", t.cooldownMs != null ? t.cooldownMs : "");
+  });
+}
+
+function bindDebouncedInput(input, handler) {
+  var timeout;
+  input.addEventListener("input", function (e) {
+    clearTimeout(timeout);
+    timeout = setTimeout(function () {
+      handler(e.target.value);
+    }, 300);
+  });
+}
+
+function createThresholdElement(threshold, index, total) {
+  var template = document.querySelector("#thresholdTemplate");
+  var clone = template.content.cloneNode(true);
+  var wrapper = clone.querySelector(".threshold-item");
+  wrapper.dataset.thresholdId = threshold.id;
+
+  var nameInput = clone.querySelector(".threshold-name");
+  var textInput = clone.querySelector(".threshold-text");
+  var operatorSelect = clone.querySelector(".threshold-operator");
+  var valueInput = clone.querySelector(".threshold-value");
+  var hysteresisInput = clone.querySelector(".threshold-hysteresis");
+  var dwellInput = clone.querySelector(".threshold-dwell");
+  var cooldownInput = clone.querySelector(".threshold-cooldown");
+  var bgInput = clone.querySelector(".threshold-bg");
+  var fgInput = clone.querySelector(".threshold-fg");
+  var hlInput = clone.querySelector(".threshold-hl");
+  var vtInput = clone.querySelector(".threshold-vt");
+  var tcInput = clone.querySelector(".threshold-tc");
+
+  nameInput.value = threshold.name || "";
+  textInput.value = threshold.text || "";
+  operatorSelect.value = threshold.operator || ">=";
+  valueInput.value = threshold.value !== undefined && threshold.value !== null ? threshold.value : "";
+  hysteresisInput.value = threshold.hysteresis !== undefined && threshold.hysteresis !== null ? threshold.hysteresis : "";
+  dwellInput.value = threshold.dwellMs !== undefined && threshold.dwellMs !== null ? threshold.dwellMs : "";
+  cooldownInput.value = threshold.cooldownMs !== undefined && threshold.cooldownMs !== null ? threshold.cooldownMs : "";
+  bgInput.value = threshold.backgroundColor || "#333300";
+  fgInput.value = threshold.foregroundColor || "#999900";
+  hlInput.value = threshold.highlightColor || "#ffff00";
+  vtInput.value = threshold.valueTextColor || "#ffff00";
+  if (tcInput) tcInput.value = threshold.textColor || "#ffffff";
+
+  var moveUpBtn = clone.querySelector(".threshold-move-up");
+  var moveDownBtn = clone.querySelector(".threshold-move-down");
+  if (moveUpBtn) moveUpBtn.disabled = index === 0;
+  if (moveDownBtn) moveDownBtn.disabled = index === total - 1;
+
+  var toggleBtn = clone.querySelector(".threshold-toggle");
+  var stickyBtn = clone.querySelector(".threshold-sticky-toggle");
+  var advancedToggleBtn = clone.querySelector(".threshold-advanced-toggle");
+  var advancedPanel = clone.querySelector(".threshold-advanced-panel");
+  var settingsDiv = clone.querySelector(".threshold-settings");
+  var thresholdId = threshold.id;
+  var isEnabled = threshold.enabled !== false;
+  var isSticky = threshold.sticky === true;
+  var isAdvancedOpen = thresholdAdvancedOpen[thresholdId] === true;
+
+  function updateToggleState() {
+    toggleBtn.textContent = isEnabled ? "on" : "off";
+    toggleBtn.style.background = isEnabled ? "#4a4" : "#a44";
+    settingsDiv.style.display = isEnabled ? "block" : "none";
+  }
+
+  function updateStickyState() {
+    if (!stickyBtn) return;
+    stickyBtn.textContent = isSticky ? "on" : "off";
+    stickyBtn.style.background = isSticky ? "#4a4" : "#a44";
+    stickyBtn.style.color = "#fff";
+  }
+
+  function updateAdvancedState() {
+    if (!advancedToggleBtn || !advancedPanel) return;
+    advancedToggleBtn.textContent = isAdvancedOpen ? "Advanced ▼" : "Advanced ▶";
+    advancedPanel.style.display = isAdvancedOpen ? "block" : "none";
+  }
+
+  updateToggleState();
+  updateStickyState();
+  updateAdvancedState();
+
+  toggleBtn.addEventListener("click", function () {
+    isEnabled = !isEnabled;
+    updateToggleState();
+    updateSelectedPageThreshold(thresholdId, "enabled", isEnabled);
+  });
+  bindDebouncedInput(nameInput, function (value) { updateSelectedPageThreshold(thresholdId, "name", value); });
+  bindDebouncedInput(textInput, function (value) { updateSelectedPageThreshold(thresholdId, "text", value); });
+  operatorSelect.addEventListener("change", function (e) { updateSelectedPageThreshold(thresholdId, "operator", e.target.value); });
+  bindDebouncedInput(valueInput, function (value) { updateSelectedPageThreshold(thresholdId, "value", value); });
+  bindDebouncedInput(hysteresisInput, function (value) { updateSelectedPageThreshold(thresholdId, "hysteresis", value); });
+  bindDebouncedInput(dwellInput, function (value) { updateSelectedPageThreshold(thresholdId, "dwellMs", value); });
+  bindDebouncedInput(cooldownInput, function (value) { updateSelectedPageThreshold(thresholdId, "cooldownMs", value); });
+  if (stickyBtn) {
+    stickyBtn.addEventListener("click", function () {
+      isSticky = !isSticky;
+      updateStickyState();
+      updateSelectedPageThreshold(thresholdId, "sticky", isSticky);
+    });
+  }
+  if (advancedToggleBtn) {
+    advancedToggleBtn.addEventListener("click", function () {
+      isAdvancedOpen = !isAdvancedOpen;
+      thresholdAdvancedOpen[thresholdId] = isAdvancedOpen;
+      updateAdvancedState();
+    });
+  }
+  bgInput.addEventListener("change", function (e) { updateSelectedPageThreshold(thresholdId, "backgroundColor", e.target.value); });
+  fgInput.addEventListener("change", function (e) { updateSelectedPageThreshold(thresholdId, "foregroundColor", e.target.value); });
+  hlInput.addEventListener("change", function (e) { updateSelectedPageThreshold(thresholdId, "highlightColor", e.target.value); });
+  vtInput.addEventListener("change", function (e) { updateSelectedPageThreshold(thresholdId, "valueTextColor", e.target.value); });
+  if (tcInput) tcInput.addEventListener("change", function (e) { updateSelectedPageThreshold(thresholdId, "textColor", e.target.value); });
+  if (moveUpBtn) moveUpBtn.addEventListener("click", function () { reorderSelectedPageThreshold(thresholdId, "up"); });
+  if (moveDownBtn) moveDownBtn.addEventListener("click", function () { reorderSelectedPageThreshold(thresholdId, "down"); });
+  clone.querySelector(".threshold-remove").addEventListener("click", function () {
+    removeThresholdFromSelectedPage(thresholdId);
+    wrapper.remove();
+  });
+
+  return clone;
+}
+
+function readingForPage(page) {
+  if (!page) return null;
+  return (currentCatalog.readings || []).find(function (reading) {
+    return reading.sensorUid === page.sensorUid && String(reading.id) === String(page.readingId);
+  }) || null;
+}
+
+function activeGlobalThresholdsForPage(page) {
+  var reading = readingForPage(page);
+  var readingType = reading ? reading.type || "" : "";
+  return (globalThresholds || []).filter(function (gt) {
+    return !gt.readingType || gt.readingType === readingType;
+  });
+}
+
+function setGlobalSuppressed(page, id, suppressed) {
+  if (!page) return;
+  var refs = Array.isArray(page.suppressedGlobalIDs) ? page.suppressedGlobalIDs : [];
+  var has = refs.indexOf(id) !== -1;
+  if (suppressed && !has) refs = refs.concat([id]);
+  if (!suppressed && has) refs = refs.filter(function (candidate) { return candidate !== id; });
+  page.suppressedGlobalIDs = refs;
+}
+
+function renderActiveGlobals() {
+  var container = document.querySelector("#globalRefsContainer");
+  if (!container) return;
+  var section = document.querySelector("#globalThresholdsSection");
+  var page = selectedPage();
+  container.innerHTML = "";
+  if (!page) {
+    if (section) section.hidden = true;
+    return;
+  }
+
+  var active = activeGlobalThresholdsForPage(page);
+  if (active.length === 0) {
+    if (section) section.hidden = true;
+    return;
+  }
+  if (section) section.hidden = false;
+
+  active.forEach(function (gt) {
+    var suppressed = page.suppressedGlobalIDs.indexOf(gt.id) !== -1;
+    var row = document.createElement("div");
+    row.className = "sdpi-item";
+    var label = document.createElement("div");
+    label.className = "sdpi-item-label";
+    label.textContent = gt.name || gt.id;
+    var valCell = document.createElement("div");
+    valCell.className = "sdpi-item-value";
+    valCell.style.cssText = "display:flex;align-items:center;gap:4px;";
+    var span = document.createElement("span");
+    span.style.color = "#888";
+    span.style.fontSize = "9pt";
+    span.textContent = (gt.operator || ">=") + " " + (gt.value != null ? gt.value : "");
+    var btn = document.createElement("button");
+    btn.style.cssText = "width:50px;padding:0;background:" + (suppressed ? "#a44" : "#4a4") + ";color:#fff;";
+    btn.textContent = suppressed ? "off" : "on";
+    btn.title = suppressed ? "Click to enable for this page" : "Click to disable for this page";
+    btn.addEventListener("click", function () {
+      var selected = selectedPage();
+      if (!selected) return;
+      var isSuppressed = selected.suppressedGlobalIDs.indexOf(gt.id) !== -1;
+      setGlobalSuppressed(selected, gt.id, !isSuppressed);
+      saveSettings();
+    });
+    valCell.appendChild(span);
+    valCell.appendChild(btn);
+    row.appendChild(label);
+    row.appendChild(valCell);
+    container.appendChild(row);
+  });
 }
 
 function bindSelectedPageSelection() {
@@ -388,6 +807,10 @@ function addSelectedPage() {
     graphMode: "both",
     graphHeightPct: 100,
     graphLineThickness: 1,
+    thresholds: [],
+    suppressedGlobalIDs: [],
+    snoozeDurations: [],
+    currentThresholdId: "",
     textStroke: false,
     textStrokeColor: "#000000"
   }));
@@ -427,5 +850,7 @@ document.addEventListener("DOMContentLoaded", function () {
     renderPageSettings();
   });
   bindPageSettings();
+  bindSnoozeControls();
+  bindThresholdControls();
   bindSelectedPageSelection();
 });

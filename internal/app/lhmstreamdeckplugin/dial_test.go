@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"image/color"
 	"testing"
+	"time"
+
+	hwsensorsservice "github.com/moeilijk/lhm-streamdeck/pkg/service"
 )
 
 func TestWrapDialIndex(t *testing.T) {
@@ -62,9 +65,9 @@ func TestDialOverviewIndices(t *testing.T) {
 
 func TestEmaSmooth(t *testing.T) {
 	tests := []struct {
-		name             string
-		alpha, value     float64
-		prev, want       float64
+		name         string
+		alpha, value float64
+		prev, want   float64
 	}{
 		{name: "alpha 1 follows value", alpha: 1, value: 50, prev: 10, want: 50},
 		{name: "alpha 0.5 halfway", alpha: 0.5, value: 100, prev: 0, want: 50},
@@ -202,5 +205,103 @@ func TestBuildDialGraphsPreservesHistory(t *testing.T) {
 	}
 	if got3[2] == nil {
 		t.Errorf("appended page graph not built")
+	}
+}
+
+func TestUpdateDialPageKeepsSnoozeWhenThresholdDrops(t *testing.T) {
+	const (
+		ctx       = "dial-ctx"
+		pageCtx   = ctx + "|dial|page|0"
+		sensorUID = "/cpu"
+		readingID = int32(42)
+	)
+
+	p := &Plugin{
+		sources:          make(map[string]*sourceRuntime),
+		thresholdStates:  make(map[string]map[string]*thresholdRuntimeState),
+		thresholdSnoozes: make(map[string]*thresholdSnoozeState),
+		thresholdDirty:   make(map[string]bool),
+		lastPollTime:     make(map[string]uint64),
+		lastRenderTime:   make(map[string]time.Time),
+		smoothedValues:   make(map[string]float64),
+		divisorCache:     make(map[string]divisorCacheEntry),
+		pollTimeCacheTTL: time.Second,
+	}
+	p.sources[""] = &sourceRuntime{
+		hw: stubHardwareService{
+			readingsBySensor: map[string][]hwsensorsservice.Reading{
+				sensorUID: {
+					stubReading{id: readingID, typ: "Load", label: "CPU Total", unit: "%"},
+				},
+			},
+		},
+	}
+
+	settings := &dialActionSettings{Pages: []actionSettings{{
+		SensorUID:          sensorUID,
+		ReadingID:          readingID,
+		ReadingLabel:       "CPU Total",
+		IsValid:            true,
+		Min:                0,
+		Max:                100,
+		ForegroundColor:    "#005128",
+		BackgroundColor:    "#000000",
+		HighlightColor:     "#009e00",
+		ValueTextColor:     "#ffffff",
+		TitleColor:         "#b7b7b7",
+		CurrentThresholdID: "t1",
+		SnoozeDurations:    []int{0},
+		Thresholds:         []Threshold{{ID: "t1", Enabled: true, Operator: ">=", Value: 10}},
+	}}}
+	state := initDialState(settings)
+	now := time.Unix(1200, 0)
+	p.setThresholdSnooze(pageCtx, 0, now)
+
+	_, changed := p.updateDialPage(ctx, settings, state, 0, true, now.Add(time.Second))
+	if !changed {
+		t.Fatalf("expected settings change when current threshold id is cleared")
+	}
+	if _, ok := p.currentThresholdSnooze(pageCtx, now.Add(time.Second)); !ok {
+		t.Fatalf("expected dial page snooze to remain active after threshold drops")
+	}
+	if settings.Pages[0].CurrentThresholdID != "" {
+		t.Fatalf("expected current threshold id to clear after threshold drops")
+	}
+}
+
+func TestHandleDialPageTouchStartsSnoozeForConfiguredThresholdPage(t *testing.T) {
+	p := &Plugin{
+		thresholdSnoozes: make(map[string]*thresholdSnoozeState),
+		thresholdDirty:   make(map[string]bool),
+	}
+	now := time.Unix(1300, 0)
+	page := &actionSettings{
+		SnoozeDurations: []int{0},
+		Thresholds:      []Threshold{{ID: "t1", Enabled: true, Operator: ">=", Value: 10}},
+	}
+
+	if !p.handleDialPageTouch("dial-page", page, now) {
+		t.Fatalf("expected touch to start snooze on configured threshold page")
+	}
+	if _, ok := p.currentThresholdSnooze("dial-page", now); !ok {
+		t.Fatalf("expected snooze to be active after touch")
+	}
+	if !p.handleDialPageTouch("dial-page", page, now.Add(time.Second)) {
+		t.Fatalf("expected second touch to clear active snooze")
+	}
+	if _, ok := p.currentThresholdSnooze("dial-page", now.Add(time.Second)); ok {
+		t.Fatalf("expected snooze to be cleared by second touch")
+	}
+}
+
+func TestHandleDialPageTouchIgnoresPageWithoutThresholds(t *testing.T) {
+	p := &Plugin{
+		thresholdSnoozes: make(map[string]*thresholdSnoozeState),
+		thresholdDirty:   make(map[string]bool),
+	}
+	page := &actionSettings{SnoozeDurations: []int{0}}
+
+	if p.handleDialPageTouch("dial-page", page, time.Unix(1400, 0)) {
+		t.Fatalf("expected touch without thresholds or active alert to do nothing")
 	}
 }

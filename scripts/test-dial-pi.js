@@ -50,11 +50,16 @@ function testNormalizePageDefaults() {
   assert(p.graphMode === "both", "graphMode default both");
   assert(p.graphHeightPct === 100, "graphHeightPct default 100");
   assert(p.graphLineThickness === 1, "graphLineThickness default 1");
+  assert(Array.isArray(p.thresholds) && p.thresholds.length === 0, "thresholds default []");
+  assert(Array.isArray(p.suppressedGlobalIDs) && p.suppressedGlobalIDs.length === 0, "suppressed globals default []");
+  assert(Array.isArray(p.snoozeDurations) && p.snoozeDurations.length === 0, "snooze durations default []");
+  assert(p.currentThresholdId === "", "current threshold default empty");
   assert(p.showTitleInGraph === true, "showTitleInGraph default true");
   assert(p.foregroundColor === "#005128", "foregroundColor default");
-  const keep = normalizePage({ smoothingAlpha: 0.3, max: 0 });
+  const keep = normalizePage({ smoothingAlpha: 0.3, max: 0, snoozeDurations: [0, "900000", 123] });
   assert(keep.smoothingAlpha === 0.3, "explicit smoothingAlpha preserved");
   assert(keep.max === 0, "explicit max:0 sentinel preserved for derive");
+  assert(keep.snoozeDurations.join(",") === "900000,0", "snooze durations normalized");
 }
 
 function testNormalizeSettingsClampsActiveIndex() {
@@ -99,7 +104,9 @@ function testSensorMatchesFilter() {
 }
 
 function testReadingsForSensor() {
-  const sb = loadDialSandbox();
+  const sb = loadDialSandbox({
+    pageList: { selectedIndex: 0 },
+  });
   sb.currentCatalog = { readings: [
     { id: 2, sensorUid: "cpu", label: "B", unit: "%" },
     { id: 1, sensorUid: "cpu", label: "A", unit: "%" },
@@ -111,7 +118,9 @@ function testReadingsForSensor() {
 }
 
 function testResetPageSelectionDraft() {
-  const sb = loadDialSandbox();
+  const sb = loadDialSandbox({
+    pageList: { selectedIndex: 0 },
+  });
   sb.resetPageSelectionDraft({ sensorUid: "cpu", readingId: 7 });
   assert(sb.pageSelectionDraft.sensorUid === "cpu", "draft sensor set");
   assert(sb.pageSelectionDraft.readingId === "7", "draft reading stringified");
@@ -155,6 +164,112 @@ function testRemoveSelectedPage() {
   assert(sb.currentSettings.activeIndex === 0, "active index clamped");
 }
 
+function testBuildRefVisibleInPi() {
+  const html = fs.readFileSync("com.moeilijk.lhm.sdPlugin/dial_pi.html", "utf8");
+  assert(html.includes('id="pluginBuildRef"'), "plugin build ref row present");
+  assert(html.includes("c56a229"), "plugin build commit visible in PI");
+  assert(html.includes('id="globalThresholdsSection" hidden'), "global thresholds section starts hidden");
+}
+
+function testSnoozeDurationNormalization() {
+  const { normalizeSnoozeDurations } = loadDialSandbox();
+  const got = normalizeSnoozeDurations(["0", 3600000, 300000, 300000, "bad", 900000]);
+  assert(got.join(",") === "300000,900000,3600000,0", "snooze durations use tile order and de-dupe");
+  assert(normalizeSnoozeDurations(null).length === 0, "non-array snooze durations -> []");
+}
+
+function testThresholdHelpers() {
+  const sb = loadDialSandbox();
+  const t = sb.createThreshold("Hot");
+  assert(t.name === "Hot", "threshold name set");
+  assert(t.enabled === true, "threshold enabled by default");
+  assert(t.operator === ">=", "threshold operator default");
+  sb.updateThresholdField(t, "value", "72.5");
+  sb.updateThresholdField(t, "hysteresis", "");
+  sb.updateThresholdField(t, "dwellMs", "1250");
+  sb.updateThresholdField(t, "sticky", true);
+  assert(t.value === 72.5, "threshold value parsed");
+  assert(t.hysteresis === 0, "empty hysteresis -> 0");
+  assert(t.dwellMs === 1250, "dwellMs parsed");
+  assert(t.sticky === true, "sticky boolean parsed");
+}
+
+function testGlobalThresholdHelpersPerPage() {
+  const sb = loadDialSandbox();
+  const page = { sensorUid: "cpu", readingId: "1", suppressedGlobalIDs: [] };
+  sb.currentCatalog = { readings: [
+    { id: "1", sensorUid: "cpu", type: "Temp" },
+    { id: "2", sensorUid: "gpu", type: "Usage" },
+  ] };
+  sb.globalThresholds = [
+    { id: "temp", readingType: "Temp" },
+    { id: "all", readingType: "" },
+    { id: "usage", readingType: "Usage" },
+  ];
+  const active = sb.activeGlobalThresholdsForPage(page).map((gt) => gt.id).join(",");
+  assert(active === "temp,all", "globals filtered by selected page reading type");
+  sb.setGlobalSuppressed(page, "temp", true);
+  sb.setGlobalSuppressed(page, "temp", true);
+  assert(page.suppressedGlobalIDs.join(",") === "temp", "suppression added once");
+  sb.setGlobalSuppressed(page, "temp", false);
+  assert(page.suppressedGlobalIDs.length === 0, "suppression removed");
+}
+
+function testGlobalThresholdSectionOnlyWhenActive() {
+  const section = { hidden: false };
+  const container = { innerHTML: "", appendChild() {} };
+  const sb = loadDialSandbox({
+    pageList: { selectedIndex: 0 },
+  });
+  sb.document.querySelector = (selector) => {
+    if (selector === "#globalRefsContainer") return container;
+    if (selector === "#globalThresholdsSection") return section;
+    return null;
+  };
+  sb.document.createElement = () => ({
+    style: {},
+    appendChild() {},
+  });
+  sb.currentSettings = { activeIndex: 0, pages: [{ sensorUid: "cpu", readingId: "1", suppressedGlobalIDs: [] }] };
+  sb.currentCatalog = { readings: [{ id: "1", sensorUid: "cpu", type: "Temp" }] };
+  sb.globalThresholds = [];
+  sb.renderActiveGlobals();
+  assert(section.hidden === true, "section hidden with no globals");
+  sb.globalThresholds = [{ id: "usage", readingType: "Usage" }];
+  sb.renderActiveGlobals();
+  assert(section.hidden === true, "section hidden when globals do not match page type");
+}
+
+function testAddThresholdClickAddsOneThreshold() {
+  const listeners = {};
+  const addBtn = {
+    dataset: {},
+    addEventListener(type, handler) { listeners[type] = handler; },
+  };
+  const nameInput = {
+    dataset: {},
+    value: "Click Test",
+    addEventListener() {},
+  };
+  const sb = loadDialSandbox({
+    pageList: { selectedIndex: 0 },
+  });
+  sb.document.querySelector = (selector) => {
+    if (selector === "#addThresholdBtn") return addBtn;
+    if (selector === "#newThresholdName") return nameInput;
+    return null;
+  };
+  sb.currentSettings = { activeIndex: 0, pages: [{ title: "A", thresholds: [] }] };
+  sb.renderPages = () => {};
+  sb.bindThresholdControls();
+  listeners.click({
+    preventDefault() {},
+    stopPropagation() {},
+  });
+  assert(sb.currentSettings.pages[0].thresholds.length === 1, "one click adds exactly one threshold");
+  assert(sb.currentSettings.pages[0].thresholds[0].name === "Click Test", "threshold name comes from input");
+}
+
 const tests = [
   ["normalizePage defaults", testNormalizePageDefaults],
   ["normalizeSettings clamps activeIndex", testNormalizeSettingsClampsActiveIndex],
@@ -166,6 +281,12 @@ const tests = [
   ["addSelectedPage derive sentinel", testAddSelectedPageSentinel],
   ["moveSelectedPage", testMoveSelectedPage],
   ["removeSelectedPage", testRemoveSelectedPage],
+  ["build ref visible in PI", testBuildRefVisibleInPi],
+  ["snooze duration normalization", testSnoozeDurationNormalization],
+  ["threshold helpers", testThresholdHelpers],
+  ["global threshold helpers per page", testGlobalThresholdHelpersPerPage],
+  ["global threshold section only when active", testGlobalThresholdSectionOnlyWhenActive],
+  ["add threshold click adds one threshold", testAddThresholdClickAddsOneThreshold],
 ];
 
 let failed = 0;

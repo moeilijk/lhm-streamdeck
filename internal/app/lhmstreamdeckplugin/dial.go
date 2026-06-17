@@ -420,13 +420,9 @@ func (p *Plugin) updateDialPage(ctx string, settings *dialActionSettings, state 
 		}
 	}
 
-	snoozeState, snoozed, _ := p.currentThresholdSnoozeState(pageCtx, now)
-	if activeThreshold == nil {
-		p.clearThresholdSnooze(pageCtx)
-		snoozed = false
-		snoozeState = thresholdSnoozeState{}
-	}
-	if newThresholdID != page.CurrentThresholdID {
+	snoozeState, snoozed, snoozeChanged := p.currentThresholdSnoozeState(pageCtx, now)
+	forceUpdate := snoozeChanged || p.consumeThresholdDirty(pageCtx)
+	if forceUpdate || newThresholdID != page.CurrentThresholdID {
 		if activeThreshold != nil && !snoozed {
 			p.applyThresholdColors(g, activeThreshold)
 		} else {
@@ -576,6 +572,8 @@ func (p *Plugin) handleDialPropertyInspectorConnected(event *streamdeck.EvSendTo
 	if settings != nil {
 		settingsCopy = *settings
 	}
+	globals := make([]Threshold, len(p.globalSettings.GlobalThresholds))
+	copy(globals, p.globalSettings.GlobalThresholds)
 	p.mu.RUnlock()
 
 	profileID := p.resolvedSourceProfileID(settingsCopy.SourceProfileID)
@@ -591,7 +589,10 @@ func (p *Plugin) handleDialPropertyInspectorConnected(event *streamdeck.EvSendTo
 	if err := p.sendCatalogToPropertyInspector(event.Action, event.Context, &catalogSettings, sensors); err != nil {
 		log.Printf("dial PI catalog: %v", err)
 	}
-	_ = p.sd.SendToPropertyInspector(event.Action, event.Context, map[string]interface{}{"dialSettings": settingsCopy})
+	_ = p.sd.SendToPropertyInspector(event.Action, event.Context, map[string]interface{}{
+		"dialSettings":     settingsCopy,
+		"globalThresholds": globals,
+	})
 }
 
 // deriveDialPageScales fills in a default graph scale (min/max) for any page that
@@ -701,35 +702,36 @@ func (p *Plugin) OnTouchTap(event *streamdeck.EvTouchTap) {
 		settings.ActiveIndex = wrapDialIndex(settings.ActiveIndex, 0, len(settings.Pages))
 	}
 	page := &settings.Pages[settings.ActiveIndex]
-	if page.CurrentThresholdID == "" {
-		return
-	}
 
 	pageCtx := dialPageContext(event.Context, settings.ActiveIndex)
-	if configured := normalizeThresholdSnoozeDurations(page.SnoozeDurations); len(configured) > 0 {
-		now := time.Now()
-		currentSnooze, snoozed := p.currentThresholdSnooze(pageCtx, now)
-		var current *thresholdSnoozeState
-		if snoozed {
-			current = &currentSnooze
-		}
-		if nextDuration, ok := nextThresholdSnoozeDuration(configured, current); ok {
-			p.setThresholdSnooze(pageCtx, nextDuration, now)
-		} else if !p.clearThresholdSnooze(pageCtx) {
-			return
-		}
-		p.updateDialFeedback(event.Context)
+	now := time.Now()
+	currentThresholdID := page.CurrentThresholdID
+	if !p.handleDialPageTouch(pageCtx, page, now) {
 		return
 	}
-
-	if !p.clearStickyThreshold(pageCtx, page.CurrentThresholdID) {
-		return
-	}
-	page.CurrentThresholdID = ""
-	if err := p.sd.SetSettings(event.Context, settings); err != nil {
-		log.Printf("dial touch SetSettings: %v", err)
+	if currentThresholdID != page.CurrentThresholdID {
+		if err := p.sd.SetSettings(event.Context, settings); err != nil {
+			log.Printf("dial touch SetSettings: %v", err)
+		}
 	}
 	p.updateDialFeedback(event.Context)
+}
+
+func (p *Plugin) handleDialPageTouch(pageCtx string, page *actionSettings, now time.Time) bool {
+	configured := normalizeThresholdSnoozeDurations(page.SnoozeDurations)
+	_, snoozed := p.currentThresholdSnooze(pageCtx, now)
+	if len(configured) > 0 && (page.CurrentThresholdID != "" || snoozed || len(page.Thresholds) > 0) {
+		return p.advanceConfiguredThresholdSnooze(pageCtx, configured, now)
+	}
+
+	if page.CurrentThresholdID == "" {
+		return false
+	}
+	if !p.clearStickyThreshold(pageCtx, page.CurrentThresholdID) {
+		return false
+	}
+	page.CurrentThresholdID = ""
+	return true
 }
 
 func (p *Plugin) OnDialRotate(event *streamdeck.EvDialRotate) {
