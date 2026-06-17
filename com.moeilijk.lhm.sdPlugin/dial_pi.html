@@ -38,6 +38,11 @@
   <div id="ui" class="sdpi-wrapper localbody hiddenx">
     <div class="sdpi-heading">Source</div>
 
+    <div class="sdpi-item" id="pluginBuildRef">
+      <div class="sdpi-item-label">Build</div>
+      <div class="sdpi-item-value" title="Plugin base commit c56a229b8d745fef3776cbf49c5b01db016855fe plus local V2.4 diff">c56a229 + V2.4</div>
+    </div>
+
     <div class="sdpi-item">
       <div class="sdpi-item-label">Profile</div>
       <select class="sdpi-item-value select" id="sourceProfileSelect"></select>
@@ -243,7 +248,165 @@
           </div>
         </div>
       </details>
+
+      <details>
+        <summary>Alert Snooze</summary>
+
+        <div class="sdpi-item">
+          <div class="sdpi-item-label">On Touch</div>
+          <div class="sdpi-item-value snooze-options" data-local-only="true">
+            <button type="button" class="snooze-duration snooze-preset" id="snooze5m" data-value="300000">5m</button>
+            <button type="button" class="snooze-duration snooze-preset" id="snooze15m" data-value="900000">15m</button>
+            <button type="button" class="snooze-duration snooze-preset" id="snooze1h" data-value="3600000">1h</button>
+            <button type="button" class="snooze-duration snooze-preset" id="snoozeUntilResumed" data-value="0">Until resumed</button>
+          </div>
+        </div>
+
+        <div class="sdpi-item">
+          <details class="noInnerMargins">
+            <summary>Help</summary>
+            <p>Select one or more presets. Each touch of the dial screen steps through the selected presets in order. After the last preset, the next touch resumes alerts.</p>
+          </details>
+        </div>
+      </details>
+
+      <details>
+        <summary>Thresholds</summary>
+
+        <div id="thresholdsContainer">
+          <!-- Dynamic threshold items will be rendered here -->
+        </div>
+
+        <div class="sdpi-item" id="addThresholdContainer">
+          <div class="sdpi-item-label">Add New</div>
+          <div class="sdpi-item-value" style="display: flex; align-items: center; gap: 4px;">
+            <input type="text" id="newThresholdName" placeholder="Name" style="width: 100px;" />
+            <button id="addThresholdBtn" class="sdpi-item-value" style="width: 60px;" type="button">Add</button>
+          </div>
+        </div>
+      </details>
+
+      <details id="globalThresholdsSection" hidden>
+        <summary>Global Thresholds</summary>
+
+        <div id="globalRefsContainer">
+          <!-- Dynamic global threshold checkboxes rendered here -->
+        </div>
+      </details>
     </div>
+
+    <!-- Template for threshold items (hidden, cloned by JS) -->
+    <template id="thresholdTemplate">
+      <div class="threshold-item" data-threshold-id="">
+        <div class="sdpi-item" style="margin-top: 8px;">
+          <div class="sdpi-item-label threshold-header-label">
+            <input type="text" class="threshold-name" placeholder="Name" style="width: 70px;" />
+          </div>
+          <div class="sdpi-item-value threshold-header-value" style="display: flex; align-items: center; gap: 4px;">
+            <button class="threshold-toggle" style="width: 26px; padding: 0;">on</button>
+            <span class="threshold-arrows">
+              <button class="threshold-move-up" style="width: 18px; padding: 0;" title="Move up">&uarr;</button>
+              <button class="threshold-move-down" style="width: 18px; padding: 0;" title="Move down">&darr;</button>
+            </span>
+            <button class="threshold-remove" style="width: 18px; padding: 0; background: #a33; color: white;" title="Remove">×</button>
+          </div>
+        </div>
+
+        <div class="threshold-settings" style="display: none;">
+          <div class="sdpi-item">
+            <div class="sdpi-item-label">Text</div>
+            <input type="text" class="sdpi-item-value threshold-text" placeholder="e.g. HOT or Hot {value}" />
+          </div>
+          <div class="sdpi-item">
+            <div class="sdpi-item-label">Condition</div>
+            <div class="sdpi-item-value" style="display: flex; align-items: center; gap: 4px;">
+              <select class="threshold-operator" style="width: 55px;">
+                <option value=">">&gt;</option>
+                <option value="<">&lt;</option>
+                <option value=">=" selected>&gt;=</option>
+                <option value="<=">&lt;=</option>
+                <option value="==">==</option>
+              </select>
+              <input type="number" class="threshold-value" step="any" style="width: 60px;" placeholder="Value" />
+            </div>
+          </div>
+
+          <div class="sdpi-item threshold-advanced-toggle-row">
+            <div class="sdpi-item-label threshold-empty-label"></div>
+            <div class="sdpi-item-value threshold-advanced-toggle-cell">
+              <button class="threshold-advanced-toggle" type="button">Advanced</button>
+            </div>
+          </div>
+
+          <div class="threshold-advanced-panel" style="display: none;">
+            <div class="sdpi-item threshold-compact-row">
+              <div class="sdpi-item-label">
+                Hyst
+                <span
+                  class="field-help"
+                  title="Hysteresis prevents alert flapping around the threshold. Example: with &gt;= 70 and Hyst 5, the alert stays active until the value drops below 65. Default: 1. Use 0 or higher."
+                >(i)</span>
+              </div>
+              <input type="number" class="sdpi-item-value threshold-hysteresis threshold-input-compact" step="any" placeholder="1" />
+            </div>
+
+            <div class="sdpi-item threshold-compact-row">
+              <div class="sdpi-item-label">
+                Dwell ms
+                <span
+                  class="field-help"
+                  title="The condition must stay true for this many milliseconds before the alert activates. Use 0 for immediate activation. Default: 1000. Typical values: 500, 1000, 5000."
+                >(i)</span>
+              </div>
+              <input type="number" class="sdpi-item-value threshold-dwell threshold-input-compact" step="100" min="0" placeholder="1000" />
+            </div>
+
+            <div class="sdpi-item threshold-compact-row">
+              <div class="sdpi-item-label">
+                Cooldown ms
+                <span
+                  class="field-help"
+                  title="After the alert clears, it cannot trigger again until this many milliseconds have passed. Use 0 to disable cooldown. Default: 5000. Typical values: 1000, 5000, 10000."
+                >(i)</span>
+              </div>
+              <input type="number" class="sdpi-item-value threshold-cooldown threshold-input-compact" step="100" min="0" placeholder="5000" />
+            </div>
+
+            <div class="sdpi-item threshold-sticky-row">
+              <div class="sdpi-item-label">
+                Sticky
+                <span
+                  class="field-help"
+                  title="Sticky latches the alert and displayed value on the tile until you press the tile to clear it. After clearing, the threshold stays suppressed until the value has actually returned to normal. Toggle on or off."
+                >(i)</span>
+              </div>
+              <div class="sdpi-item-value threshold-sticky-cell">
+                <button class="threshold-sticky-toggle" type="button">off</button>
+              </div>
+            </div>
+          </div>
+
+          <div type="color" class="sdpi-item">
+            <div class="sdpi-item-label">Background</div>
+            <input type="color" class="sdpi-item-value threshold-bg" value="#333300" />
+            <div class="sdpi-item-label">Value Text</div>
+            <input type="color" class="sdpi-item-value threshold-vt" value="#ffff00" />
+          </div>
+
+          <div type="color" class="sdpi-item">
+            <div class="sdpi-item-label">Foreground</div>
+            <input type="color" class="sdpi-item-value threshold-fg" value="#999900" />
+            <div class="sdpi-item-label">Highlight</div>
+            <input type="color" class="sdpi-item-value threshold-hl" value="#ffff00" />
+          </div>
+
+          <div type="color" class="sdpi-item">
+            <div class="sdpi-item-label">Alert Text</div>
+            <input type="color" class="sdpi-item-value threshold-tc" value="#ffffff" />
+          </div>
+        </div>
+      </div>
+    </template>
   </div>
 
   <script src="pi_utils.js"></script>

@@ -20,6 +20,7 @@ class FakeElement {
     this.children = [];
     this.disabled = initial.disabled || false;
     this.selected = initial.selected || false;
+    this.dataset = initial.dataset || {};
     this._innerHTML = "";
   }
   addEventListener(evt, fn) {
@@ -28,10 +29,17 @@ class FakeElement {
   }
   trigger(evt) {
     const fns = this.handlers[evt] || [];
-    fns.forEach((fn) => fn({ target: this }));
+    fns.forEach((fn) => fn({
+      target: this,
+      preventDefault() {},
+      stopPropagation() {},
+    }));
   }
   appendChild(child) {
     this.children.push(child);
+  }
+  querySelectorAll() {
+    return [];
   }
   get options() {
     return this.children;
@@ -61,6 +69,8 @@ function loadSandbox(opts = {}) {
     profileName: new FakeElement(),
     lhmHost: new FakeElement({ value: "127.0.0.1" }),
     lhmPort: new FakeElement({ value: "8085" }),
+    addGlobalThresholdBtn: new FakeElement(),
+    newGlobalThresholdName: new FakeElement(),
   };
   const sent = [];
   const intervalFns = [];
@@ -92,6 +102,9 @@ function loadSandbox(opts = {}) {
       },
       createElement() {
         return new FakeElement();
+      },
+      querySelector() {
+        return null;
       },
     },
   };
@@ -281,6 +294,64 @@ function testFocusedProfileInputIsNotOverwritten() {
   assert(elements.lhmPort.value === "9000", "port should sync when not focused");
 }
 
+function testAddGlobalThresholdButtonSendsCommand() {
+  const { sandbox, elements, sent } = loadSandbox();
+  sandbox.context = "ctx-settings";
+  sandbox.uuid = "ctx-pi";
+  elements.newGlobalThresholdName.value = "Global CPU";
+
+  elements.addGlobalThresholdBtn.trigger("click");
+
+  const add = sent.find((m) => m.event === "sendToPlugin" && m.payload && m.payload.addGlobalThreshold === "Global CPU");
+  assert(add, "add global threshold command missing");
+  assert(elements.newGlobalThresholdName.value === "", "name input should clear after add");
+}
+
+function testGlobalThresholdWithoutEnabledRendersOpen() {
+  const { sandbox } = loadSandbox();
+  const elements = {};
+  [
+    ".threshold-item",
+    ".threshold-name",
+    ".threshold-text",
+    ".threshold-reading-type",
+    ".threshold-operator",
+    ".threshold-value",
+    ".threshold-hysteresis",
+    ".threshold-dwell",
+    ".threshold-cooldown",
+    ".threshold-bg",
+    ".threshold-fg",
+    ".threshold-hl",
+    ".threshold-vt",
+    ".threshold-tc",
+    ".threshold-toggle",
+    ".threshold-settings",
+    ".threshold-sticky-toggle",
+    ".threshold-advanced-toggle",
+    ".threshold-advanced-panel",
+    ".threshold-remove",
+  ].forEach((selector) => {
+    elements[selector] = new FakeElement();
+  });
+  elements[".threshold-item"].dataset = {};
+
+  const fakeClone = {
+    querySelector(selector) {
+      return elements[selector] || null;
+    },
+  };
+  sandbox.document.querySelector = (selector) => {
+    if (selector !== "#globalThresholdTemplate") return null;
+    return { content: { cloneNode: () => fakeClone } };
+  };
+
+  sandbox.createGlobalThresholdElement({ id: "g1", name: "Global CPU" });
+
+  assert(elements[".threshold-toggle"].textContent === "on", "missing enabled should render as on");
+  assert(elements[".threshold-settings"].style.display === "block", "settings should be visible for enabled threshold");
+}
+
 function main() {
   testShowLabelPayload();
   testContextFanout();
@@ -290,7 +361,9 @@ function main() {
   testPollingFallbackSave();
   testStatusHeartbeatIsLightweight();
   testFocusedProfileInputIsNotOverwritten();
-  process.stdout.write("settings-pi tests ok (8 cases)\n");
+  testAddGlobalThresholdButtonSendsCommand();
+  testGlobalThresholdWithoutEnabledRendersOpen();
+  process.stdout.write("settings-pi tests ok (10 cases)\n");
 }
 
 main();

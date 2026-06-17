@@ -312,6 +312,27 @@ func TestNextThresholdSnoozeDuration(t *testing.T) {
 	}
 }
 
+func TestAdvanceConfiguredThresholdSnoozeCanClearExistingSnooze(t *testing.T) {
+	p := &Plugin{
+		thresholdDirty: make(map[string]bool),
+	}
+	now := time.Unix(950, 0)
+	configured := []int{0}
+
+	if !p.advanceConfiguredThresholdSnooze("ctx-a", configured, now) {
+		t.Fatalf("expected first advance to set the configured snooze")
+	}
+	if _, ok := p.currentThresholdSnooze("ctx-a", now); !ok {
+		t.Fatalf("expected snooze to be active after first advance")
+	}
+	if !p.advanceConfiguredThresholdSnooze("ctx-a", configured, now.Add(time.Second)) {
+		t.Fatalf("expected second advance to clear the existing snooze")
+	}
+	if _, ok := p.currentThresholdSnooze("ctx-a", now.Add(time.Second)); ok {
+		t.Fatalf("expected snooze to be cleared after cycling past final preset")
+	}
+}
+
 func TestThresholdSnoozeText(t *testing.T) {
 	now := time.Unix(1000, 0)
 
