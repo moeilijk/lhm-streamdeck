@@ -40,7 +40,7 @@
 
     <div class="sdpi-item" id="pluginBuildRef">
       <div class="sdpi-item-label">Build</div>
-      <div class="sdpi-item-value" title="Plugin base commit c56a229b8d745fef3776cbf49c5b01db016855fe plus local V2.4 diff">c56a229 + V2.4</div>
+      <div class="sdpi-item-value" title="Plugin base commit dd1449e plus local V3 separator diff">dd1449e + V3-separator</div>
     </div>
 
     <div class="sdpi-item">
@@ -98,12 +98,36 @@
     </div>
 
     <div class="sdpi-item">
+      <div class="sdpi-item-label">Dial press</div>
+      <div class="sdpi-item-value">Toggle overview</div>
+    </div>
+
+    <div class="sdpi-item">
       <div class="sdpi-item-label empty-label">Actions</div>
       <div class="sdpi-item-value dial-actions">
         <button id="moveUpBtn" type="button" disabled>Up</button>
         <button id="moveDownBtn" type="button" disabled>Down</button>
         <button id="removePageBtn" type="button" disabled>Delete</button>
       </div>
+    </div>
+
+    <div class="sdpi-heading">Separator</div>
+
+    <div type="range" class="sdpi-item" id="separatorWidth">
+      <div class="sdpi-item-label">Width</div>
+      <div class="sdpi-item-value">
+        <span value="0">0</span>
+        <div class="range-wrap">
+          <span class="range-val">3</span>
+          <input type="range" min="0" max="10" step="1" value="3" />
+        </div>
+        <span value="10">10</span>
+      </div>
+    </div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Color</div>
+      <input class="sdpi-item-value" id="separatorColor" type="color" />
     </div>
 
     <div id="pageSettings" class="page-settings" hidden>

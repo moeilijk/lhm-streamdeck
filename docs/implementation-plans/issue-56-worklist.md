@@ -15,6 +15,13 @@ als opgelost.
 één voor één bouwen en in de emu (DeckBridge) valideren en laten goedkeuren. Het
 is samen **één basis-deliverable**, geen losse hardware-releases.
 
+**Build/source-marker discipline:** elke wijziging die in de emu getest moet
+worden, moet zichtbaar traceerbaar zijn. Bij **DeckBridge**-wijzigingen altijd de
+zichtbare `BUILD relurl-####` verhogen en met een DeckBridge-test borgen. Bij
+**plugin**-wijzigingen altijd de zichtbare PI-rij `Build` (`pluginBuildRef`)
+bijwerken en met de PI functional test borgen. Geen emu-test laten uitvoeren op
+een build waarvan de zichtbare marker niet bij de actuele diff hoort.
+
 **De hardware-test komt pas ná emu-akkoord op _alles_.** De HW-test is extern en
 buiten onze controle, dus eenmalig: we sturen er één complete build heen zodra
 álle emu-blokken zijn goedgekeurd. Geen per-block hardware-test.
@@ -255,6 +262,61 @@ externe HW-test.
 Per blok meelopen: 11 swipe-regressie (mag nooit breken) en 10 UI-pagina-op-device
 (bevestigen als bedoeld gedrag). V1/V2 zijn het zwaarst (PI-pariteit); splits verder
 als een blok per sessie te groot wordt.
+
+## Vx — uitvoerplan (afvinkbaar)
+
+**"Klaar wanneer" geldt voor ELK blok** (definition of done, naast de blok-eigen
+voorwaarden):
+- [ ] Functionaliteit reuse de released tile-componenten; alleen afwijken waar
+  dial/touch het echt vereist (zie kernprincipes hierboven).
+- [ ] Tests meegeleverd **in dezelfde wijziging**, volgens AGENTS.md "Testing":
+  gedragstest (geen string-match van logica), state-condities gedekt (PI open/dicht,
+  hidden pages, `thresholds:null`, met/zonder smoothing), cross-component-invariant
+  gepind op de consumer.
+- [ ] Check-suite groen: `make verify` / `scripts/verify-settings-pi.sh` + DeckBridge `npm test`.
+- [ ] Build-marker opgehoogd (relurl / pluginBuildRef) + asserttest.
+- [ ] Emu-validatie + gebruiker-akkoord vóór het blok als af geldt.
+
+**Status:**
+- **V0** ✅ klaar + gecommit (DeckBridge-fundament).
+- **V1** ✅ klaar + gecommit + getest (tile-pariteit data/display).
+- **V2** ⚠️ code door codex aanwezig (`dd1449e`), **niet** gevalideerd per de
+  testregels; introduceerde de freeze (gefixt in DeckBridge `d9250eb`). → eerst valideren + tests.
+- **V3** ✅ emu-akkoord, klaar voor commit: dynamische separator, page-indicator,
+  dial-press uitleg, per-pagina default-kleur en graph-label sanitize met Go-, PI-
+  en DeckBridge-live-e2e-tests.
+- **V4/V5** ⬜ nog niet begonnen.
+
+### V2 — alerts/interactie per pagina (valideren + testen)
+- [ ] Alert Snooze, Thresholds, Global-threshold-suppressie per pagina werken,
+  gebonden aan `selectedPage()`, opgeslagen via `dialSetSettings`.
+- [ ] Touch op de strip = tile-druk (snooze cyclen/clearen) op de actieve pagina,
+  óók via globale thresholds. Gemeten op device/emu.
+- **Klaar wanneer (extra):** functionele PI-test die de snooze-toggle + threshold-edit
+  + global-suppress **uitvoert** (geen string-match) en de per-pagina-opslag assert;
+  Go-test dat `OnTouchTap` snoozet/cleart bij actieve threshold; liveness-e2e mee.
+
+### V3 — dial-eigen UI (valideren + testen)
+- [x] Dynamische separator per dial: breedte 0-10, kleur, default breedte 3 /
+  `#363e46`, actie-niveau opgeslagen.
+- [x] Page-indicator (dots ≤9, `x/y` daarboven), off in fullscreen.
+- [x] Per-pagina default-kleur uit palette (wrap-around) bij toevoegen.
+- [x] Dial-press-uitleg in PI (bestaand patroon).
+- [x] Graph-label sanitize tegen onveilige runes.
+- **Getest:** Go pixel/resolve-tests voor separator + indicator, graph sanitize-test,
+  PI-tests voor separator/palette/build-marker en DeckBridge live e2e voor separator,
+  page indicator, dial press, touch/snooze, global-threshold cleanup en live movement.
+
+### V4 — overview multi-preview
+- [ ] Overview toont ~3 pagina's (actieve gecentreerd), tegen echte touch-strip-aspect.
+- **Klaar wanneer (extra):** test dat de overview-render N pagina's plaatst zonder
+  distortie-aanname; geen freeze met PI open (liveness-e2e).
+
+### V5 — bulk & extra's
+- [ ] Bulk-pagina-aanmaak via regel (alle cores / alle readings van sensor) + preview + deselect.
+- [ ] Overview-als-default-toggle; configureerbare indicator-stijl.
+- **Klaar wanneer (extra):** PI-test die bulk-generatie de juiste pagina's laat
+  produceren; toggle-persistentie getest.
 
 ## Te (her)valideren — niet-gaten
 

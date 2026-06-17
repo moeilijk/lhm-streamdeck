@@ -7,6 +7,8 @@ import (
 	"math"
 	"os"
 	"regexp"
+	"strings"
+	"unicode"
 
 	"github.com/golang/freetype/truetype"
 	"golang.org/x/image/font"
@@ -370,9 +372,21 @@ func unfix(x fixed.Int26_6) float64 {
 
 var newlineRegex = regexp.MustCompile("(\n|\\\\n)+")
 
+func printableLabelText(text string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\r' || r == '\t' {
+			return r
+		}
+		if r == unicode.ReplacementChar || unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, text)
+}
+
 func (g *Graph) drawLabel(l *Label) {
 	sh := shared()
-	lines := newlineRegex.Split(l.text, -1)
+	lines := newlineRegex.Split(printableLabelText(l.text), -1)
 	face, err := sh.fontFaceManager.GetFaceOfSize(l.fontSize)
 	if err != nil {
 		log.Printf("drawLabel font: %v", err)
@@ -383,7 +397,7 @@ func (g *Graph) drawLabel(l *Label) {
 	for _, line := range lines {
 		var lwidth float64
 		for _, x := range line {
-			awidth, ok := face.GlyphAdvance(rune(x))
+			awidth, ok := safeGlyphAdvance(face, rune(x))
 			if !ok {
 				log.Println("drawLabel: Failed to GlyphAdvance")
 				return
@@ -416,13 +430,33 @@ func (g *Graph) drawLabel(l *Label) {
 						X: point.X + fixed.Int26_6(dx*64),
 						Y: point.Y + fixed.Int26_6(dy*64),
 					}
-					d.DrawString(line)
+					safeDrawString(d, line)
 				}
 			}
 			d.Src = image.NewUniform(l.clr)
 			d.Dot = point
 		}
-		d.DrawString(line)
+		safeDrawString(d, line)
 		curY += 12
 	}
+}
+
+func safeGlyphAdvance(face font.Face, r rune) (advance fixed.Int26_6, ok bool) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			log.Printf("drawLabel glyph advance panic for %q: %v", r, recovered)
+			advance = 0
+			ok = false
+		}
+	}()
+	return face.GlyphAdvance(r)
+}
+
+func safeDrawString(d *font.Drawer, text string) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			log.Printf("drawLabel draw string panic: %v", recovered)
+		}
+	}()
+	d.DrawString(text)
 }

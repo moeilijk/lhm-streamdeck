@@ -255,6 +255,10 @@ type dialActionSettings struct {
 	SourceProfileID string           `json:"sourceProfileId,omitempty"`
 	ActiveIndex     int              `json:"activeIndex"`
 	Pages           []actionSettings `json:"pages"`
+	// Edge separator drawn on this dial's left/right edges to visually separate
+	// it from adjacent dials. Width is per edge in px (0 = off); nil = default.
+	SeparatorWidth *int   `json:"separatorWidth,omitempty"`
+	SeparatorColor string `json:"separatorColor,omitempty"`
 }
 
 type evSdpiCollection struct {

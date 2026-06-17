@@ -31,6 +31,13 @@ node scripts/test-reading-pi.js
 echo "test: dial PI functional script"
 node scripts/test-dial-pi.js
 
+if curl -fsS "${DECKBRIDGE_URL:-http://127.0.0.1:34075}/api/state" >/dev/null 2>&1; then
+  echo "test: DeckBridge live dial e2e flow"
+  node scripts/test-deckbridge-dial-live.js
+else
+  echo "skip: DeckBridge live dial e2e flow (DeckBridge not reachable)"
+fi
+
 echo "test: Go targets (windows)"
 GOOS=windows GOARCH=amd64 GOCACHE=/tmp/go-build go test \
   ./cmd/lhm_streamdeck_plugin \

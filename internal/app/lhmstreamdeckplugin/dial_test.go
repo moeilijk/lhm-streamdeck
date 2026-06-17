@@ -1,8 +1,11 @@
 package lhmstreamdeckplugin
 
 import (
+	"bytes"
 	"encoding/json"
+	"image"
 	"image/color"
+	"image/png"
 	"testing"
 	"time"
 
@@ -112,6 +115,22 @@ func TestDialColor(t *testing.T) {
 	}
 }
 
+func TestDialDefaultPageColors(t *testing.T) {
+	firstFG, firstHL := dialDefaultPageColors(0)
+	secondFG, secondHL := dialDefaultPageColors(1)
+	wrappedFG, wrappedHL := dialDefaultPageColors(len(dialPageColorPalette))
+
+	if firstFG == "" || firstHL == "" {
+		t.Fatalf("first page colors must be set")
+	}
+	if firstFG == secondFG || firstHL == secondHL {
+		t.Fatalf("second page should get a different default color")
+	}
+	if wrappedFG != firstFG || wrappedHL != firstHL {
+		t.Fatalf("palette wrap = (%s,%s), want first (%s,%s)", wrappedFG, wrappedHL, firstFG, firstHL)
+	}
+}
+
 func TestDefaultDialFontSizes(t *testing.T) {
 	if got := defaultDialTitleFontSize(0); got != 14 {
 		t.Errorf("title 0 -> %v, want 14", got)
@@ -124,6 +143,89 @@ func TestDefaultDialFontSizes(t *testing.T) {
 	}
 	if got := defaultDialValueFontSize(22); got != 22 {
 		t.Errorf("value 22 -> %v, want 22", got)
+	}
+}
+
+func TestDialSeparatorDynamicWidthAndColor(t *testing.T) {
+	bg := color.RGBA{20, 120, 30, 255}
+	sep := color.RGBA{200, 30, 30, 255}
+	fixture := func() []byte {
+		img := image.NewRGBA(image.Rect(0, 0, dialWidth, dialHeight))
+		fillRect(img, img.Bounds(), bg)
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, img); err != nil {
+			t.Fatalf("encode fixture: %v", err)
+		}
+		return buf.Bytes()
+	}
+	at := func(b []byte, x, y int) color.RGBA {
+		im, err := png.Decode(bytes.NewReader(b))
+		if err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		return color.RGBAModel.Convert(im.At(x, y)).(color.RGBA)
+	}
+	y := dialHeight / 2
+
+	// width 0 = off: edges keep the original graph pixels.
+	off, err := decorateDialImage(fixture(), 0, 1, false, 0, sep)
+	if err != nil {
+		t.Fatalf("decorate off: %v", err)
+	}
+	if at(off, 0, y) != bg || at(off, dialWidth-1, y) != bg {
+		t.Fatalf("width 0 must not draw a separator")
+	}
+
+	// width 5 + color: a 5px band of that color on each edge, center untouched.
+	on, err := decorateDialImage(fixture(), 0, 1, false, 5, sep)
+	if err != nil {
+		t.Fatalf("decorate on: %v", err)
+	}
+	if at(on, 0, y) != sep || at(on, 4, y) != sep || at(on, dialWidth-1, y) != sep || at(on, dialWidth-5, y) != sep {
+		t.Fatalf("width 5 must draw a 5px colored band on both edges")
+	}
+	if at(on, 5, y) != bg || at(on, dialWidth-6, y) != bg {
+		t.Fatalf("separator band must be exactly 5px wide")
+	}
+	if at(on, dialWidth/2, y) != bg {
+		t.Fatalf("center must not be overwritten by the separator")
+	}
+}
+
+func TestDialSeparatorResolve(t *testing.T) {
+	if got := dialSeparatorWidth(&dialActionSettings{}); got != 3 {
+		t.Errorf("unset width -> %d, want default 3", got)
+	}
+	w7, w0, w15, wn := 7, 0, 15, -2
+	if got := dialSeparatorWidth(&dialActionSettings{SeparatorWidth: &w7}); got != 7 {
+		t.Errorf("explicit 7 -> %d", got)
+	}
+	if got := dialSeparatorWidth(&dialActionSettings{SeparatorWidth: &w0}); got != 0 {
+		t.Errorf("explicit 0 (off) -> %d", got)
+	}
+	if got := dialSeparatorWidth(&dialActionSettings{SeparatorWidth: &w15}); got != 10 {
+		t.Errorf("15 -> %d, want clamp 10", got)
+	}
+	if got := dialSeparatorWidth(&dialActionSettings{SeparatorWidth: &wn}); got != 0 {
+		t.Errorf("negative -> %d, want 0", got)
+	}
+	if c := dialSeparatorColor(&dialActionSettings{}); c != (color.RGBA{54, 62, 70, 255}) {
+		t.Errorf("default color = %+v", c)
+	}
+	if c := dialSeparatorColor(&dialActionSettings{SeparatorColor: "#ff0000"}); c.R != 255 || c.G != 0 || c.B != 0 {
+		t.Errorf("parsed color = %+v, want red", c)
+	}
+}
+
+func TestDrawDialPageIndicatorUsesDotsForSmallPageCounts(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, dialWidth, dialHeight))
+	fillRect(img, img.Bounds(), color.RGBA{0, 0, 0, 255})
+
+	drawDialPageIndicator(img, 1, 3)
+
+	activePixel := color.RGBAModel.Convert(img.At(dialWidth/2, dialHeight-6)).(color.RGBA)
+	if activePixel == (color.RGBA{0, 0, 0, 255}) {
+		t.Fatalf("active indicator pixel was not drawn")
 	}
 }
 
