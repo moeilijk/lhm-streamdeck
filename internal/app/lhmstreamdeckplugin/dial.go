@@ -36,6 +36,17 @@ type dialPageRender struct {
 	messageValue string
 }
 
+var dialPageColorPalette = []struct {
+	foreground string
+	highlight  string
+}{
+	{foreground: "#005128", highlight: "#009e00"},
+	{foreground: "#003f73", highlight: "#00a2ff"},
+	{foreground: "#5a3b87", highlight: "#b06cff"},
+	{foreground: "#6a4a00", highlight: "#ffbf33"},
+	{foreground: "#6f1d1b", highlight: "#ff5a4f"},
+}
+
 func decodeDialSettings(raw *json.RawMessage) (dialActionSettings, error) {
 	var s dialActionSettings
 	if raw != nil && *raw != nil {
@@ -50,6 +61,17 @@ func decodeDialSettings(raw *json.RawMessage) (dialActionSettings, error) {
 		s.ActiveIndex %= len(s.Pages)
 	}
 	return s, nil
+}
+
+func dialDefaultPageColors(index int) (foreground, highlight string) {
+	if len(dialPageColorPalette) == 0 {
+		return "#005128", "#009e00"
+	}
+	if index < 0 {
+		index = 0
+	}
+	c := dialPageColorPalette[index%len(dialPageColorPalette)]
+	return c.foreground, c.highlight
 }
 
 // emaSmooth applies one exponential-moving-average step, shared by the reading
@@ -248,6 +270,113 @@ func strokeRect(img *image.RGBA, r image.Rectangle, c color.Color, width int) {
 	}
 }
 
+// drawDialEdgeSeparators draws a width-px band of clr on the left and right edge
+// of the dial image so adjacent dials are visually separated. width 0 = off.
+func drawDialEdgeSeparators(img *image.RGBA, width int, clr color.RGBA) {
+	if width <= 0 {
+		return
+	}
+	bounds := img.Bounds()
+	if bounds.Empty() {
+		return
+	}
+	if half := bounds.Dx() / 2; width > half {
+		width = half
+	}
+	fillRect(img, image.Rect(bounds.Min.X, bounds.Min.Y, bounds.Min.X+width, bounds.Max.Y), clr)
+	fillRect(img, image.Rect(bounds.Max.X-width, bounds.Min.Y, bounds.Max.X, bounds.Max.Y), clr)
+}
+
+// dialSeparatorWidth resolves the configured edge-separator width (0-10 per edge),
+// defaulting to 3 when unset (preserving the original visible separator).
+func dialSeparatorWidth(s *dialActionSettings) int {
+	w := 3
+	if s != nil && s.SeparatorWidth != nil {
+		w = *s.SeparatorWidth
+	}
+	if w < 0 {
+		w = 0
+	}
+	if w > 10 {
+		w = 10
+	}
+	return w
+}
+
+func dialSeparatorColor(s *dialActionSettings) color.RGBA {
+	hex := ""
+	if s != nil {
+		hex = s.SeparatorColor
+	}
+	return *dialColor(hex, color.RGBA{54, 62, 70, 255})
+}
+
+func drawDialPageIndicator(img *image.RGBA, active, count int) {
+	if count <= 1 {
+		return
+	}
+	if active < 0 {
+		active = 0
+	}
+	if active >= count {
+		active = count - 1
+	}
+	inactive := color.RGBA{100, 108, 116, 255}
+	activeColor := color.RGBA{190, 198, 206, 255}
+	y := dialHeight - 7
+	if count <= 9 {
+		dotW, dotH, gap := 4, 3, 4
+		activeW := 10
+		total := 0
+		for i := 0; i < count; i++ {
+			if i > 0 {
+				total += gap
+			}
+			if i == active {
+				total += activeW
+			} else {
+				total += dotW
+			}
+		}
+		x := (dialWidth - total) / 2
+		for i := 0; i < count; i++ {
+			w := dotW
+			c := inactive
+			if i == active {
+				w = activeW
+				c = activeColor
+			}
+			fillRect(img, image.Rect(x, y, x+w, y+dotH), c)
+			x += w + gap
+		}
+		return
+	}
+
+	face, err := graph.GetSharedFontFaceManager().GetFaceOfSize(8)
+	if err != nil {
+		return
+	}
+	drawCenteredText(img, face, &activeColor, fmt.Sprintf("%d/%d", active+1, count), dialHeight-3)
+}
+
+func decorateDialImage(b []byte, active, count int, showIndicator bool, sepWidth int, sepColor color.RGBA) ([]byte, error) {
+	src, err := png.Decode(bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+	canvas := image.NewRGBA(src.Bounds())
+	imagedraw.Draw(canvas, canvas.Bounds(), src, image.Point{}, imagedraw.Src)
+	drawDialEdgeSeparators(canvas, sepWidth, sepColor)
+	if showIndicator {
+		drawDialPageIndicator(canvas, active, count)
+	}
+	var out bytes.Buffer
+	if err := png.Encode(&out, canvas); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
+}
+
 func (p *Plugin) renderDialOverview(settings *dialActionSettings, state *dialState) ([]byte, error) {
 	canvas := image.NewRGBA(image.Rect(0, 0, dialWidth, dialHeight))
 	fillRect(canvas, canvas.Bounds(), color.RGBA{5, 8, 11, 255})
@@ -288,6 +417,9 @@ func (p *Plugin) renderDialOverview(settings *dialActionSettings, state *dialSta
 			strokeRect(canvas, card, color.RGBA{40, 50, 62, 255}, 1)
 		}
 	}
+
+	drawDialEdgeSeparators(canvas, dialSeparatorWidth(settings), dialSeparatorColor(settings))
+	drawDialPageIndicator(canvas, settings.ActiveIndex, len(settings.Pages))
 
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, canvas); err != nil {
@@ -472,6 +604,11 @@ func (p *Plugin) updateDialPage(ctx string, settings *dialActionSettings, state 
 		b, err := g.EncodePNG()
 		if err != nil {
 			log.Printf("dial encode: %v", err)
+			return render, settingsChanged
+		}
+		b, err = decorateDialImage(b, settings.ActiveIndex, len(settings.Pages), false, dialSeparatorWidth(settings), dialSeparatorColor(settings))
+		if err != nil {
+			log.Printf("dial decorate: %v", err)
 			return render, settingsChanged
 		}
 		render.image = b

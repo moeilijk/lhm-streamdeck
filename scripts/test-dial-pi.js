@@ -142,7 +142,49 @@ function testAddSelectedPageSentinel() {
   const p = sb.currentSettings.pages[0];
   assert(p.min === 0 && p.max === 0, "new page uses min:0/max:0 derive sentinel");
   assert(p.sensorUid === "cpu" && String(p.readingId) === "1", "reading wired onto page");
-  assert(sb.currentSettings.activeIndex === 0, "active index = new page");
+  assert(p.foregroundColor === "#005128" && p.highlightColor === "#009e00", "first page uses first palette color");
+  sb.addSelectedPage();
+  const p2 = sb.currentSettings.pages[1];
+  assert(p2.foregroundColor === "#003f73" && p2.highlightColor === "#00a2ff", "second page uses second palette color");
+  assert(sb.currentSettings.activeIndex === 1, "active index = newest page");
+}
+
+function testAddPageButtonSendsSettings() {
+  const listeners = {};
+  const sent = [];
+  const sb = loadDialSandbox({
+    addPageBtn: {
+      dataset: {},
+      addEventListener(type, handler) { listeners[type] = handler; },
+    },
+    pageSensorSelect: { value: "cpu" },
+    pageReadingSelect: { value: "2", disabled: false },
+  });
+  sb.websocket = {
+    readyState: 1,
+    send(payload) { sent.push(JSON.parse(payload)); },
+  };
+  sb.uuid = "ctx";
+  sb.actionInfo = { action: "com.moeilijk.lhm.dial" };
+  sb.renderPages = () => {};
+  sb.currentCatalog = { readings: [
+    { id: 1, sensorUid: "cpu", label: "CPU Core #1", unit: "%" },
+    { id: 2, sensorUid: "cpu", label: "CPU Core #2", unit: "%" },
+  ] };
+  sb.currentSettings = { activeIndex: 0, pages: [{ title: "CPU Core #1" }] };
+  sb.pageSelectionDraft = { sensorUid: "cpu", readingId: "2" };
+
+  sb.bindAddPageControl();
+  listeners.click({
+    preventDefault() {},
+    stopPropagation() {},
+  });
+
+  assert(sb.currentSettings.pages.length === 2, "button click adds a page");
+  assert(sb.currentSettings.pages[1].title === "CPU Core #2", "button click uses selected reading");
+  assert(sent.length === 1, "button click sends one plugin message");
+  assert(sent[0].payload && sent[0].payload.dialSetSettings, "button click sends dialSetSettings");
+  assert(sent[0].payload.dialSetSettings.pages.length === 2, "sent settings include added page");
 }
 
 function testMoveSelectedPage() {
@@ -167,7 +209,9 @@ function testRemoveSelectedPage() {
 function testBuildRefVisibleInPi() {
   const html = fs.readFileSync("com.moeilijk.lhm.sdPlugin/dial_pi.html", "utf8");
   assert(html.includes('id="pluginBuildRef"'), "plugin build ref row present");
-  assert(html.includes("c56a229"), "plugin build commit visible in PI");
+  assert(html.includes("dd1449e + V3-separator"), "plugin V3 separator build ref visible in PI");
+  assert(html.includes("Dial press"), "dial-press row present");
+  assert(html.includes("Toggle overview"), "dial-press behavior visible");
   assert(html.includes('id="globalThresholdsSection" hidden'), "global thresholds section starts hidden");
 }
 
@@ -240,6 +284,58 @@ function testGlobalThresholdSectionOnlyWhenActive() {
   assert(section.hidden === true, "section hidden when globals do not match page type");
 }
 
+function testGlobalThresholdToggleClickSavesPageSuppression() {
+  const buttons = [];
+  const section = { hidden: false };
+  const container = {
+    innerHTML: "",
+    appendChild() {},
+  };
+  const sb = loadDialSandbox({
+    pageList: { selectedIndex: 0 },
+  });
+  sb.document.querySelector = (selector) => {
+    if (selector === "#globalRefsContainer") return container;
+    if (selector === "#globalThresholdsSection") return section;
+    return null;
+  };
+  sb.document.createElement = (tag) => {
+    const el = {
+      className: "",
+      textContent: "",
+      title: "",
+      style: {},
+      appendChild() {},
+      addEventListener(type, handler) {
+        if (tag === "button" && type === "click") {
+          buttons.push({ el, handler });
+        }
+      },
+    };
+    return el;
+  };
+  sb.renderPages = () => {};
+  sb.currentSettings = {
+    activeIndex: 0,
+    pages: [{
+      sensorUid: "cpu",
+      readingId: "1",
+      thresholds: null,
+      currentThresholdId: "usage",
+    }],
+  };
+  sb.currentCatalog = { readings: [{ id: "1", sensorUid: "cpu", type: "Usage" }] };
+  sb.globalThresholds = [{ id: "usage", name: "Usage", readingType: "Usage" }];
+
+  sb.renderActiveGlobals();
+  assert(buttons.length === 1, "global threshold toggle rendered");
+  buttons[0].handler();
+  assert(sb.currentSettings.pages[0].suppressedGlobalIDs.join(",") === "usage", "global threshold suppression saved from click");
+
+  buttons[0].handler();
+  assert(sb.currentSettings.pages[0].suppressedGlobalIDs.length === 0, "global threshold unsuppression saved from click");
+}
+
 function testAddThresholdClickAddsOneThreshold() {
   const listeners = {};
   const addBtn = {
@@ -270,8 +366,35 @@ function testAddThresholdClickAddsOneThreshold() {
   assert(sb.currentSettings.pages[0].thresholds[0].name === "Click Test", "threshold name comes from input");
 }
 
+function testSeparatorIsActionLevelWithCurrentDefault() {
+  function rangeHost(input) {
+    return { tagName: "DIV", querySelector: (s) => (s === "input[type=range]" ? input : null) };
+  }
+  const widthInput = { type: "range", value: "3", dataset: {}, _h: {}, addEventListener(t, h) { this._h[t] = h; } };
+  const colorInput = { tagName: "INPUT", type: "color", value: "#000000", dataset: {}, _h: {}, addEventListener(t, h) { this._h[t] = h; } };
+  const sb = loadDialSandbox({ separatorWidth: rangeHost(widthInput), separatorColor: colorInput });
+  sb.renderPages = () => {};
+
+  // Default (unset) must show the current separator look: width 3, #363e46.
+  sb.currentSettings = { activeIndex: 0, pages: [] };
+  sb.renderDialSettings();
+  assert(widthInput.value === "3", "default separator width 3 (current look)");
+  assert(colorInput.value === "#363e46", "default separator color #363e46 (current look)");
+
+  // The controls are action-level: they write to currentSettings, not a page.
+  sb.bindDialSettings();
+  widthInput.value = "7";
+  widthInput._h.input();
+  assert(sb.currentSettings.separatorWidth === 7, "width writes to action settings");
+  colorInput.value = "#ff0000";
+  colorInput._h.change();
+  assert(sb.currentSettings.separatorColor === "#ff0000", "color writes to action settings");
+  assert(!("separatorWidth" in (sb.currentSettings.pages[0] || {})), "separator is not stored per page");
+}
+
 const tests = [
   ["normalizePage defaults", testNormalizePageDefaults],
+  ["separator is action-level with current default", testSeparatorIsActionLevelWithCurrentDefault],
   ["normalizeSettings clamps activeIndex", testNormalizeSettingsClampsActiveIndex],
   ["fieldInput range-wrap handling", testFieldInputRangeWrap],
   ["pageTitle fallbacks", testPageTitle],
@@ -279,6 +402,7 @@ const tests = [
   ["readingsForSensor filter+sort", testReadingsForSensor],
   ["resetPageSelectionDraft", testResetPageSelectionDraft],
   ["addSelectedPage derive sentinel", testAddSelectedPageSentinel],
+  ["add page button sends settings", testAddPageButtonSendsSettings],
   ["moveSelectedPage", testMoveSelectedPage],
   ["removeSelectedPage", testRemoveSelectedPage],
   ["build ref visible in PI", testBuildRefVisibleInPi],
@@ -286,6 +410,7 @@ const tests = [
   ["threshold helpers", testThresholdHelpers],
   ["global threshold helpers per page", testGlobalThresholdHelpersPerPage],
   ["global threshold section only when active", testGlobalThresholdSectionOnlyWhenActive],
+  ["global threshold toggle click saves page suppression", testGlobalThresholdToggleClickSavesPageSuppression],
   ["add threshold click adds one threshold", testAddThresholdClickAddsOneThreshold],
 ];
 

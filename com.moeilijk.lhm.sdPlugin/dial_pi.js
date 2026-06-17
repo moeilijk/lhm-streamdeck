@@ -8,6 +8,20 @@ var websocket = null,
 
 var globalThresholds = [];
 var snoozeDurationOptions = [300000, 900000, 3600000, 0];
+var dialPageColorPalette = [
+  { foregroundColor: "#005128", highlightColor: "#009e00" },
+  { foregroundColor: "#003f73", highlightColor: "#00a2ff" },
+  { foregroundColor: "#5a3b87", highlightColor: "#b06cff" },
+  { foregroundColor: "#6a4a00", highlightColor: "#ffbf33" },
+  { foregroundColor: "#6f1d1b", highlightColor: "#ff5a4f" }
+];
+
+function dialDefaultPageColors(index) {
+  var palette = dialPageColorPalette.length ? dialPageColorPalette : [{ foregroundColor: "#005128", highlightColor: "#009e00" }];
+  var i = Number(index) || 0;
+  if (i < 0) i = 0;
+  return palette[i % palette.length];
+}
 
 function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
   uuid = inUUID;
@@ -150,7 +164,14 @@ function renderPages() {
     list.appendChild(opt);
   });
   updatePageButtons();
+  renderDialSettings();
   renderPageSettings();
+}
+
+// Action-level (whole-dial) settings, separate from the per-page settings.
+function renderDialSettings() {
+  setValue("separatorWidth", currentSettings.separatorWidth != null ? currentSettings.separatorWidth : 3);
+  setValue("separatorColor", currentSettings.separatorColor || "#363e46");
 }
 
 function selectedPageIndex() {
@@ -320,6 +341,26 @@ function bindPageField(id, key, parser) {
   };
   el.addEventListener("input", handler);
   el.addEventListener("change", handler);
+}
+
+// bindActionField binds an action-level control (writes to currentSettings, the
+// whole dial) instead of the selected page.
+function bindActionField(id, key, parser) {
+  var el = fieldInput(document.getElementById(id));
+  if (!el || el.dataset.bound) return;
+  el.dataset.bound = "1";
+  var handler = function () {
+    currentSettings[key] = parser ? parser(el.value) : el.value;
+    if (el.type === "range" && typeof positionRangeVal === "function") positionRangeVal(el);
+    saveSettings();
+  };
+  el.addEventListener("input", handler);
+  el.addEventListener("change", handler);
+}
+
+function bindDialSettings() {
+  bindActionField("separatorWidth", "separatorWidth", function (v) { return Number(v) || 0; });
+  bindActionField("separatorColor", "separatorColor");
 }
 
 function bindPageSettings() {
@@ -778,7 +819,9 @@ function bindSelectedPageSelection() {
   }
 }
 
-function addSelectedPage() {
+function addSelectedPage(event) {
+  if (event && typeof event.preventDefault === "function") event.preventDefault();
+  if (event && typeof event.stopPropagation === "function") event.stopPropagation();
   var sensorSel = document.getElementById("pageSensorSelect");
   var readingSel = document.getElementById("pageReadingSelect");
   if (!sensorSel || !readingSel) return;
@@ -787,6 +830,7 @@ function addSelectedPage() {
   var readings = readingsForSensor(sensorUid);
   var reading = readings.find(function (item) { return String(item.id) === String(readingId); });
   if (!reading) return;
+  var pageColors = dialDefaultPageColors(currentSettings.pages.length);
   currentSettings.pages.push(normalizePage({
     sourceProfileId: currentSettings.sourceProfileId || "",
     sensorUid: sensorUid,
@@ -800,9 +844,9 @@ function addSelectedPage() {
     graphUnit: "",
     isValid: true,
     titleColor: "#b7b7b7",
-    foregroundColor: "#005128",
+    foregroundColor: pageColors.foregroundColor,
     backgroundColor: "#000000",
-    highlightColor: "#009e00",
+    highlightColor: pageColors.highlightColor,
     valueTextColor: "#ffffff",
     graphMode: "both",
     graphHeightPct: 100,
@@ -816,6 +860,13 @@ function addSelectedPage() {
   }));
   currentSettings.activeIndex = currentSettings.pages.length - 1;
   saveSettings();
+}
+
+function bindAddPageControl() {
+  var addBtn = document.getElementById("addPageBtn");
+  if (!addBtn || addBtn.dataset.bound) return;
+  addBtn.dataset.bound = "1";
+  addBtn.addEventListener("click", addSelectedPage);
 }
 
 function removeSelectedPage() {
@@ -840,7 +891,7 @@ function moveSelectedPage(delta) {
 }
 
 document.addEventListener("DOMContentLoaded", function () {
-  document.getElementById("addPageBtn").addEventListener("click", addSelectedPage);
+  bindAddPageControl();
   document.getElementById("removePageBtn").addEventListener("click", removeSelectedPage);
   document.getElementById("moveUpBtn").addEventListener("click", function () { moveSelectedPage(-1); });
   document.getElementById("moveDownBtn").addEventListener("click", function () { moveSelectedPage(1); });
@@ -849,6 +900,7 @@ document.addEventListener("DOMContentLoaded", function () {
     saveSettings();
     renderPageSettings();
   });
+  bindDialSettings();
   bindPageSettings();
   bindSnoozeControls();
   bindThresholdControls();
