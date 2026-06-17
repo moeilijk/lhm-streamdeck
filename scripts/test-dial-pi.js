@@ -209,7 +209,7 @@ function testRemoveSelectedPage() {
 function testBuildRefVisibleInPi() {
   const html = fs.readFileSync("com.moeilijk.lhm.sdPlugin/dial_pi.html", "utf8");
   assert(html.includes('id="pluginBuildRef"'), "plugin build ref row present");
-  assert(html.includes("dd1449e + V3-separator"), "plugin V3 separator build ref visible in PI");
+  assert(html.includes("251dff3 + V3"), "plugin V3 build ref visible in PI");
   assert(html.includes("Dial press"), "dial-press row present");
   assert(html.includes("Toggle overview"), "dial-press behavior visible");
   assert(html.includes('id="globalThresholdsSection" hidden'), "global thresholds section starts hidden");
