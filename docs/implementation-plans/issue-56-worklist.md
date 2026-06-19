@@ -280,24 +280,32 @@ voorwaarden):
 **Status:**
 - **V0** ✅ klaar + gecommit (DeckBridge-fundament).
 - **V1** ✅ klaar + gecommit + getest (tile-pariteit data/display).
-- **V2** ⚠️ code door codex aanwezig (`dd1449e`), **niet** gevalideerd per de
-  testregels; introduceerde de freeze (gefixt in DeckBridge `d9250eb`). → eerst valideren + tests.
+- **V2** ✅ emu-akkoord (17 juni) + testlat dicht: DeckBridge freeze-fix
+  (`d9250eb`, rotary overgeslagen in `patchDeckImages`) en plugin-gedragstests op
+  niveau. Go dekt nu alle drie de touch-takken (snooze-cycle/clear, sticky-clear
+  zónder snooze-duren, no-op); PI voert snooze-toggle + threshold-add +
+  global-suppress echt uit met per-pagina opslag-assert (incl. `thresholds:null`).
+  `make verify` + `scripts/verify-settings-pi.sh` groen.
 - **V3** ✅ emu-akkoord, klaar voor commit: dynamische separator, page-indicator,
   dial-press uitleg, per-pagina default-kleur en graph-label sanitize met Go-, PI-
   en DeckBridge-live-e2e-tests.
 - **V4** ✅ emu-akkoord (`3c5e9b5 + V4-prep`): overview multi-preview zonder
   overlap, tests groen.
-- **V5** ⚠️ code in emu gedeployed (`3c5e9b5 + V5-prep`), tests groen; gebruiker
-  emu-check nog pending.
+- **V5** ✅ emu-akkoord (`V5-prep.16`): bulk-apply UX (kort "No matching
+  readings", uitgegrijsd/niet-aanklikbaar), tests groen, gecommit + gepusht
+  (`0bf49a2`).
 
 ### V2 — alerts/interactie per pagina (valideren + testen)
-- [ ] Alert Snooze, Thresholds, Global-threshold-suppressie per pagina werken,
+- [x] Alert Snooze, Thresholds, Global-threshold-suppressie per pagina werken,
   gebonden aan `selectedPage()`, opgeslagen via `dialSetSettings`.
-- [ ] Touch op de strip = tile-druk (snooze cyclen/clearen) op de actieve pagina,
-  óók via globale thresholds. Gemeten op device/emu.
-- **Klaar wanneer (extra):** functionele PI-test die de snooze-toggle + threshold-edit
-  + global-suppress **uitvoert** (geen string-match) en de per-pagina-opslag assert;
-  Go-test dat `OnTouchTap` snoozet/cleart bij actieve threshold; liveness-e2e mee.
+- [x] Touch op de strip = tile-druk (snooze cyclen/clearen) op de actieve pagina,
+  óok via globale thresholds. Gemeten op device/emu.
+- **Getest:** Go `TestHandleDialPageTouch*` dekt de drie touch-takken
+  (snooze-cycle/clear, sticky-clear zónder snooze-duren, no-op) +
+  `TestUpdateDialPageKeepsSnoozeWhenThresholdDrops`; PI `test-dial-pi.js` voert
+  snooze-toggle, threshold-add en global-suppress echt uit en assert per-pagina
+  opslag + `dialSetSettings`-verzending (incl. `thresholds:null`). `make verify` +
+  `scripts/verify-settings-pi.sh` groen.
 
 ### V3 — dial-eigen UI (valideren + testen)
 - [x] Dynamische separator per dial: breedte 0-10, kleur, default breedte 3 /
@@ -325,7 +333,8 @@ voorwaarden):
   voor action-level default view/indicatorstijl; Go-tests voor renderer-resolve;
   DeckBridge live e2e voor view-opties en bulk-add; `scripts/verify-settings-pi.sh`;
   `make verify`.
-- **Pending:** gebruiker emu-check op V5-controls.
+- **Emu-akkoord (`V5-prep.16`):** bulk-apply melding kort + uitgegrijsd; gecommit
+  + gepusht (`0bf49a2`).
 
 ## Te (her)valideren — niet-gaten
 
