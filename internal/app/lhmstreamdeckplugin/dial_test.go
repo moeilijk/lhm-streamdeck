@@ -473,3 +473,33 @@ func TestHandleDialPageTouchIgnoresPageWithoutThresholds(t *testing.T) {
 		t.Fatalf("expected touch without thresholds or active alert to do nothing")
 	}
 }
+
+func TestHandleDialPageTouchClearsStickyThresholdWithoutSnoozeDurations(t *testing.T) {
+	const pageCtx = "dial-page"
+	p := &Plugin{
+		thresholdStates:  make(map[string]map[string]*thresholdRuntimeState),
+		thresholdSnoozes: make(map[string]*thresholdSnoozeState),
+		thresholdDirty:   make(map[string]bool),
+	}
+	p.thresholdStates[pageCtx] = map[string]*thresholdRuntimeState{
+		"t1": {Active: true, Latched: true},
+	}
+	page := &actionSettings{
+		CurrentThresholdID: "t1",
+		Thresholds:         []Threshold{{ID: "t1", Enabled: true, Operator: ">=", Value: 10}},
+	}
+	now := time.Unix(1500, 0)
+
+	// Active threshold, no snooze durations -> sticky-clear branch.
+	if !p.handleDialPageTouch(pageCtx, page, now) {
+		t.Fatalf("expected touch to clear sticky threshold when no snooze durations configured")
+	}
+	if page.CurrentThresholdID != "" {
+		t.Fatalf("expected current threshold id cleared, got %q", page.CurrentThresholdID)
+	}
+
+	// Nothing active anymore -> a follow-up touch is a no-op.
+	if p.handleDialPageTouch(pageCtx, page, now.Add(time.Second)) {
+		t.Fatalf("expected no-op touch after sticky threshold cleared")
+	}
+}

@@ -358,6 +358,60 @@ function testGlobalThresholdToggleClickSavesPageSuppression() {
   assert(sb.currentSettings.pages[0].suppressedGlobalIDs.length === 0, "global threshold unsuppression saved from click");
 }
 
+function testSnoozeClickSavesPerPageDurations() {
+  // Drives the real bindSnoozeControls click handler against a stubbed DOM and
+  // asserts the toggle writes per-page snoozeDurations and persists them.
+  function makeButton(value) {
+    const classes = {};
+    return {
+      dataset: { value: String(value) },
+      _h: {},
+      classList: {
+        contains(cls) { return classes[cls] === true; },
+        toggle(cls, force) {
+          const next = force === undefined ? !classes[cls] : force === true;
+          classes[cls] = next;
+          return next;
+        },
+      },
+      addEventListener(type, handler) { this._h[type] = handler; },
+    };
+  }
+  const fifteenMin = makeButton(900000);
+  const buttons = [fifteenMin, makeButton(300000), makeButton(0)];
+  const sent = [];
+  const sb = loadDialSandbox({ pageList: { selectedIndex: 0 } });
+  sb.document.querySelectorAll = (selector) =>
+    selector === ".snooze-duration" ? buttons : [];
+  sb.renderPages = () => {};
+  sb.websocket = {
+    readyState: 1,
+    send(payload) { sent.push(JSON.parse(payload)); },
+  };
+  sb.uuid = "ctx";
+  sb.currentSettings = { activeIndex: 0, pages: [{ title: "A", snoozeDurations: [] }] };
+
+  sb.bindSnoozeControls();
+
+  // Selecting the 15-minute preset persists it on the active page.
+  fifteenMin._h.click();
+  assert(
+    sb.currentSettings.pages[0].snoozeDurations.join(",") === "900000",
+    "snooze toggle saves the selected duration on the active page"
+  );
+  assert(
+    sent.length === 1 && sent[0].payload && sent[0].payload.dialSetSettings,
+    "snooze toggle persists via dialSetSettings"
+  );
+
+  // Toggling the same preset off clears it again.
+  fifteenMin._h.click();
+  assert(
+    sb.currentSettings.pages[0].snoozeDurations.length === 0,
+    "snooze toggle off clears the per-page duration"
+  );
+}
+
 function testAddThresholdClickAddsOneThreshold() {
   const listeners = {};
   const addBtn = {
@@ -459,6 +513,7 @@ const tests = [
   ["global threshold helpers per page", testGlobalThresholdHelpersPerPage],
   ["global threshold section only when active", testGlobalThresholdSectionOnlyWhenActive],
   ["global threshold toggle click saves page suppression", testGlobalThresholdToggleClickSavesPageSuppression],
+  ["snooze click saves per-page durations", testSnoozeClickSavesPerPageDurations],
   ["add threshold click adds one threshold", testAddThresholdClickAddsOneThreshold],
 ];
 
