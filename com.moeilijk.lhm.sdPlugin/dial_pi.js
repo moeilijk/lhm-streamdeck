@@ -839,14 +839,14 @@ function bindSelectedPageSelection() {
   }
 }
 
-function pageFromReading(sensorUid, reading, index) {
+function pageFromReading(sensorUid, reading, index, title) {
   var pageColors = dialDefaultPageColors(index);
   return normalizePage({
     sourceProfileId: currentSettings.sourceProfileId || "",
     sensorUid: sensorUid,
     readingId: String(reading.id),
     readingLabel: reading.label,
-    title: reading.label,
+    title: title || reading.label,
     min: 0,
     max: 0,
     format: "",
@@ -920,32 +920,16 @@ function sameBulkField(left, right) {
   return !l || !r || l === r;
 }
 
-function isMatchingBulkReading(selected, reading) {
-  var selectedLabel = bulkMatchText(selected.label);
-  var readingLabel = bulkMatchText(reading.label);
-  if (selectedLabel && readingLabel === selectedLabel) {
-    return sameBulkField(selected.type, reading.type) && sameBulkField(selected.unit, reading.unit);
-  }
-
-  return false;
-}
-
-function isMatchingNumberedBulkReading(selected, reading) {
-  var selectedStem = bulkNumberedReadingStem(selected.label);
-  if (!selectedStem) return false;
-  return bulkNumberedReadingStem(reading.label) === selectedStem &&
-    sameBulkField(selected.type, reading.type) &&
-    sameBulkField(selected.unit, reading.unit);
+// Category of a reading (cpu, gpu, memory, disk, network, ...). Used to scope
+// "this reading on matching sensors" to the same KIND of sensor (disks↔disks).
+function readingCategory(reading, sensorUid) {
+  if (reading && reading.category) return bulkMatchText(reading.category);
+  var sensor = sensorByUid(sensorUid || (reading && reading.sensorUid));
+  return bulkMatchText((sensor && sensor.category) || "other");
 }
 
 function bulkCandidateKey(sensorUid, readingId, sourceProfileId) {
   return (sourceProfileId || currentSettings.sourceProfileId || "") + ":" + sensorUid + ":" + String(readingId);
-}
-
-function isSelectedBulkCandidate(selected, sensorUid, reading) {
-  return selected &&
-    selected.sensorUid === sensorUid &&
-    String(selected.reading.id) === String(reading.id);
 }
 
 function existingBulkPageKeys() {
@@ -957,9 +941,16 @@ function existingBulkPageKeys() {
   return seen;
 }
 
+// Three concrete bulk rules (the issuer's spec): all readings on the seed's sensor;
+// the whole numbered family on that sensor (all cores / all fans); the same reading
+// on all matching (same-category) sensors. Each INCLUDES the seed, so the count the
+// UI shows is the full set that will be added (existing pages are still skipped).
 function buildBulkCandidates(rule) {
   var selected = selectedDraftReading();
   if (!selected) return [];
+  var seed = selected.reading;
+  var seedSensor = selected.sensorUid;
+  var seedCat = readingCategory(seed, seedSensor);
   var seen = existingBulkPageKeys();
   var candidates = [];
   function addCandidate(sensorUid, reading) {
@@ -973,27 +964,62 @@ function buildBulkCandidates(rule) {
       label: (sensor.name || sensorUid) + " — " + (reading.label || reading.id)
     });
   }
+  var readings = currentCatalog.readings || [];
 
-  if (rule === "matching-reading") {
-    (currentCatalog.readings || []).forEach(function (reading) {
-      if (isSelectedBulkCandidate(selected, reading.sensorUid, reading)) return;
-      if (isMatchingBulkReading(selected.reading, reading)) addCandidate(reading.sensorUid, reading);
+  if (rule === "numbered-family") {
+    var stem = bulkNumberedReadingStem(seed.label);
+    if (!stem) return [];
+    var family = readings.filter(function (r) {
+      return r.sensorUid === seedSensor && // cores/fans live on the one sensor
+        bulkNumberedReadingStem(r.label) === stem &&
+        sameBulkField(seed.type, r.type) && sameBulkField(seed.unit, r.unit);
     });
+    if (family.length < 2) return []; // a "set" needs more than just the seed
+    family.forEach(function (r) { addCandidate(r.sensorUid, r); });
     return candidates;
   }
 
-  if (rule === "matching-numbered-readings") {
-    (currentCatalog.readings || []).forEach(function (reading) {
-      if (isSelectedBulkCandidate(selected, reading.sensorUid, reading)) return;
-      if (isMatchingNumberedBulkReading(selected.reading, reading)) addCandidate(reading.sensorUid, reading);
+  if (rule === "matching-category") {
+    var matched = readings.filter(function (r) {
+      return readingCategory(r, r.sensorUid) === seedCat && // same KIND of sensor
+        bulkMatchText(r.label) === bulkMatchText(seed.label) &&
+        sameBulkField(seed.type, r.type) && sameBulkField(seed.unit, r.unit);
     });
+    var sensorsSeen = {};
+    matched.forEach(function (r) { sensorsSeen[r.sensorUid] = 1; });
+    if (Object.keys(sensorsSeen).length < 2) return []; // needs >1 matching sensor
+    matched.forEach(function (r) { addCandidate(r.sensorUid, r); });
     return candidates;
   }
 
-  readingsForSensor(selected.sensorUid).forEach(function (reading) {
-    addCandidate(selected.sensorUid, reading);
+  // "sensor-all": every reading on the seed's sensor.
+  readingsForSensor(seedSensor).forEach(function (r) {
+    addCandidate(seedSensor, r);
   });
   return candidates;
+}
+
+function bulkRuleValue() {
+  var sel = document.getElementById("bulkRule");
+  return sel && sel.value ? sel.value : "sensor-all";
+}
+
+// Fill the preview from the selected rule. When a rule yields nothing, say so plainly
+// (a disabled line) instead of a silent empty list, so "no matches" never reads as
+// "broken".
+function generateBulkPreview() {
+  var candidates = buildBulkCandidates(bulkRuleValue());
+  renderBulkPreview(candidates);
+  if (candidates.length === 0) {
+    var list = document.getElementById("bulkPreviewList");
+    if (list) {
+      var hint = document.createElement("option");
+      hint.disabled = true;
+      hint.selected = false; // not a choice — just a readable, un-highlighted note
+      hint.textContent = "No matching readings";
+      list.appendChild(hint);
+    }
+  }
 }
 
 function renderBulkPreview(candidates) {
@@ -1016,9 +1042,20 @@ function clearBulkPreview() {
   renderBulkPreview([]);
 }
 
-function generateBulkPreview() {
-  var rule = document.getElementById("bulkRule");
-  renderBulkPreview(buildBulkCandidates(rule ? rule.value : "sensor-readings"));
+// Cross-sensor matches (e.g. "This reading across sensors") all share the same
+// reading label by definition, so bare labels would render N identical pages
+// ("Read", "Read", "Read"). Qualify with the sensor name when the match is on a
+// different sensor than the seed — skipping it when the label already names the
+// sensor, to avoid doubling ("GPU GPU Core").
+function bulkPageTitle(candidate, seedSensorUid, qualifyAll) {
+  var label = candidate.reading.label || String(candidate.reading.id);
+  // Same-label-across-sensors adds must qualify EVERY page (incl. the seed sensor) so
+  // they stay distinguishable; same-sensor adds keep their already-distinct labels.
+  if (!candidate.sensorUid || (!qualifyAll && candidate.sensorUid === seedSensorUid)) return label;
+  var sensor = sensorByUid(candidate.sensorUid);
+  var sensorName = (sensor && sensor.name) || candidate.sensorUid;
+  if (bulkMatchText(label).indexOf(bulkMatchText(sensorName)) !== -1) return label;
+  return sensorName + " " + label;
 }
 
 function addBulkSelectedPages() {
@@ -1027,6 +1064,10 @@ function addBulkSelectedPages() {
   var selected = Array.from(list.options).filter(function (opt) { return opt.selected; });
   if (selected.length === 0) return;
   var firstIndex = currentSettings.pages.length;
+  var seedSensorUid = pageSelectionDraft.sensorUid || "";
+  // The "matching sensors" rule adds the same label across sensors, so every page
+  // must be sensor-qualified to stay distinguishable.
+  var qualifyAll = bulkRuleValue() === "matching-category";
   var seen = existingBulkPageKeys();
   var added = 0;
   selected.forEach(function (opt) {
@@ -1035,7 +1076,8 @@ function addBulkSelectedPages() {
     var key = bulkCandidateKey(candidate.sensorUid, candidate.reading.id, currentSettings.sourceProfileId);
     if (seen[key]) return;
     seen[key] = true;
-    currentSettings.pages.push(pageFromReading(candidate.sensorUid, candidate.reading, currentSettings.pages.length));
+    var title = bulkPageTitle(candidate, seedSensorUid, qualifyAll);
+    currentSettings.pages.push(pageFromReading(candidate.sensorUid, candidate.reading, currentSettings.pages.length, title));
     added++;
   });
   if (added > 0) {
@@ -1046,9 +1088,9 @@ function addBulkSelectedPages() {
 }
 
 function bindBulkControls() {
+  var rule = document.getElementById("bulkRule");
   var previewBtn = document.getElementById("bulkPreviewBtn");
   var addBtn = document.getElementById("bulkAddBtn");
-  var rule = document.getElementById("bulkRule");
   if (rule && !rule.dataset.bound) {
     rule.dataset.bound = "1";
     rule.addEventListener("change", clearBulkPreview);

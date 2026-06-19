@@ -31,18 +31,18 @@ node scripts/test-reading-pi.js
 echo "test: dial PI functional script"
 node scripts/test-dial-pi.js
 
-if curl -fsS "${DECKBRIDGE_URL:-http://127.0.0.1:34075}/api/state" >/dev/null 2>&1; then
-  echo "test: DeckBridge live dial e2e flow"
-  node scripts/test-deckbridge-dial-live.js
-  if command -v powershell.exe >/dev/null 2>&1 && curl -fsS "http://127.0.0.1:9998/data.json" >/dev/null 2>&1; then
-    echo "test: DeckBridge browser bulk e2e flow"
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-deckbridge-bulk-browser-e2e.ps1
-  else
-    echo "skip: DeckBridge browser bulk e2e flow (PowerShell or Bulk E2E source not reachable)"
-  fi
+if node -e "require('../DeckBridge/node_modules/jsdom')" >/dev/null 2>&1 \
+  || node -e "require('jsdom')" >/dev/null 2>&1; then
+  echo "test: dial bulk render (jsdom, real DOM)"
+  node scripts/test-dial-bulk-render.js
 else
-  echo "skip: DeckBridge live dial e2e flow (DeckBridge not reachable)"
+  echo "skip: dial bulk render (jsdom not reachable)"
 fi
+
+# Live, non-destructive e2e against a running DeckBridge + plugin (real catalog,
+# real WebSocket, real DOM). Self-skips with exit 0 when DeckBridge/jsdom is absent.
+echo "test: dial bulk live e2e (skips if DeckBridge not running)"
+node scripts/test-dial-bulk-live-e2e.js
 
 echo "test: Go targets (windows)"
 GOOS=windows GOARCH=amd64 GOCACHE=/tmp/go-build go test \
