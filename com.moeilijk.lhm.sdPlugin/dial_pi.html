@@ -48,7 +48,7 @@
 
     <div class="sdpi-item" id="pluginBuildRef">
       <div class="sdpi-item-label">Build</div>
-      <div class="sdpi-item-value" title="Plugin commit 3c5e9b5 plus local V5 prep fixes">3c5e9b5 + V5-prep.12</div>
+      <div class="sdpi-item-value" title="Plugin commit 3c5e9b5 plus local V5 prep fixes">3c5e9b5 + V5-prep.16</div>
     </div>
 
     <div class="sdpi-item">
@@ -106,16 +106,16 @@
       <div class="sdpi-item">
         <div class="sdpi-item-label">Rule</div>
         <select class="sdpi-item-value select" id="bulkRule">
-          <option value="sensor-readings">All readings from sensor</option>
-          <option value="matching-reading">This reading across sensors</option>
-          <option value="matching-numbered-readings">Matching numbered readings</option>
+          <option value="sensor-all">All readings from this sensor</option>
+          <option value="matching-category">This reading on all matching sensors</option>
+          <option value="numbered-family">All readings in this numbered set (cores, fans…)</option>
         </select>
       </div>
 
       <div class="sdpi-item">
         <div class="sdpi-item-label empty-label">Action</div>
         <div class="sdpi-item-value dial-actions">
-          <button id="bulkPreviewBtn" type="button" disabled>Preview</button>
+          <button id="bulkPreviewBtn" type="button">Preview</button>
           <button id="bulkAddBtn" type="button" disabled>Add Selected</button>
         </div>
       </div>
@@ -485,8 +485,8 @@
     </template>
   </div>
 
-  <script src="pi_utils.js?v=V5-prep.12"></script>
-  <script src="dial_pi.js?v=V5-prep.12"></script>
+  <script src="pi_utils.js?v=V5-prep.16"></script>
+  <script src="dial_pi.js?v=V5-prep.16"></script>
 </body>
 
 </html>
