@@ -310,7 +310,10 @@ voorwaarden):
 ### V3 — dial-eigen UI (valideren + testen)
 - [x] Dynamische separator per dial: breedte 0-10, kleur, default breedte 3 /
   `#363e46`, actie-niveau opgeslagen.
-- [x] Page-indicator (dots ≤9, `x/y` daarboven), off in fullscreen.
+- [x] Page-indicator (dots ≤9, `x/y` daarboven). Standaard uit in fullscreen,
+  maar aan te zetten via de action-level toggle "In fullscreen" (plan-eis
+  "optionele" indicator / "off by default in fullscreen"). Overview toont hem op
+  de gekozen stijl.
 - [x] Per-pagina default-kleur uit palette (wrap-around) bij toevoegen.
 - [x] Dial-press-uitleg in PI (bestaand patroon).
 - [x] Graph-label sanitize tegen onveilige runes.
@@ -418,6 +421,9 @@ validatie). Elk item is pas klaar ná lokale deploy + hardware-bevestiging.
 
 ### 3. Optionele page-indicator op de touch-strip — code
 - Off by default in fullscreen (geen nieuwe default-weergave forceren).
+  **Gebouwd:** action-level toggle `indicatorFullscreen` (default false); fullscreen
+  honoreert hem via `dialIndicatorFullscreen` + `decorateDialImage`. Eerder was
+  fullscreen hárd uit (geen toggle) — dat ontbrekende stuk is nu af.
 - Kleine grijze dots bij weinig pagina's; actieve dot iets feller én zijwaarts
   uitgerekt (zoals de issue-feedback vroeg); `x / y`-tekst zodra dots onleesbaar
   worden (richtdrempel ~9, zoals de Action Wheel).

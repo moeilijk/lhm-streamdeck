@@ -184,6 +184,9 @@ function renderPages() {
 function renderDialSettings() {
   setValue("defaultView", currentSettings.defaultView || "fullscreen");
   setValue("indicatorStyle", currentSettings.indicatorStyle || "auto");
+  setValue("indicatorFullscreen", currentSettings.indicatorFullscreen === true);
+  setValue("indicatorColor", currentSettings.indicatorColor || "#bec6ce");
+  setValue("indicatorSize", currentSettings.indicatorSize != null ? currentSettings.indicatorSize : 6);
   setValue("separatorWidth", currentSettings.separatorWidth != null ? currentSettings.separatorWidth : 3);
   setValue("separatorColor", currentSettings.separatorColor || "#363e46");
 }
@@ -366,7 +369,8 @@ function bindActionField(id, key, parser) {
   if (!el || el.dataset.bound) return;
   el.dataset.bound = "1";
   var handler = function () {
-    currentSettings[key] = parser ? parser(el.value) : el.value;
+    var raw = el.type === "checkbox" ? el.checked : el.value;
+    currentSettings[key] = parser ? parser(raw) : raw;
     if (el.type === "range" && typeof positionRangeVal === "function") positionRangeVal(el);
     saveSettings();
   };
@@ -377,6 +381,9 @@ function bindActionField(id, key, parser) {
 function bindDialSettings() {
   bindActionField("defaultView", "defaultView");
   bindActionField("indicatorStyle", "indicatorStyle");
+  bindActionField("indicatorFullscreen", "indicatorFullscreen", function (v) { return !!v; });
+  bindActionField("indicatorColor", "indicatorColor");
+  bindActionField("indicatorSize", "indicatorSize", function (v) { return Number(v) || 6; });
   bindActionField("separatorWidth", "separatorWidth", function (v) { return Number(v) || 0; });
   bindActionField("separatorColor", "separatorColor");
 }

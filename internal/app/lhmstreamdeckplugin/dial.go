@@ -338,7 +338,48 @@ func dialDefaultOverview(s *dialActionSettings) bool {
 	return s != nil && s.DefaultView == "overview"
 }
 
-func drawDialPageIndicator(img *image.RGBA, active, count int, style string) {
+// dialIndicatorDefaultColor is the original active page-indicator colour, used as
+// the default and as the base for the dimmer inactive dots.
+var dialIndicatorDefaultColor = color.RGBA{190, 198, 206, 255}
+
+// dialIndicatorColor resolves the configured page-indicator colour, defaulting to
+// the original light grey when unset.
+func dialIndicatorColor(s *dialActionSettings) color.RGBA {
+	hex := ""
+	if s != nil {
+		hex = s.IndicatorColor
+	}
+	return *dialColor(hex, dialIndicatorDefaultColor)
+}
+
+// dialIndicatorDefaultSize is the default page-indicator size in "points" (4 =
+// original size).
+const dialIndicatorDefaultSize = 6.0
+
+// dialIndicatorSize resolves the configured page-indicator size in "points"
+// (4 = original, 8 = double). Clamped to 1-8.
+func dialIndicatorSize(s *dialActionSettings) float64 {
+	size := dialIndicatorDefaultSize
+	if s != nil && s.IndicatorSize != nil {
+		size = *s.IndicatorSize
+	}
+	if size < 1 {
+		size = 1
+	}
+	if size > 8 {
+		size = 8
+	}
+	return size
+}
+
+// dialIndicatorFullscreen reports whether the page indicator should also be
+// drawn in the fullscreen view. Off by default (fullscreen keeps its original
+// look); the resolved indicator style controls how it renders when enabled.
+func dialIndicatorFullscreen(s *dialActionSettings) bool {
+	return s != nil && s.IndicatorFullscreen
+}
+
+func drawDialPageIndicator(img *image.RGBA, active, count int, style string, indicatorColor color.RGBA, size float64) {
 	if count <= 1 || style == "off" {
 		return
 	}
@@ -348,15 +389,36 @@ func drawDialPageIndicator(img *image.RGBA, active, count int, style string) {
 	if active >= count {
 		active = count - 1
 	}
-	inactive := color.RGBA{100, 108, 116, 255}
-	activeColor := color.RGBA{190, 198, 206, 255}
-	y := dialHeight - 7
+	if size < 1 {
+		size = 1
+	}
+	if size > 8 {
+		size = 8
+	}
+	activeColor := indicatorColor
+	// The inactive dots are a dimmer shade of the chosen colour (~55%), preserving
+	// the original active/inactive contrast ratio whatever colour the user picks.
+	inactive := color.RGBA{
+		uint8(float64(indicatorColor.R) * 0.55),
+		uint8(float64(indicatorColor.G) * 0.55),
+		uint8(float64(indicatorColor.B) * 0.55),
+		255,
+	}
 	if style == "" {
 		style = "auto"
 	}
 	if style == "dots" || (style == "auto" && count <= 9) {
-		dotW, dotH, gap := 4, 3, 4
-		activeW := 10
+		// Sizes are derived so that size 4 reproduces the original indicator
+		// (dotW 4, dotH 3, gap 4, activeW 10) and scale linearly from there.
+		dotW := int(size + 0.5)
+		dotH := int(size*0.75 + 0.5)
+		if dotH < 1 {
+			dotH = 1
+		}
+		gap := int(size + 0.5)
+		activeW := int(size*2.5 + 0.5)
+		// Bottom-align the dots so larger sizes grow upward from the dial edge.
+		y := dialHeight - 3 - dotH
 		total := 0
 		for i := 0; i < count; i++ {
 			if i > 0 {
@@ -389,7 +451,7 @@ func drawDialPageIndicator(img *image.RGBA, active, count int, style string) {
 		return
 	}
 
-	face, err := graph.GetSharedFontFaceManager().GetFaceOfSize(8)
+	face, err := graph.GetSharedFontFaceManager().GetFaceOfSize(size * 2)
 	if err != nil {
 		return
 	}
@@ -435,7 +497,7 @@ func dialOverviewRects(count int) []image.Rectangle {
 	}
 }
 
-func decorateDialImage(b []byte, active, count int, showIndicator bool, indicatorStyle string, sepWidth int, sepColor color.RGBA) ([]byte, error) {
+func decorateDialImage(b []byte, active, count int, showIndicator bool, indicatorStyle string, sepWidth int, sepColor color.RGBA, indicatorColor color.RGBA, indicatorSize float64) ([]byte, error) {
 	src, err := png.Decode(bytes.NewReader(b))
 	if err != nil {
 		return nil, err
@@ -444,7 +506,7 @@ func decorateDialImage(b []byte, active, count int, showIndicator bool, indicato
 	imagedraw.Draw(canvas, canvas.Bounds(), src, image.Point{}, imagedraw.Src)
 	drawDialEdgeSeparators(canvas, sepWidth, sepColor)
 	if showIndicator {
-		drawDialPageIndicator(canvas, active, count, indicatorStyle)
+		drawDialPageIndicator(canvas, active, count, indicatorStyle, indicatorColor, indicatorSize)
 	}
 	var out bytes.Buffer
 	if err := png.Encode(&out, canvas); err != nil {
@@ -488,7 +550,7 @@ func (p *Plugin) renderDialOverview(settings *dialActionSettings, state *dialSta
 	}
 
 	drawDialEdgeSeparators(canvas, dialSeparatorWidth(settings), dialSeparatorColor(settings))
-	drawDialPageIndicator(canvas, settings.ActiveIndex, len(settings.Pages), dialIndicatorStyle(settings))
+	drawDialPageIndicator(canvas, settings.ActiveIndex, len(settings.Pages), dialIndicatorStyle(settings), dialIndicatorColor(settings), dialIndicatorSize(settings))
 
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, canvas); err != nil {
@@ -675,7 +737,7 @@ func (p *Plugin) updateDialPage(ctx string, settings *dialActionSettings, state 
 			log.Printf("dial encode: %v", err)
 			return render, settingsChanged
 		}
-		b, err = decorateDialImage(b, settings.ActiveIndex, len(settings.Pages), false, dialIndicatorStyle(settings), dialSeparatorWidth(settings), dialSeparatorColor(settings))
+		b, err = decorateDialImage(b, settings.ActiveIndex, len(settings.Pages), dialIndicatorFullscreen(settings), dialIndicatorStyle(settings), dialSeparatorWidth(settings), dialSeparatorColor(settings), dialIndicatorColor(settings), dialIndicatorSize(settings))
 		if err != nil {
 			log.Printf("dial decorate: %v", err)
 			return render, settingsChanged

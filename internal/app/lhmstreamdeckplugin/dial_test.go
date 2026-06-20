@@ -216,7 +216,7 @@ func TestDialSeparatorDynamicWidthAndColor(t *testing.T) {
 	y := dialHeight / 2
 
 	// width 0 = off: edges keep the original graph pixels.
-	off, err := decorateDialImage(fixture(), 0, 1, false, "auto", 0, sep)
+	off, err := decorateDialImage(fixture(), 0, 1, false, "auto", 0, sep, dialIndicatorDefaultColor, dialIndicatorDefaultSize)
 	if err != nil {
 		t.Fatalf("decorate off: %v", err)
 	}
@@ -225,7 +225,7 @@ func TestDialSeparatorDynamicWidthAndColor(t *testing.T) {
 	}
 
 	// width 5 + color: a 5px band of that color on each edge, center untouched.
-	on, err := decorateDialImage(fixture(), 0, 1, false, "auto", 5, sep)
+	on, err := decorateDialImage(fixture(), 0, 1, false, "auto", 5, sep, dialIndicatorDefaultColor, dialIndicatorDefaultSize)
 	if err != nil {
 		t.Fatalf("decorate on: %v", err)
 	}
@@ -287,11 +287,135 @@ func TestDrawDialPageIndicatorUsesDotsForSmallPageCounts(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, dialWidth, dialHeight))
 	fillRect(img, img.Bounds(), color.RGBA{0, 0, 0, 255})
 
-	drawDialPageIndicator(img, 1, 3, "auto")
+	drawDialPageIndicator(img, 1, 3, "auto", dialIndicatorDefaultColor, dialIndicatorDefaultSize)
 
 	activePixel := color.RGBAModel.Convert(img.At(dialWidth/2, dialHeight-6)).(color.RGBA)
 	if activePixel == (color.RGBA{0, 0, 0, 255}) {
 		t.Fatalf("active indicator pixel was not drawn")
+	}
+}
+
+func TestDialIndicatorColorResolveAndRender(t *testing.T) {
+	if c := dialIndicatorColor(&dialActionSettings{}); c != dialIndicatorDefaultColor {
+		t.Fatalf("unset indicator color = %+v, want default %+v", c, dialIndicatorDefaultColor)
+	}
+	if c := dialIndicatorColor(&dialActionSettings{IndicatorColor: "#ff0000"}); c.R != 255 || c.G != 0 || c.B != 0 {
+		t.Fatalf("parsed indicator color = %+v, want red", c)
+	}
+
+	// The chosen colour must actually reach the rendered active dot. Rendering with
+	// red must produce a red-dominant pixel; the default grey must not. If the
+	// colour param were ignored, the red assertion below would fail.
+	at := func(c color.RGBA) color.RGBA {
+		img := image.NewRGBA(image.Rect(0, 0, dialWidth, dialHeight))
+		fillRect(img, img.Bounds(), color.RGBA{0, 0, 0, 255})
+		drawDialPageIndicator(img, 1, 3, "auto", c, dialIndicatorDefaultSize)
+		return color.RGBAModel.Convert(img.At(dialWidth/2, dialHeight-6)).(color.RGBA)
+	}
+
+	red := at(color.RGBA{255, 0, 0, 255})
+	if !(red.R > 150 && red.G < 80 && red.B < 80) {
+		t.Fatalf("active dot did not render the chosen red colour: %+v", red)
+	}
+	grey := at(dialIndicatorDefaultColor)
+	if grey.R > 150 && grey.G < 80 && grey.B < 80 {
+		t.Fatalf("default grey active dot rendered as red: %+v", grey)
+	}
+}
+
+func TestDialIndicatorSizeResolveAndScales(t *testing.T) {
+	if got := dialIndicatorSize(&dialActionSettings{}); got != dialIndicatorDefaultSize {
+		t.Fatalf("unset indicator size = %v, want default %v", got, dialIndicatorDefaultSize)
+	}
+	five := 5.0
+	if got := dialIndicatorSize(&dialActionSettings{IndicatorSize: &five}); got != 5 {
+		t.Fatalf("explicit size = %v, want 5", got)
+	}
+	lo, hi := 0.2, 99.0
+	if got := dialIndicatorSize(&dialActionSettings{IndicatorSize: &lo}); got != 1 {
+		t.Fatalf("size below range = %v, want clamp 1", got)
+	}
+	if got := dialIndicatorSize(&dialActionSettings{IndicatorSize: &hi}); got != 8 {
+		t.Fatalf("size above range = %v, want clamp 8", got)
+	}
+
+	// The size must actually scale the rendered dots: the active dot's vertical
+	// extent grows with the configured size. If the size param were ignored, both
+	// heights would be equal and this fails.
+	dotHeight := func(size float64) int {
+		img := image.NewRGBA(image.Rect(0, 0, dialWidth, dialHeight))
+		fillRect(img, img.Bounds(), color.RGBA{0, 0, 0, 255})
+		drawDialPageIndicator(img, 1, 3, "dots", color.RGBA{255, 0, 0, 255}, size)
+		h := 0
+		for y := 0; y < dialHeight; y++ {
+			c := color.RGBAModel.Convert(img.At(dialWidth/2, y)).(color.RGBA)
+			if c.R > 150 && c.G < 80 && c.B < 80 {
+				h++
+			}
+		}
+		return h
+	}
+	small := dotHeight(2)
+	large := dotHeight(8)
+	if small <= 0 {
+		t.Fatalf("smallest size drew no active dot")
+	}
+	if large <= small {
+		t.Fatalf("larger indicator size must render taller dots: small=%d large=%d", small, large)
+	}
+	// Pin the "points" mapping the user cares about: size 4 reproduces the
+	// original dot height (3) and size 8 is double (6) — never smaller.
+	if h := dotHeight(4); h != 3 {
+		t.Fatalf("size 4 active dot height = %d, want original 3", h)
+	}
+	if h := dotHeight(8); h != 6 {
+		t.Fatalf("size 8 active dot height = %d, want double 6", h)
+	}
+}
+
+func TestDialIndicatorFullscreenToggle(t *testing.T) {
+	if dialIndicatorFullscreen(&dialActionSettings{}) {
+		t.Fatalf("indicator fullscreen must default off")
+	}
+	if !dialIndicatorFullscreen(&dialActionSettings{IndicatorFullscreen: true}) {
+		t.Fatalf("indicator fullscreen must be on when enabled")
+	}
+
+	fixture := func() []byte {
+		img := image.NewRGBA(image.Rect(0, 0, dialWidth, dialHeight))
+		fillRect(img, img.Bounds(), color.RGBA{0, 0, 0, 255})
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, img); err != nil {
+			t.Fatalf("encode fixture: %v", err)
+		}
+		return buf.Bytes()
+	}
+	at := func(b []byte, x, y int) color.RGBA {
+		im, err := png.Decode(bytes.NewReader(b))
+		if err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		return color.RGBAModel.Convert(im.At(x, y)).(color.RGBA)
+	}
+	black := color.RGBA{0, 0, 0, 255}
+	y := dialHeight - 6
+
+	// Toggle off: fullscreen keeps its original look, no indicator drawn.
+	off, err := decorateDialImage(fixture(), 1, 3, false, "auto", 0, color.RGBA{}, dialIndicatorDefaultColor, dialIndicatorDefaultSize)
+	if err != nil {
+		t.Fatalf("decorate off: %v", err)
+	}
+	if at(off, dialWidth/2, y) != black {
+		t.Fatalf("indicator must not be drawn in fullscreen when toggle is off")
+	}
+
+	// Toggle on: the indicator is drawn in fullscreen using the resolved style.
+	on, err := decorateDialImage(fixture(), 1, 3, true, "auto", 0, color.RGBA{}, dialIndicatorDefaultColor, dialIndicatorDefaultSize)
+	if err != nil {
+		t.Fatalf("decorate on: %v", err)
+	}
+	if at(on, dialWidth/2, y) == black {
+		t.Fatalf("indicator must be drawn in fullscreen when toggle is on")
 	}
 }
 
@@ -301,6 +425,90 @@ func TestDialPageContext(t *testing.T) {
 	}
 	if dialPageContext("x", 0) == dialPageContext("x", 1) {
 		t.Errorf("different page indices must produce different contexts")
+	}
+}
+
+// TestUpdateDialPageDrawsFullscreenIndicatorOnlyWhenEnabled is the integration
+// test for the previously-missing link: that the REAL fullscreen render path
+// (updateDialPage) honors the IndicatorFullscreen toggle. It renders the active
+// page twice with an identical reading (deterministic stub value) and asserts the
+// only pixels that change are inside the page-indicator band. This catches both a
+// dead toggle (no diff) and a toggle that leaks into the rest of the dial.
+func TestUpdateDialPageDrawsFullscreenIndicatorOnlyWhenEnabled(t *testing.T) {
+	const (
+		ctx       = "dial-fs-ind"
+		sensorUID = "/cpu"
+		readingID = int32(7)
+	)
+	now := time.Unix(2000, 0)
+
+	render := func(fullscreenIndicator bool) image.Image {
+		p := &Plugin{
+			sources:          make(map[string]*sourceRuntime),
+			thresholdStates:  make(map[string]map[string]*thresholdRuntimeState),
+			thresholdSnoozes: make(map[string]*thresholdSnoozeState),
+			thresholdDirty:   make(map[string]bool),
+			lastPollTime:     make(map[string]uint64),
+			lastRenderTime:   make(map[string]time.Time),
+			smoothedValues:   make(map[string]float64),
+			divisorCache:     make(map[string]divisorCacheEntry),
+			pollTimeCacheTTL: time.Second,
+		}
+		p.sources[""] = &sourceRuntime{
+			hw: stubHardwareService{
+				readingsBySensor: map[string][]hwsensorsservice.Reading{
+					sensorUID: {stubReading{id: readingID, typ: "Load", label: "CPU Total", unit: "%"}},
+				},
+			},
+		}
+		page := actionSettings{
+			SensorUID: sensorUID, ReadingID: readingID, ReadingLabel: "CPU Total",
+			IsValid: true, Min: 0, Max: 100,
+			ForegroundColor: "#005128", BackgroundColor: "#000000",
+			HighlightColor: "#009e00", ValueTextColor: "#ffffff", TitleColor: "#b7b7b7",
+		}
+		settings := &dialActionSettings{
+			Pages:               []actionSettings{page, page, page},
+			ActiveIndex:         1,
+			IndicatorFullscreen: fullscreenIndicator,
+		}
+		state := initDialState(settings)
+		r, _ := p.updateDialPage(ctx, settings, state, settings.ActiveIndex, true, now)
+		if len(r.image) == 0 {
+			t.Fatalf("no fullscreen image rendered (indicator=%v)", fullscreenIndicator)
+		}
+		im, err := png.Decode(bytes.NewReader(r.image))
+		if err != nil {
+			t.Fatalf("decode fullscreen image: %v", err)
+		}
+		return im
+	}
+
+	off := render(false)
+	on := render(true)
+
+	diff, outsideBand := 0, 0
+	b := off.Bounds()
+	// The indicator band spans from the bottom edge up to the top of the active
+	// dot at the default size, mirroring drawDialPageIndicator's dot height.
+	bandTop := dialHeight - 3 - int(float64(dialIndicatorDefaultSize)*0.75+0.5)
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			o := color.RGBAModel.Convert(off.At(x, y)).(color.RGBA)
+			n := color.RGBAModel.Convert(on.At(x, y)).(color.RGBA)
+			if o != n {
+				diff++
+				if y < bandTop {
+					outsideBand++
+				}
+			}
+		}
+	}
+	if diff == 0 {
+		t.Fatalf("fullscreen render identical with indicator on vs off — toggle is not wired into the fullscreen path")
+	}
+	if outsideBand > 0 {
+		t.Fatalf("indicator toggle changed %d pixels outside the indicator band — it affects more than the page indicator", outsideBand)
 	}
 }
 

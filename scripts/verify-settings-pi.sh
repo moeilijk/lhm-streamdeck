@@ -35,6 +35,8 @@ if node -e "require('../DeckBridge/node_modules/jsdom')" >/dev/null 2>&1 \
   || node -e "require('jsdom')" >/dev/null 2>&1; then
   echo "test: dial bulk render (jsdom, real DOM)"
   node scripts/test-dial-bulk-render.js
+  echo "test: dial indicator-fullscreen render (jsdom, real CSS)"
+  node scripts/test-dial-indicator-fullscreen-render.js
 else
   echo "skip: dial bulk render (jsdom not reachable)"
 fi
@@ -43,6 +45,9 @@ fi
 # real WebSocket, real DOM). Self-skips with exit 0 when DeckBridge/jsdom is absent.
 echo "test: dial bulk live e2e (skips if DeckBridge not running)"
 node scripts/test-dial-bulk-live-e2e.js
+
+echo "test: dial indicator-fullscreen live e2e (skips if DeckBridge not running)"
+node scripts/test-dial-indicator-fullscreen-live-e2e.js
 
 echo "test: Go targets (windows)"
 GOOS=windows GOARCH=amd64 GOCACHE=/tmp/go-build go test \

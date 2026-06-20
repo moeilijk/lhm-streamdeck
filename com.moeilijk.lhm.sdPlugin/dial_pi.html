@@ -48,7 +48,7 @@
 
     <div class="sdpi-item" id="pluginBuildRef">
       <div class="sdpi-item-label">Build</div>
-      <div class="sdpi-item-value" title="Plugin commit 3c5e9b5 plus local V5 prep fixes">3c5e9b5 + V5-prep.16</div>
+      <div class="sdpi-item-value" title="Plugin commit 3c5e9b5 plus local V5 prep fixes">3c5e9b5 + V5-prep.19</div>
     </div>
 
     <div class="sdpi-item">
@@ -152,6 +152,32 @@
         <option value="count">Count</option>
         <option value="off">Off</option>
       </select>
+    </div>
+
+    <div class="sdpi-item show-label-row">
+      <div class="sdpi-item-label">In fullscreen</div>
+      <div class="show-label-cell">
+        <input type="checkbox" class="show-label-checkbox" id="indicatorFullscreen" />
+      </div>
+      <div class="sdpi-item-label empty"></div>
+      <div class="show-label-cell show-label-cell-spacer" aria-hidden="true"></div>
+    </div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Color</div>
+      <input class="sdpi-item-value" id="indicatorColor" type="color" />
+    </div>
+
+    <div type="range" class="sdpi-item" id="indicatorSize">
+      <div class="sdpi-item-label">Size</div>
+      <div class="sdpi-item-value">
+        <span value="1">1</span>
+        <div class="range-wrap">
+          <span class="range-val">6</span>
+          <input type="range" min="1" max="8" step="0.5" value="6" />
+        </div>
+        <span value="8">8</span>
+      </div>
     </div>
 
     <div class="sdpi-item">
@@ -485,8 +511,8 @@
     </template>
   </div>
 
-  <script src="pi_utils.js?v=V5-prep.16"></script>
-  <script src="dial_pi.js?v=V5-prep.16"></script>
+  <script src="pi_utils.js?v=V5-prep.19"></script>
+  <script src="dial_pi.js?v=V5-prep.19"></script>
 </body>
 
 </html>
