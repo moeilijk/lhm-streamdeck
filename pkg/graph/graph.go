@@ -338,6 +338,60 @@ func (g *Graph) EncodePNG() ([]byte, error) {
 	return bts, nil
 }
 
+// Series returns a copy of the plotted history as y-positions in the range
+// [0, EffectiveHeight()-1], oldest first and newest last. It lets callers
+// re-plot the same data natively at a different size (e.g. the stacked dial
+// strips) without rescaling a pre-rendered tile.
+func (g *Graph) Series() []uint8 {
+	out := make([]uint8, len(g.yvals))
+	copy(out, g.yvals)
+	return out
+}
+
+// EffectiveHeight is the exported height (in pixels) the series y-positions are
+// scaled against, honouring SetHeightPct.
+func (g *Graph) EffectiveHeight() int {
+	return g.effectiveHeight()
+}
+
+func rgbaOr(c *color.RGBA, def color.RGBA) color.RGBA {
+	if c == nil {
+		return def
+	}
+	return *c
+}
+
+// ForegroundColor returns the filled-area colour.
+func (g *Graph) ForegroundColor() color.RGBA {
+	return rgbaOr(g.fgColor, color.RGBA{0, 81, 40, 255})
+}
+
+// HighlightColor returns the line colour.
+func (g *Graph) HighlightColor() color.RGBA {
+	return rgbaOr(g.hlColor, color.RGBA{0, 158, 0, 255})
+}
+
+// BackgroundColor returns the background colour.
+func (g *Graph) BackgroundColor() color.RGBA {
+	return rgbaOr(g.bgColor, color.RGBA{0, 0, 0, 255})
+}
+
+// LabelText returns the current text for the label at key, or "" if unset.
+func (g *Graph) LabelText(key int) string {
+	if l, ok := g.labels[key]; ok {
+		return l.text
+	}
+	return ""
+}
+
+// LabelColor returns the colour for the label at key and whether it exists.
+func (g *Graph) LabelColor(key int) (color.RGBA, bool) {
+	if l, ok := g.labels[key]; ok {
+		return rgbaOr(l.clr, color.RGBA{255, 255, 255, 255}), true
+	}
+	return color.RGBA{}, false
+}
+
 // Clear fills the canvas with the background color and resets graph history.
 func (g *Graph) Clear() {
 	for i := 0; i < len(g.img.Pix); i += 4 {

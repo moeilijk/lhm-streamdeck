@@ -16,7 +16,9 @@ import (
 	"github.com/moeilijk/lhm-streamdeck/pkg/graph"
 	hwsensorsservice "github.com/moeilijk/lhm-streamdeck/pkg/service"
 	"github.com/moeilijk/lhm-streamdeck/pkg/streamdeck"
+	"golang.org/x/image/font"
 	xdraw "golang.org/x/image/draw"
+	"golang.org/x/image/math/fixed"
 )
 
 const (
@@ -338,6 +340,15 @@ func dialDefaultOverview(s *dialActionSettings) bool {
 	return s != nil && s.DefaultView == "overview"
 }
 
+// dialOverviewStyle resolves how the overview view renders: "stacked" (default,
+// vertical full-width strips) or "carousel" (the original horizontal layout).
+func dialOverviewStyle(s *dialActionSettings) string {
+	if s != nil && s.OverviewStyle == "carousel" {
+		return "carousel"
+	}
+	return "stacked"
+}
+
 // dialIndicatorDefaultColor is the original active page-indicator colour, used as
 // the default and as the base for the dimmer inactive dots.
 var dialIndicatorDefaultColor = color.RGBA{190, 198, 206, 255}
@@ -506,7 +517,11 @@ func decorateDialImage(b []byte, active, count int, showIndicator bool, indicato
 	imagedraw.Draw(canvas, canvas.Bounds(), src, image.Point{}, imagedraw.Src)
 	drawDialEdgeSeparators(canvas, sepWidth, sepColor)
 	if showIndicator {
-		drawDialPageIndicator(canvas, active, count, indicatorStyle, indicatorColor, indicatorSize)
+		// Draw the page indicator in the LEFT column (vertically), matching the
+		// stacked overview. In fullscreen the graph fills the bottom and builds up
+		// from the right, so a left gutter overwrites the least of it — the old
+		// bottom-aligned horizontal indicator sat right on top of the graph fill.
+		drawDialVerticalPageIndicator(canvas, active, count, indicatorStyle, indicatorColor, indicatorSize)
 	}
 	var out bytes.Buffer
 	if err := png.Encode(&out, canvas); err != nil {
@@ -551,6 +566,381 @@ func (p *Plugin) renderDialOverview(settings *dialActionSettings, state *dialSta
 
 	drawDialEdgeSeparators(canvas, dialSeparatorWidth(settings), dialSeparatorColor(settings))
 	drawDialPageIndicator(canvas, settings.ActiveIndex, len(settings.Pages), dialIndicatorStyle(settings), dialIndicatorColor(settings), dialIndicatorSize(settings))
+
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, canvas); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// dialStackedLeftColumn is the default width reserved on the left of the stacked
+// view for the vertical page indicator, keeping the right side (where the graph
+// builds up) clear. The actual width scales with the indicator size via
+// dialStackedGutter so a larger size visibly widens the indicator gutter.
+const dialStackedLeftColumn = 12
+
+// dialStackedGutter returns the left-column width reserved for the vertical page
+// indicator, scaled by the indicator size. A larger size widens the gutter so
+// both the dots and the page number grow visibly (and the strips shift right),
+// instead of being clamped by a fixed narrow column.
+func dialStackedGutter(size float64) int {
+	if size < 1 {
+		size = 1
+	}
+	if size > 8 {
+		size = 8
+	}
+	w := int(size*2 + 6 + 0.5)
+	if w < 8 {
+		w = 8
+	}
+	if w > 24 {
+		w = 24
+	}
+	return w
+}
+
+// dialStackedLayout returns, for the stacked overview, the page indices to draw
+// top-to-bottom, the slot holding the active page, and the matching strip
+// rectangles. The strips are equal height so every reading is equally legible;
+// the active page sits in the middle (with three pages) and is marked by its
+// border, with the previous/next page above and below. The strips start after
+// the reserved indicator gutter (gutter px wide).
+func dialStackedLayout(active, count, gutter int) (indices []int, activeSlot int, rects []image.Rectangle) {
+	x0, x1 := gutter, dialWidth
+	if count <= 1 {
+		return []int{active}, 0, []image.Rectangle{image.Rect(x0, 2, x1, 98)}
+	}
+	if count == 2 {
+		// Two equal strips: active on top, the other below.
+		return []int{active, wrapDialIndex(active, 1, count)}, 0, []image.Rectangle{
+			image.Rect(x0, 1, x1, 49),
+			image.Rect(x0, 51, x1, 99),
+		}
+	}
+	// Three equal strips: previous / active / next, the active one in the middle.
+	return []int{
+			wrapDialIndex(active, -1, count),
+			active,
+			wrapDialIndex(active, 1, count),
+		}, 1, []image.Rectangle{
+			image.Rect(x0, 1, x1, 33),
+			image.Rect(x0, 34, x1, 66),
+			image.Rect(x0, 67, x1, 99),
+		}
+}
+
+// drawDialVerticalPageIndicator draws the page indicator in the reserved left
+// column. It honours the explicit choice with no silent fallback: "dots" always
+// draws dots (auto-shrinking to fit), "count" always draws the page number, and
+// only "auto" decides for itself (dots while they stay legible, otherwise the
+// number). "off" hides it.
+func drawDialVerticalPageIndicator(img *image.RGBA, active, count int, style string, indicatorColor color.RGBA, size float64) {
+	if count <= 1 || style == "off" {
+		return
+	}
+	if active < 0 {
+		active = 0
+	}
+	if active >= count {
+		active = count - 1
+	}
+	if size < 1 {
+		size = 1
+	}
+	if size > 8 {
+		size = 8
+	}
+	if style == "" {
+		style = "auto"
+	}
+	colW := dialStackedGutter(size)
+	// Auto decides for itself; dots/count are honoured literally.
+	if style == "count" || (style == "auto" && count > 9) {
+		drawDialVerticalCount(img, active, count, indicatorColor, size, colW)
+		return
+	}
+	drawDialVerticalDots(img, active, count, indicatorColor, size, colW)
+}
+
+// drawDialVerticalDots draws the page indicator as a vertical stack of dots with
+// the active dot elongated, auto-shrinking to fit when there are many pages. The
+// dots are centred in the colW-wide gutter and scale with size.
+func drawDialVerticalDots(img *image.RGBA, active, count int, indicatorColor color.RGBA, size float64, colW int) {
+	inactive := color.RGBA{
+		uint8(float64(indicatorColor.R) * 0.55),
+		uint8(float64(indicatorColor.G) * 0.55),
+		uint8(float64(indicatorColor.B) * 0.55),
+		255,
+	}
+	dotW := int(size*0.75 + 0.5)
+	if dotW < 1 {
+		dotW = 1
+	}
+	if dotW > colW-2 {
+		dotW = colW - 2
+	}
+	dotH := int(size + 0.5)
+	if dotH < 1 {
+		dotH = 1
+	}
+	gap := int(size + 0.5)
+	if gap < 1 {
+		gap = 1
+	}
+	activeH := int(size*2.5 + 0.5)
+	if activeH < 2 {
+		activeH = 2
+	}
+	total := func() int {
+		t := 0
+		for i := 0; i < count; i++ {
+			if i > 0 {
+				t += gap
+			}
+			if i == active {
+				t += activeH
+			} else {
+				t += dotH
+			}
+		}
+		return t
+	}
+	avail := dialHeight - 6
+	if t := total(); t > avail {
+		f := float64(avail) / float64(t)
+		dotH = int(float64(dotH) * f)
+		if dotH < 1 {
+			dotH = 1
+		}
+		gap = int(float64(gap) * f)
+		if gap < 1 {
+			gap = 1
+		}
+		activeH = int(float64(activeH) * f)
+		if activeH < 2 {
+			activeH = 2
+		}
+	}
+	t := total()
+	y := (dialHeight - t) / 2
+	if y < 0 {
+		y = 0
+	}
+	x := (colW - dotW) / 2
+	if x < 1 {
+		x = 1
+	}
+	for i := 0; i < count; i++ {
+		h := dotH
+		c := inactive
+		if i == active {
+			h = activeH
+			c = indicatorColor
+		}
+		fillRect(img, image.Rect(x, y, x+dotW, y+h), c)
+		y += h + gap
+	}
+}
+
+// drawDialVerticalCount draws the explicit "count" indicator in the narrow left
+// column as the current page number above the total, separated by a fraction
+// bar, so it reads as "current/total". The face is shrunk until the widest line
+// fits the column, so the chosen count is always shown (never silently dropped).
+func drawDialVerticalCount(img *image.RGBA, active, count int, indicatorColor color.RGBA, size float64, colW int) {
+	cur := fmt.Sprintf("%d", active+1)
+	tot := fmt.Sprintf("%d", count)
+	inactive := color.RGBA{
+		uint8(float64(indicatorColor.R) * 0.55),
+		uint8(float64(indicatorColor.G) * 0.55),
+		uint8(float64(indicatorColor.B) * 0.55),
+		255,
+	}
+	faceSize := size*1.8 + 4
+	// No artificial height cap: the narrow column only limits the digit *width*,
+	// which the fit loop below enforces. Capping faceSize here made the upper
+	// half of the size range render identically (size 6 and 8 were the same).
+	var face font.Face
+	for {
+		f, err := graph.GetSharedFontFaceManager().GetFaceOfSize(faceSize)
+		if err != nil {
+			return
+		}
+		d := &font.Drawer{Face: f}
+		w := d.MeasureString(cur).Round()
+		if w2 := d.MeasureString(tot).Round(); w2 > w {
+			w = w2
+		}
+		if w <= colW-1 || faceSize <= 6 {
+			face = f
+			break
+		}
+		faceSize -= 1
+	}
+	m := face.Metrics()
+	lineH := (m.Ascent + m.Descent).Ceil()
+	ascent := m.Ascent.Ceil()
+	const gap = 3
+	totalH := lineH*2 + gap
+	top := (dialHeight - totalH) / 2
+	if top < 0 {
+		top = 0
+	}
+	drawDialColumnCenteredText(img, face, cur, colW, top+ascent, indicatorColor)
+	barY := top + lineH + gap/2
+	fillRect(img, image.Rect(2, barY, colW-2, barY+1), indicatorColor)
+	drawDialColumnCenteredText(img, face, tot, colW, top+lineH+gap+ascent, inactive)
+}
+
+// drawDialColumnCenteredText draws text horizontally centred within [0,colW] at
+// the given baseline.
+func drawDialColumnCenteredText(img *image.RGBA, face font.Face, text string, colW, baselineY int, clr color.RGBA) {
+	d := &font.Drawer{Dst: img, Src: image.NewUniform(clr), Face: face}
+	w := d.MeasureString(text).Round()
+	x := (colW - w) / 2
+	if x < 0 {
+		x = 0
+	}
+	d.Dot = fixed.P(x, baselineY)
+	d.DrawString(text)
+}
+
+// setDialPixel sets one pixel if it falls inside the image bounds.
+func setDialPixel(img *image.RGBA, x, y int, c color.RGBA) {
+	if (image.Point{X: x, Y: y}).In(img.Bounds()) {
+		img.SetRGBA(x, y, c)
+	}
+}
+
+// drawDialSparkline plots a graph's history as a filled area chart that fills the
+// whole rect, mapping the most recent sample to the right edge so the graph
+// visibly builds rightward. The series is scaled to the rect height natively, so
+// the data is never distorted by cropping or stretching a pre-rendered tile.
+func drawDialSparkline(img *image.RGBA, rect image.Rectangle, g *graph.Graph) {
+	series := g.Series()
+	if len(series) == 0 {
+		return
+	}
+	effH := g.EffectiveHeight()
+	if effH < 2 {
+		effH = 2
+	}
+	fg := g.ForegroundColor()
+	hl := g.HighlightColor()
+	w, h := rect.Dx(), rect.Dy()
+	if w <= 0 || h <= 0 {
+		return
+	}
+	n := len(series)
+	for col := 0; col < w; col++ {
+		idx := n - 1 - (w - 1 - col)
+		if idx < 0 {
+			continue // not enough history yet; leave the left side empty
+		}
+		frac := float64(series[idx]) / float64(effH-1)
+		if frac < 0 {
+			frac = 0
+		} else if frac > 1 {
+			frac = 1
+		}
+		fillH := int(frac*float64(h) + 0.5)
+		x := rect.Min.X + col
+		lineY := rect.Max.Y - 1 - fillH
+		if lineY < rect.Min.Y {
+			lineY = rect.Min.Y
+		}
+		for y := rect.Max.Y - 1; y > lineY; y-- {
+			setDialPixel(img, x, y, fg)
+		}
+		setDialPixel(img, x, lineY, hl)
+	}
+}
+
+// drawDialStripText draws left-aligned text at the given baseline, outlined with
+// strokeClr so it stays legible over the graph behind it.
+func drawDialStripText(img *image.RGBA, rect image.Rectangle, text string, size float64, clr, strokeClr color.RGBA, baselineY int) {
+	if text == "" {
+		return
+	}
+	face, err := graph.GetSharedFontFaceManager().GetFaceOfSize(size)
+	if err != nil {
+		return
+	}
+	x := rect.Min.X + 2
+	stroke := &font.Drawer{Dst: img, Src: image.NewUniform(strokeClr), Face: face}
+	for dy := -1; dy <= 1; dy++ {
+		for dx := -1; dx <= 1; dx++ {
+			if dx == 0 && dy == 0 {
+				continue
+			}
+			stroke.Dot = fixed.P(x+dx, baselineY+dy)
+			stroke.DrawString(text)
+		}
+	}
+	d := &font.Drawer{Dst: img, Src: image.NewUniform(clr), Face: face, Dot: fixed.P(x, baselineY)}
+	d.DrawString(text)
+}
+
+// drawDialStrip renders one stacked-overview strip natively at its own size: a
+// full-width filled sparkline (newest sample on the right, where the graph keeps
+// building) with the page title and current value drawn over the left, outlined
+// for legibility. All strips are equal height and show the title and value; the
+// active strip gets a bright border while the neighbours are lightly dimmed. No
+// scaling or cropping is used, so the graph is never distorted.
+func drawDialStrip(canvas *image.RGBA, rect image.Rectangle, g *graph.Graph, active bool) {
+	fillRect(canvas, rect, color.RGBA{14, 18, 24, 255})
+	inner := rect.Inset(1)
+	drawDialSparkline(canvas, inner, g)
+
+	if !active {
+		// Lightly dim the neighbouring strips so the active reading stays the focus.
+		imagedraw.Draw(canvas, rect, &image.Uniform{C: color.RGBA{0, 0, 0, 70}}, image.Point{}, imagedraw.Over)
+	}
+
+	title := strings.TrimSpace(g.LabelText(0))
+	value := strings.TrimSpace(g.LabelText(1))
+	stroke := color.RGBA{0, 0, 0, 220}
+	titleColor := color.RGBA{200, 206, 214, 255}
+	if c, ok := g.LabelColor(0); ok {
+		titleColor = c
+	}
+	valueColor := color.RGBA{255, 255, 255, 255}
+	if c, ok := g.LabelColor(1); ok {
+		valueColor = c
+	}
+	drawDialStripText(canvas, inner, title, 10, titleColor, stroke, inner.Min.Y+11)
+	drawDialStripText(canvas, inner, value, 15, valueColor, stroke, inner.Max.Y-5)
+
+	if active {
+		strokeRect(canvas, rect, color.RGBA{0, 150, 255, 255}, 2)
+	} else {
+		strokeRect(canvas, rect, color.RGBA{40, 50, 62, 255}, 1)
+	}
+}
+
+// renderDialStacked renders the vertically-scrolling stacked overview: full-width
+// strips with the active reading dominant in the centre and a dimmed peek of the
+// previous/next page above and below, plus the vertical page indicator on the
+// left.
+func (p *Plugin) renderDialStacked(settings *dialActionSettings, state *dialState) ([]byte, error) {
+	canvas := image.NewRGBA(image.Rect(0, 0, dialWidth, dialHeight))
+	fillRect(canvas, canvas.Bounds(), color.RGBA{5, 8, 11, 255})
+
+	count := len(settings.Pages)
+	if count == 0 {
+		return nil, nil
+	}
+	indices, activeSlot, rects := dialStackedLayout(settings.ActiveIndex, count, dialStackedGutter(dialIndicatorSize(settings)))
+
+	for slot, pageIndex := range indices {
+		if pageIndex < 0 || pageIndex >= len(state.graphs) || state.graphs[pageIndex] == nil {
+			continue
+		}
+		drawDialStrip(canvas, rects[slot], state.graphs[pageIndex], slot == activeSlot)
+	}
+
+	drawDialVerticalPageIndicator(canvas, settings.ActiveIndex, count, dialIndicatorStyle(settings), dialIndicatorColor(settings), dialIndicatorSize(settings))
 
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, canvas); err != nil {
@@ -778,7 +1168,13 @@ func (p *Plugin) updateDialFeedback(ctx string) {
 		_ = p.sd.SetSettings(ctx, settings)
 	}
 	if state.overview {
-		b, err := p.renderDialOverview(settings, state)
+		var b []byte
+		var err error
+		if dialOverviewStyle(settings) == "stacked" {
+			b, err = p.renderDialStacked(settings, state)
+		} else {
+			b, err = p.renderDialOverview(settings, state)
+		}
 		if err != nil {
 			log.Printf("dial overview encode: %v", err)
 			return

@@ -183,12 +183,19 @@ function renderPages() {
 // Action-level (whole-dial) settings, separate from the per-page settings.
 function renderDialSettings() {
   setValue("defaultView", currentSettings.defaultView || "fullscreen");
+  setValue("overviewStyle", currentSettings.overviewStyle || "stacked");
   setValue("indicatorStyle", currentSettings.indicatorStyle || "auto");
   setValue("indicatorFullscreen", currentSettings.indicatorFullscreen === true);
   setValue("indicatorColor", currentSettings.indicatorColor || "#bec6ce");
   setValue("indicatorSize", currentSettings.indicatorSize != null ? currentSettings.indicatorSize : 6);
   setValue("separatorWidth", currentSettings.separatorWidth != null ? currentSettings.separatorWidth : 3);
   setValue("separatorColor", currentSettings.separatorColor || "#363e46");
+  // Overview style only applies to the overview, so hide it when the dial starts
+  // (and stays) in fullscreen.
+  var overviewStyleRow = document.getElementById("overviewStyleRow");
+  if (overviewStyleRow) {
+    overviewStyleRow.style.display = (currentSettings.defaultView || "fullscreen") === "overview" ? "" : "none";
+  }
 }
 
 function selectedPageIndex() {
@@ -380,6 +387,7 @@ function bindActionField(id, key, parser) {
 
 function bindDialSettings() {
   bindActionField("defaultView", "defaultView");
+  bindActionField("overviewStyle", "overviewStyle");
   bindActionField("indicatorStyle", "indicatorStyle");
   bindActionField("indicatorFullscreen", "indicatorFullscreen", function (v) { return !!v; });
   bindActionField("indicatorColor", "indicatorColor");

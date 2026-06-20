@@ -6,9 +6,11 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"os"
 	"testing"
 	"time"
 
+	"github.com/moeilijk/lhm-streamdeck/pkg/graph"
 	hwsensorsservice "github.com/moeilijk/lhm-streamdeck/pkg/service"
 )
 
@@ -281,7 +283,376 @@ func TestDialViewOptionsResolve(t *testing.T) {
 	if !dialDefaultOverview(&dialActionSettings{DefaultView: "overview"}) {
 		t.Fatalf("overview default view must start in overview")
 	}
+	if got := dialOverviewStyle(&dialActionSettings{}); got != "stacked" {
+		t.Fatalf("unset overview style = %q, want stacked", got)
+	}
+	if got := dialOverviewStyle(&dialActionSettings{OverviewStyle: "carousel"}); got != "carousel" {
+		t.Fatalf("carousel overview style = %q, want carousel", got)
+	}
+	if got := dialOverviewStyle(&dialActionSettings{OverviewStyle: "bad"}); got != "stacked" {
+		t.Fatalf("bad overview style = %q, want stacked default", got)
+	}
 }
+
+func TestDialStackedLayout(t *testing.T) {
+	const gutter = 18
+	// Single page: one full-width strip starting after the reserved left column.
+	idx, slot, rects := dialStackedLayout(0, 1, gutter)
+	if len(idx) != 1 || len(rects) != 1 || slot != 0 {
+		t.Fatalf("count 1 layout = idx %v slot %d rects %d", idx, slot, len(rects))
+	}
+
+	// Three pages: previous/active/next, three EQUAL strips with the active one
+	// centred in the middle. Every strip is full width starting at the reserved
+	// left column (so the indicator column on the left stays clear and the graph
+	// reaches the right edge).
+	idx, slot, rects = dialStackedLayout(2, 5, gutter)
+	if slot != 1 {
+		t.Fatalf("active slot = %d, want middle slot 1", slot)
+	}
+	if len(rects) != 3 {
+		t.Fatalf("count 5 layout rects = %d, want 3", len(rects))
+	}
+	want := []int{1, 2, 3}
+	for i, v := range want {
+		if idx[i] != v {
+			t.Fatalf("stacked indices = %v, want %v", idx, want)
+		}
+	}
+	for _, r := range rects {
+		if r.Min.X != gutter {
+			t.Fatalf("strip left edge = %d, want reserved gutter %d", r.Min.X, gutter)
+		}
+		if r.Max.X != dialWidth {
+			t.Fatalf("strip right edge = %d, want full width %d", r.Max.X, dialWidth)
+		}
+	}
+	for i := 1; i < len(rects); i++ {
+		if d := rects[i].Dy() - rects[0].Dy(); d < -1 || d > 1 {
+			t.Fatalf("three strips must be equal height: %d vs %d", rects[0].Dy(), rects[i].Dy())
+		}
+	}
+	// The active (middle) strip must sit between the other two.
+	if !(rects[0].Max.Y <= rects[1].Min.Y && rects[1].Max.Y <= rects[2].Min.Y) {
+		t.Fatalf("strips must stack top->middle->bottom: %v %v %v", rects[0], rects[1], rects[2])
+	}
+
+	// Two pages: two EQUAL strips, active on top; both full width.
+	idx, slot, rects = dialStackedLayout(0, 2, gutter)
+	if len(idx) != 2 || slot != 0 {
+		t.Fatalf("count 2 layout idx %v slot %d", idx, slot)
+	}
+	if d := rects[0].Dy() - rects[1].Dy(); d < -1 || d > 1 {
+		t.Fatalf("count 2 strips must be equal height: %d vs %d", rects[0].Dy(), rects[1].Dy())
+	}
+}
+
+// renderStackedTestGraph builds a dial graph plotting a rising 0..99 ramp so its
+// newest (highest) sample is the tallest, with a bright-green highlight that is
+// easy to detect against the dark card background.
+func renderStackedTestGraph(title, value string) *graph.Graph {
+	s := actionSettings{ForegroundColor: "#004000", HighlightColor: "#00ff00"}
+	g := newDialGraph(&s)
+	for v := 0; v <= 99; v++ {
+		g.Update(float64(v))
+	}
+	_ = g.SetLabelText(0, title)
+	_ = g.SetLabelText(1, value)
+	return g
+}
+
+// TestRenderDialStackedNativeStrips verifies the stacked overview renders each
+// strip natively (no cropping/scaling that would distort the graph): the active
+// strip's sparkline fills toward the right edge, the most recent sample is the
+// tallest (the graph builds rightward), and the older/left side stays empty until
+// there is enough history. Set LHM_DUMP_DIAL=/path.png to also dump the image for
+// visual inspection.
+func TestRenderDialStackedNativeStrips(t *testing.T) {
+	const n = 5
+	pages := make([]actionSettings, n)
+	state := &dialState{graphs: make([]*graph.Graph, n)}
+	for i := 0; i < n; i++ {
+		state.graphs[i] = renderStackedTestGraph("CPU Core", "99%")
+	}
+	settings := &dialActionSettings{Pages: pages, ActiveIndex: 2, OverviewStyle: "stacked"}
+
+	b, err := (&Plugin{}).renderDialStacked(settings, state)
+	if err != nil {
+		t.Fatalf("renderDialStacked: %v", err)
+	}
+	if b == nil {
+		t.Fatal("renderDialStacked returned nil image")
+	}
+	img, err := png.Decode(bytes.NewReader(b))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if dump := os.Getenv("LHM_DUMP_DIAL"); dump != "" {
+		if err := os.WriteFile(dump, b, 0o644); err != nil {
+			t.Fatalf("dump: %v", err)
+		}
+	}
+
+	// Active strip band for active=2,count=5 is the middle equal third
+	// Rect(12,34,200,66); its inner (sparkline) area is inset by 1px to
+	// Rect(13,35,199,65), and the 2px blue border covers y=34..35.
+	isGraph := func(x, y int) bool {
+		c := color.RGBAModel.Convert(img.At(x, y)).(color.RGBA)
+		// Greenish: the filled area (#004000) and the highlight line (#00ff00).
+		// Use int math so the +20 margin cannot overflow uint8 (e.g. white).
+		return int(c.G) > 40 && int(c.G) > int(c.R)+20 && int(c.G) > int(c.B)+20
+	}
+	fillTop := func(x int) int {
+		for y := 36; y <= 64; y++ {
+			if isGraph(x, y) {
+				return y
+			}
+		}
+		return 65
+	}
+
+	// The sparkline reaches the right edge of the strip (full width, no side gap).
+	if fillTop(196) >= 65 {
+		t.Fatalf("active strip drew no graph near the right edge")
+	}
+	// Newest sample (rightmost) is the tallest; a mid column is lower.
+	if right, mid := fillTop(196), fillTop(150); right >= mid {
+		t.Fatalf("graph must build rightward: right fillTop=%d should be smaller (taller) than mid=%d", right, mid)
+	}
+	// Only 100 samples for ~186 columns, so the far left stays empty (newest-on-right).
+	if isGraph(20, 50) || fillTop(20) < 65 {
+		t.Fatalf("left side must stay empty until there is enough history")
+	}
+	// The active strip carries the bright blue selection border.
+	blue := func(x, y int) bool {
+		c := color.RGBAModel.Convert(img.At(x, y)).(color.RGBA)
+		return c.B > 180 && c.G > 100 && c.R < 90
+	}
+	foundBlue := false
+	for x := 12; x < dialWidth && !foundBlue; x++ {
+		if blue(x, 34) || blue(x, 35) {
+			foundBlue = true
+		}
+	}
+	if !foundBlue {
+		t.Fatal("active strip must have the blue selection border")
+	}
+}
+
+// TestRenderDialStackedHonoursIndicatorSize drives the full stacked render
+// through the settings path (IndicatorSize) and asserts the chosen size actually
+// changes the rendered left-column indicator. This is the end-to-end size test:
+// a bigger indicator size must paint visibly more indicator pixels in the column.
+func TestRenderDialStackedHonoursIndicatorSize(t *testing.T) {
+	const n = 5
+	indicatorPixels := func(size float64) int {
+		pages := make([]actionSettings, n)
+		state := &dialState{graphs: make([]*graph.Graph, n)}
+		for i := 0; i < n; i++ {
+			state.graphs[i] = renderStackedTestGraph("CPU Core", "99%")
+		}
+		sz := size
+		settings := &dialActionSettings{
+			Pages:          pages,
+			ActiveIndex:    2,
+			OverviewStyle:  "stacked",
+			IndicatorStyle: "dots",
+			IndicatorColor: "#ff0000",
+			IndicatorSize:  &sz,
+		}
+		b, err := (&Plugin{}).renderDialStacked(settings, state)
+		if err != nil {
+			t.Fatalf("renderDialStacked(size=%v): %v", size, err)
+		}
+		img, err := png.Decode(bytes.NewReader(b))
+		if err != nil {
+			t.Fatalf("decode(size=%v): %v", size, err)
+		}
+		count := 0
+		for y := 0; y < dialHeight; y++ {
+			for x := 0; x < dialStackedGutter(size); x++ {
+				c := color.RGBAModel.Convert(img.At(x, y)).(color.RGBA)
+				if c.R > 120 && int(c.G) < 90 && int(c.B) < 90 {
+					count++
+				}
+			}
+		}
+		return count
+	}
+
+	small := indicatorPixels(1)
+	large := indicatorPixels(8)
+	if small == 0 {
+		t.Fatal("indicator drew no pixels at the smallest size")
+	}
+	if large <= small {
+		t.Fatalf("indicator size has no effect in stacked mode: size1=%d px, size8=%d px (want size8 > size1)", small, large)
+	}
+}
+
+// TestRenderDialStackedCountHonoursIndicatorSize locks the size knob for the
+// "count" indicator (including a double-digit page count, which previously
+// saturated because the number was clamped to a fixed narrow column): a larger
+// size must paint a visibly bigger page number.
+func TestRenderDialStackedCountHonoursIndicatorSize(t *testing.T) {
+	if _, err := graph.GetSharedFontFaceManager().GetFaceOfSize(12); err != nil {
+		t.Skip("DejaVuSans-Bold.ttf not available in package dir; skipping count-render test")
+	}
+	const n = 12 // double-digit total
+	indicatorPixels := func(size float64) int {
+		pages := make([]actionSettings, n)
+		state := &dialState{graphs: make([]*graph.Graph, n)}
+		for i := 0; i < n; i++ {
+			state.graphs[i] = renderStackedTestGraph("CPU Core", "99%")
+		}
+		sz := size
+		settings := &dialActionSettings{
+			Pages:          pages,
+			ActiveIndex:    2,
+			OverviewStyle:  "stacked",
+			IndicatorStyle: "count",
+			IndicatorColor: "#ff0000",
+			IndicatorSize:  &sz,
+		}
+		b, err := (&Plugin{}).renderDialStacked(settings, state)
+		if err != nil {
+			t.Fatalf("renderDialStacked(size=%v): %v", size, err)
+		}
+		img, err := png.Decode(bytes.NewReader(b))
+		if err != nil {
+			t.Fatalf("decode(size=%v): %v", size, err)
+		}
+		count := 0
+		for y := 0; y < dialHeight; y++ {
+			for x := 0; x < dialStackedGutter(size); x++ {
+				c := color.RGBAModel.Convert(img.At(x, y)).(color.RGBA)
+				if c.R > 120 && int(c.G) < 90 && int(c.B) < 90 {
+					count++
+				}
+			}
+		}
+		return count
+	}
+
+	small := indicatorPixels(1)
+	large := indicatorPixels(8)
+	if small == 0 {
+		t.Fatal("count indicator drew no pixels at the smallest size")
+	}
+	if large <= small {
+		t.Fatalf("count indicator size has no effect in stacked mode: size1=%d px, size8=%d px (want size8 > size1)", small, large)
+	}
+}
+
+func TestDrawDialVerticalPageIndicatorDrawsOnLeft(t *testing.T) {
+	// Longest contiguous red run down a column is the active (elongated) dot.
+	maxRun := func(img *image.RGBA, x int) int {
+		best, run := 0, 0
+		for y := 0; y < dialHeight; y++ {
+			c := color.RGBAModel.Convert(img.At(x, y)).(color.RGBA)
+			if c.R > 150 && c.G < 80 && c.B < 80 {
+				run++
+				if run > best {
+					best = run
+				}
+			} else {
+				run = 0
+			}
+		}
+		return best
+	}
+	render := func(size float64) *image.RGBA {
+		img := image.NewRGBA(image.Rect(0, 0, dialWidth, dialHeight))
+		fillRect(img, img.Bounds(), color.RGBA{0, 0, 0, 255})
+		drawDialVerticalPageIndicator(img, 1, 3, "dots", color.RGBA{255, 0, 0, 255}, size)
+		return img
+	}
+	// Tallest active dot run anywhere inside the indicator gutter.
+	bestInGutter := func(img *image.RGBA, size float64) int {
+		best := 0
+		for x := 0; x < dialStackedGutter(size); x++ {
+			if r := maxRun(img, x); r > best {
+				best = r
+			}
+		}
+		return best
+	}
+
+	img := render(8)
+	// The indicator lives in the reserved left gutter.
+	if got := bestInGutter(img, 8); got <= 0 {
+		t.Fatalf("vertical indicator drew no active dot in the left gutter")
+	}
+	// The right side (where the graph builds up) must stay clear of the indicator.
+	for _, x := range []int{dialStackedGutter(8) + 4, dialWidth / 2, dialWidth - 4} {
+		if maxRun(img, x) > 0 {
+			t.Fatalf("vertical indicator must not draw at x=%d (graph area)", x)
+		}
+	}
+	// Size must scale the active dot height.
+	if large, small := bestInGutter(render(8), 8), bestInGutter(render(2), 2); large <= small {
+		t.Fatalf("larger size must render a taller active dot: small=%d large=%d", small, large)
+	}
+	// "off" hides it.
+	off := image.NewRGBA(image.Rect(0, 0, dialWidth, dialHeight))
+	fillRect(off, off.Bounds(), color.RGBA{0, 0, 0, 255})
+	drawDialVerticalPageIndicator(off, 1, 3, "off", color.RGBA{255, 0, 0, 255}, 8)
+	if bestInGutter(off, 8) > 0 {
+		t.Fatalf("style off must draw no vertical indicator")
+	}
+}
+
+// TestDrawDialVerticalIndicatorHonoursExplicitChoice locks the "no silent
+// fallback" rule for the vertical indicator: an explicit "count" must render the
+// page number (a wide fraction bar across the column), an explicit "dots" must
+// stay dots even with many pages, and only "auto" may switch to the number when
+// the dots would no longer be legible.
+func TestDrawDialVerticalIndicatorHonoursExplicitChoice(t *testing.T) {
+	if _, err := graph.GetSharedFontFaceManager().GetFaceOfSize(12); err != nil {
+		t.Skip("DejaVuSans-Bold.ttf not available in package dir; skipping count-render test")
+	}
+	red := color.RGBA{255, 0, 0, 255}
+	// Widest contiguous red run on any row within the left indicator column. The
+	// count form draws a fraction bar (~8px wide); dots are at most ~6px wide.
+	widestRow := func(active, count int, style string, size float64) int {
+		img := image.NewRGBA(image.Rect(0, 0, dialWidth, dialHeight))
+		fillRect(img, img.Bounds(), color.RGBA{0, 0, 0, 255})
+		drawDialVerticalPageIndicator(img, active, count, style, red, size)
+		best := 0
+		for y := 0; y < dialHeight; y++ {
+			run := 0
+			for x := 0; x < dialStackedGutter(size); x++ {
+				c := color.RGBAModel.Convert(img.At(x, y)).(color.RGBA)
+				if c.R > 150 && c.G < 80 && c.B < 80 {
+					run++
+					if run > best {
+						best = run
+					}
+				} else {
+					run = 0
+				}
+			}
+		}
+		return best
+	}
+
+	// Explicit "count" renders the number form (wide fraction bar), never dots.
+	if w := widestRow(1, 3, "count", 8); w < 7 {
+		t.Fatalf("explicit count must render the page number (widest red row %d, want >=7)", w)
+	}
+	// Explicit "dots" stays dots even with many pages (no silent switch to count).
+	if w := widestRow(1, 12, "dots", 8); w >= 7 {
+		t.Fatalf("explicit dots must stay dots (widest red row %d, want <7 = no fraction bar)", w)
+	}
+	// Auto may decide: dots for a small page count, the number for a large one.
+	if w := widestRow(1, 3, "auto", 8); w >= 7 {
+		t.Fatalf("auto with few pages should use dots (widest red row %d, want <7)", w)
+	}
+	if w := widestRow(1, 12, "auto", 8); w < 7 {
+		t.Fatalf("auto with many pages should switch to the number (widest red row %d, want >=7)", w)
+	}
+}
+
 
 func TestDrawDialPageIndicatorUsesDotsForSmallPageCounts(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, dialWidth, dialHeight))
@@ -390,32 +761,42 @@ func TestDialIndicatorFullscreenToggle(t *testing.T) {
 		}
 		return buf.Bytes()
 	}
-	at := func(b []byte, x, y int) color.RGBA {
+	black := color.RGBA{0, 0, 0, 255}
+	// The fullscreen indicator is drawn vertically in the LEFT gutter (like the
+	// stacked overview), so count any non-black pixels there. The bottom-centre,
+	// where the old horizontal indicator sat, must now stay clear of the graph.
+	leftGutterPixels := func(b []byte) int {
 		im, err := png.Decode(bytes.NewReader(b))
 		if err != nil {
 			t.Fatalf("decode: %v", err)
 		}
-		return color.RGBAModel.Convert(im.At(x, y)).(color.RGBA)
+		n := 0
+		for y := 2; y < dialHeight-2; y++ {
+			for x := 2; x < 16; x++ {
+				if color.RGBAModel.Convert(im.At(x, y)).(color.RGBA) != black {
+					n++
+				}
+			}
+		}
+		return n
 	}
-	black := color.RGBA{0, 0, 0, 255}
-	y := dialHeight - 6
 
 	// Toggle off: fullscreen keeps its original look, no indicator drawn.
 	off, err := decorateDialImage(fixture(), 1, 3, false, "auto", 0, color.RGBA{}, dialIndicatorDefaultColor, dialIndicatorDefaultSize)
 	if err != nil {
 		t.Fatalf("decorate off: %v", err)
 	}
-	if at(off, dialWidth/2, y) != black {
-		t.Fatalf("indicator must not be drawn in fullscreen when toggle is off")
+	if px := leftGutterPixels(off); px != 0 {
+		t.Fatalf("indicator must not be drawn in fullscreen when toggle is off (left-gutter pixels=%d)", px)
 	}
 
-	// Toggle on: the indicator is drawn in fullscreen using the resolved style.
+	// Toggle on: the indicator is drawn in fullscreen, in the LEFT gutter.
 	on, err := decorateDialImage(fixture(), 1, 3, true, "auto", 0, color.RGBA{}, dialIndicatorDefaultColor, dialIndicatorDefaultSize)
 	if err != nil {
 		t.Fatalf("decorate on: %v", err)
 	}
-	if at(on, dialWidth/2, y) == black {
-		t.Fatalf("indicator must be drawn in fullscreen when toggle is on")
+	if px := leftGutterPixels(on); px == 0 {
+		t.Fatalf("indicator must be drawn in the left gutter in fullscreen when toggle is on")
 	}
 }
 
@@ -489,16 +870,16 @@ func TestUpdateDialPageDrawsFullscreenIndicatorOnlyWhenEnabled(t *testing.T) {
 
 	diff, outsideBand := 0, 0
 	b := off.Bounds()
-	// The indicator band spans from the bottom edge up to the top of the active
-	// dot at the default size, mirroring drawDialPageIndicator's dot height.
-	bandTop := dialHeight - 3 - int(float64(dialIndicatorDefaultSize)*0.75+0.5)
+	// The fullscreen indicator now lives in the LEFT gutter (like the stacked
+	// overview), so the only pixels the toggle may change are x < the gutter width.
+	gutterRight := dialStackedGutter(dialIndicatorDefaultSize)
 	for y := b.Min.Y; y < b.Max.Y; y++ {
 		for x := b.Min.X; x < b.Max.X; x++ {
 			o := color.RGBAModel.Convert(off.At(x, y)).(color.RGBA)
 			n := color.RGBAModel.Convert(on.At(x, y)).(color.RGBA)
 			if o != n {
 				diff++
-				if y < bandTop {
+				if x >= gutterRight {
 					outsideBand++
 				}
 			}
@@ -508,7 +889,7 @@ func TestUpdateDialPageDrawsFullscreenIndicatorOnlyWhenEnabled(t *testing.T) {
 		t.Fatalf("fullscreen render identical with indicator on vs off — toggle is not wired into the fullscreen path")
 	}
 	if outsideBand > 0 {
-		t.Fatalf("indicator toggle changed %d pixels outside the indicator band — it affects more than the page indicator", outsideBand)
+		t.Fatalf("indicator toggle changed %d pixels outside the left indicator gutter — it affects more than the page indicator", outsideBand)
 	}
 }
 
