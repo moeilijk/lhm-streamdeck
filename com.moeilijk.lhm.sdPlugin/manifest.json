@@ -77,7 +77,7 @@
   "Icon": "pluginIcon",
   "CategoryIcon": "categoryIcon",
   "URL": "https://github.com/moeilijk/lhm-streamdeck",
-  "Version": "1.9.0.0",
+  "Version": "1.9.1.0",
   "ApplicationsToMonitor": {
     "windows": [
       "LibreHardwareMonitor.EXE",
