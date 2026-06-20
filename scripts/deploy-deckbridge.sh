@@ -45,10 +45,27 @@ fi
 
 # ── stop existing DeckBridge daemon ────────────────────────────────────────
 echo "kill: DeckBridge + plugin + companion processes"
-pkill -f "node.*DeckBridge" 2>/dev/null || true
+# DeckBridge installs a SIGTERM handler that does not reliably exit, so a plain
+# pkill (SIGTERM) leaves the old daemon alive; the next start then dies on
+# EADDRINUSE and the stale daemon keeps serving OLD code. Use SIGKILL.
+# Also: the real process is launched as "node dist/index.js" (cwd is the
+# DeckBridge dir, which is NOT part of the command line), so the historical
+# "node.*DeckBridge" pattern never matched it. Match the entry script instead.
+pkill -9 -f "dist/index.js"   2>/dev/null || true
+# Kill the spawned plugin binary too. On Linux DeckBridge runs the "lhm" binary
+# (not "lhm.exe"), so a "lhm.exe"-only match leaves a stale plugin process alive
+# and the deploy silently keeps running OLD plugin code. Match the plugin path so
+# both "sdPlugin/lhm" and "sdPlugin/lhm.exe" are killed.
+pkill -9 -f "sdPlugin/lhm"  2>/dev/null || true
 pkill -f "lhm.exe"          2>/dev/null || true
 pkill -f "lhm-companion"    2>/dev/null || true
-sleep 1
+
+# Wait until port 34075 is actually free before starting, so we never race a
+# half-dead daemon into EADDRINUSE.
+for _ in $(seq 1 20); do
+  if ! ss -ltn 2>/dev/null | grep -q ':34075 '; then break; fi
+  sleep 0.5
+done
 
 if [[ -x "$companion_bin" ]]; then
   echo "start: lhm-companion on $host_ip:$companion_port"

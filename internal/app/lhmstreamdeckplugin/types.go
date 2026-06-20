@@ -257,6 +257,16 @@ type dialActionSettings struct {
 	Pages           []actionSettings `json:"pages"`
 	DefaultView     string           `json:"defaultView,omitempty"`    // "", "fullscreen", "overview"
 	IndicatorStyle  string           `json:"indicatorStyle,omitempty"` // "", "auto", "dots", "count", "off"
+	// IndicatorFullscreen draws the page indicator in the fullscreen view too.
+	// Off by default so fullscreen keeps its original look; the indicator style
+	// above controls how it renders once enabled.
+	IndicatorFullscreen bool `json:"indicatorFullscreen,omitempty"`
+	// IndicatorColor sets the page-indicator colour (active dot / count text) so it
+	// can be made to contrast against the dial background; empty = default grey.
+	IndicatorColor string `json:"indicatorColor,omitempty"`
+	// IndicatorSize scales the page indicator in "points": value 4 matches the
+	// original size, 8 is double. Range 1-8; nil = default.
+	IndicatorSize *float64 `json:"indicatorSize,omitempty"`
 	// Edge separator drawn on this dial's left/right edges to visually separate
 	// it from adjacent dials. Width is per edge in px (0 = off); nil = default.
 	SeparatorWidth *int   `json:"separatorWidth,omitempty"`
