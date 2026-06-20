@@ -207,6 +207,7 @@ func buildSnapshot(root *node) (map[string]*sensor, []string, map[string][]*read
 	sensors := make(map[string]*sensor)
 	sensorOrder := make([]string, 0)
 	readings := make(map[string][]*reading)
+	usedIDs := make(map[string]map[int32]bool)
 
 	var walk func(n *node, ancestors []*node)
 	walk = func(n *node, ancestors []*node) {
@@ -221,6 +222,23 @@ func buildSnapshot(root *node) (map[string]*sensor, []string, map[string][]*read
 				sensorOrder = append(sensorOrder, sid)
 			}
 			if r := newReading(sid, n); r != nil {
+				if usedIDs[sid] == nil {
+					usedIDs[sid] = make(map[int32]bool)
+				}
+				// Workaround for LibreHardwareMonitor bug #1441: NVIDIA exposes
+				// two distinct Load readings ("GPU Memory" and "GPU Bus") with an
+				// identical SensorId (/gpu-nvidia/0/load/3, the hardcoded index 3
+				// in NvidiaGpu.cs collides with the bus interface utilization), so
+				// makeReadingID produces the same id and the second reading becomes
+				// unselectable. Keep the first occurrence canonical (backward
+				// compatible with already-saved button settings) and derive a
+				// stable, distinct id for later duplicates from the label.
+				// Remove once LHM ships the upstream fix (>= v0.9.7) and duplicate
+				// SensorIds no longer occur.
+				if usedIDs[sid][r.id] {
+					r.id = disambiguateReadingID(sid, n.SensorID, r.label, usedIDs[sid])
+				}
+				usedIDs[sid][r.id] = true
 				readings[sid] = append(readings[sid], r)
 			}
 			return
@@ -354,6 +372,28 @@ func makeReadingID(sensorID, readingID string) int32 {
 	_, _ = h.Write([]byte(sensorID))
 	_, _ = h.Write([]byte(readingID))
 	return int32(h.Sum32() & 0x7fffffff)
+}
+
+// disambiguateReadingID derives a stable reading id that does not collide with
+// ids already used within the same sensor. It mixes the reading label into the
+// hash so distinct readings sharing one SensorId (see LHM bug #1441) get
+// distinct ids, falling back to an incrementing suffix if a collision remains.
+func disambiguateReadingID(sensorID, readingID, label string, used map[int32]bool) int32 {
+	for attempt := 0; ; attempt++ {
+		h := fnv.New32a()
+		_, _ = h.Write([]byte(sensorID))
+		_, _ = h.Write([]byte(readingID))
+		_, _ = h.Write([]byte{0})
+		_, _ = h.Write([]byte(label))
+		if attempt > 0 {
+			_, _ = h.Write([]byte{0})
+			_, _ = h.Write([]byte(strconv.Itoa(attempt)))
+		}
+		id := int32(h.Sum32() & 0x7fffffff)
+		if !used[id] {
+			return id
+		}
+	}
 }
 
 func mapReadingType(t string) hwsensorsservice.ReadingType {
