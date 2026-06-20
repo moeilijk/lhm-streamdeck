@@ -256,7 +256,12 @@ type dialActionSettings struct {
 	ActiveIndex     int              `json:"activeIndex"`
 	Pages           []actionSettings `json:"pages"`
 	DefaultView     string           `json:"defaultView,omitempty"`    // "", "fullscreen", "overview"
-	IndicatorStyle  string           `json:"indicatorStyle,omitempty"` // "", "auto", "dots", "count", "off"
+	// OverviewStyle selects how the overview (non-fullscreen) view renders:
+	// "" / "carousel" = the original horizontal carousel; "stacked" = vertically
+	// scrolling full-width strips with the active reading dominant and a peek of
+	// the previous/next pages.
+	OverviewStyle  string `json:"overviewStyle,omitempty"`
+	IndicatorStyle string `json:"indicatorStyle,omitempty"` // "", "auto", "dots", "count", "off"
 	// IndicatorFullscreen draws the page indicator in the fullscreen view too.
 	// Off by default so fullscreen keeps its original look; the indicator style
 	// above controls how it renders once enabled.

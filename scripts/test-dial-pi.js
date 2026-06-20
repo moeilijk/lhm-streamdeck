@@ -223,8 +223,8 @@ function testRemoveSelectedPage() {
 function testBuildRefVisibleInPi() {
   const html = fs.readFileSync("com.moeilijk.lhm.sdPlugin/dial_pi.html", "utf8");
   assert(html.includes('id="pluginBuildRef"'), "plugin build ref row present");
-  assert(html.includes("3c5e9b5 + V5-prep.19"), "plugin V5 build ref visible in PI");
-  assert(html.includes('dial_pi.js?v=V5-prep.19'), "dial PI script is cache-busted with build ref");
+  assert(html.includes("3c5e9b5 + V5-prep.25"), "plugin V5 build ref visible in PI");
+  assert(html.includes('dial_pi.js?v=V5-prep.25'), "dial PI script is cache-busted with build ref");
   assert(html.includes("Dial press"), "dial-press row present");
   assert(html.includes("Toggle overview"), "dial-press behavior visible");
   assert(html.includes('id="globalThresholdsSection" hidden'), "global thresholds section starts hidden");
@@ -470,16 +470,20 @@ function testSeparatorIsActionLevelWithCurrentDefault() {
 
 function testDialViewOptionsAreActionLevel() {
   const defaultView = { tagName: "SELECT", type: "select-one", value: "fullscreen", dataset: {}, _h: {}, addEventListener(t, h) { this._h[t] = h; } };
+  const overviewStyle = { tagName: "SELECT", type: "select-one", value: "carousel", dataset: {}, _h: {}, addEventListener(t, h) { this._h[t] = h; } };
+  const overviewStyleRow = { tagName: "DIV", style: {} };
   const indicatorStyle = { tagName: "SELECT", type: "select-one", value: "auto", dataset: {}, _h: {}, addEventListener(t, h) { this._h[t] = h; } };
   const indicatorFullscreen = { tagName: "INPUT", type: "checkbox", checked: false, dataset: {}, _h: {}, addEventListener(t, h) { this._h[t] = h; } };
   const indicatorColor = { tagName: "INPUT", type: "color", value: "#000000", dataset: {}, _h: {}, addEventListener(t, h) { this._h[t] = h; } };
   const indicatorSize = { tagName: "INPUT", type: "range", value: "1", dataset: {}, _h: {}, addEventListener(t, h) { this._h[t] = h; } };
-  const sb = loadDialSandbox({ defaultView, indicatorStyle, indicatorFullscreen, indicatorColor, indicatorSize });
+  const sb = loadDialSandbox({ defaultView, overviewStyle, overviewStyleRow, indicatorStyle, indicatorFullscreen, indicatorColor, indicatorSize });
   sb.renderPages = () => {};
   sb.currentSettings = { activeIndex: 0, pages: [{}] };
 
   sb.renderDialSettings();
   assert(defaultView.value === "fullscreen", "default view defaults to fullscreen");
+  assert(overviewStyle.value === "stacked", "overview style defaults to stacked");
+  assert(overviewStyleRow.style.display === "none", "overview style hidden when default view is fullscreen");
   assert(indicatorStyle.value === "auto", "indicator style defaults to auto");
   assert(indicatorFullscreen.checked === false, "indicator-in-fullscreen defaults off");
   assert(indicatorColor.value === "#bec6ce", "indicator color defaults to light grey");
@@ -488,9 +492,22 @@ function testDialViewOptionsAreActionLevel() {
   sb.bindDialSettings();
   defaultView.value = "overview";
   defaultView._h.change();
+  overviewStyle.value = "stacked";
+  overviewStyle._h.change();
   indicatorStyle.value = "count";
   indicatorStyle._h.change();
   indicatorFullscreen.checked = true;
+  indicatorFullscreen._h.change();
+  indicatorColor.value = "#ff0000";
+  indicatorColor._h.change();
+  indicatorSize.value = "7.5";
+  indicatorSize._h.change();
+  assert(sb.currentSettings.defaultView === "overview", "default view writes to action settings");
+  assert(sb.currentSettings.overviewStyle === "stacked", "overview style writes to action settings");
+  assert(sb.currentSettings.indicatorStyle === "count", "indicator style writes to action settings");
+  // Switching the default view to overview must reveal the overview style row.
+  sb.renderDialSettings();
+  assert(overviewStyleRow.style.display === "", "overview style shown when default view is overview");
   indicatorFullscreen._h.change();
   indicatorColor.value = "#ff0000";
   indicatorColor._h.change();

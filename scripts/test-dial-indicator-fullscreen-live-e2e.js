@@ -12,9 +12,10 @@
 //
 // Live sensor values drift every frame, so a whole-image md5 is meaningless here.
 // We isolate the indicator deterministically:
-//   - pages use GraphMode "text" (no moving graph in the bottom band),
-//   - we inspect ONLY the indicator band (bottom rows where drawDialPageIndicator
-//     paints), and
+//   - pages use GraphMode "text" (no moving graph, and the text is centred away
+//     from the left gutter where the indicator lives),
+//   - we inspect ONLY the indicator band (the left gutter where the vertical
+//     fullscreen indicator paints, matching the stacked overview), and
 //   - we capture several frames per state and assert the band is STABLE within a
 //     state (self-validates that the band is drift-free) while DIFFERING between
 //     the checkbox-off and checkbox-on states.
@@ -79,7 +80,11 @@ async function bootLivePi(slot) {
 const $ = (win, id) => win.document.getElementById(id);
 const fire = (win, el, t) => el.dispatchEvent(new win.Event(t, { bubbles: true }));
 
-// Decode the current dial image's indicator band (bottom rows, full width) to raw RGB.
+// Decode the current dial image's indicator band to raw RGB. The fullscreen page
+// indicator is drawn vertically in the LEFT gutter (like the stacked overview), so
+// we sample the left column over the full height. In fullscreen text mode the
+// title/value text is horizontally centred (~x=100), so this column carries only
+// the indicator dots — nothing else lights up here when the indicator is off.
 async function captureBand(ctx) {
   const slot = slotByContext(await getState(), ctx);
   const url = ((slot || {}).feedback || {}).imageDataUrl || "";
@@ -88,11 +93,11 @@ async function captureBand(ctx) {
   const buf = Buffer.from(b64, "base64");
   const { data, info } = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const { width: W, height: H, channels: ch } = info;
-  const y0 = H - 8;
-  const y1 = H - 3; // drawDialPageIndicator paints dots at H-7..H-5
+  const x0 = 2;
+  const x1 = 16; // the reserved left indicator gutter (dialStackedGutter ~18 at size 6)
   const out = [];
-  for (let y = y0; y < y1; y++) {
-    for (let x = 0; x < W; x++) {
+  for (let y = 2; y < H - 2; y++) {
+    for (let x = x0; x < x1; x++) {
       const i = (y * W + x) * ch;
       out.push(data[i], data[i + 1], data[i + 2]);
     }
@@ -164,11 +169,16 @@ async function pollPages(ctx, want, tries = 40) {
   return slotByContext(await getState(), ctx);
 }
 
-async function resetDial(win, ctx) {
+// Restore the dial to the settings it had before the test, so running this against
+// a real (configured) dial leaves it exactly as the user had it.
+async function restoreDial(win, ctx, original) {
   try {
-    win.currentSettings = { activeIndex: 0, pages: [], sourceProfileId: win.currentSettings.sourceProfileId || "", defaultView: "fullscreen" };
+    const restored = JSON.parse(JSON.stringify(original || {}));
+    if (!Array.isArray(restored.pages)) restored.pages = [];
+    if (typeof restored.activeIndex !== "number") restored.activeIndex = 0;
+    win.currentSettings = restored;
     win.saveSettings();
-    await pollPages(ctx, 0);
+    await pollPages(ctx, restored.pages.length);
   } catch (e) {
     console.error("cleanup warning: " + (e && e.message ? e.message : e));
   }
@@ -186,11 +196,17 @@ async function main() {
     console.log("skip: dial indicator-fullscreen live e2e (DeckBridge not reachable at " + BASE + ")");
     return 0;
   }
-  const target = dialSlots(state).find((s) => (((s.settings || {}).pages) || []).length === 0);
-  if (!target) {
-    console.log("skip: dial indicator-fullscreen live e2e (no empty dial to use as a non-destructive target)");
+  // Prefer an already-empty dial, but fall back to ANY configured dial: a real deck
+  // never has a spare empty dial, so requiring one made this whole e2e self-skip and
+  // validate nothing. We snapshot the target's settings up front and RESTORE them in
+  // the finally block, so mutating a configured dial stays non-destructive.
+  const slots = dialSlots(state);
+  if (slots.length === 0) {
+    console.log("skip: dial indicator-fullscreen live e2e (no dial on the deck)");
     return 0;
   }
+  const target = slots.find((s) => (((s.settings || {}).pages) || []).length === 0) || slots[0];
+  const originalSettings = JSON.parse(JSON.stringify(target.settings || { pages: [], activeIndex: 0 }));
 
   const win = await bootLivePi(target);
   const ctx = target.context;
@@ -259,11 +275,12 @@ async function main() {
 
     console.log(`\npersistent-bright indicator pixels: OFF=${offBright}  ON=${onBright} (3 pages, fullscreen, text mode)`);
   } finally {
-    await resetDial(win, ctx);
+    await restoreDial(win, ctx, originalSettings);
     const cleaned = slotByContext(await getState(), ctx);
     const n = (((cleaned || {}).settings || {}).pages || []).length;
-    console.log(n === 0 ? "cleanup: dial reset to empty" : "cleanup WARNING: dial still has " + n + " pages");
-    if (n !== 0) failures++;
+    const want = (originalSettings.pages || []).length;
+    console.log(n === want ? "cleanup: dial restored to original (" + want + " pages)" : "cleanup WARNING: dial has " + n + " pages, expected " + want);
+    if (n !== want) failures++;
   }
 
   return failures > 0 ? 1 : 0;

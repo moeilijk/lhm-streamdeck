@@ -49,7 +49,17 @@ node scripts/test-dial-bulk-live-e2e.js
 echo "test: dial indicator-fullscreen live e2e (skips if DeckBridge not running)"
 node scripts/test-dial-indicator-fullscreen-live-e2e.js
 
+echo "test: dial stacked overview live e2e (skips if DeckBridge not running)"
+node scripts/test-dial-stacked-live-e2e.js
+
 echo "test: Go targets (windows)"
+# Text-rendering tests load DejaVuSans-Bold.ttf from the package CWD; provide it
+# for the dial package and clean it up afterwards.
+dial_pkg="internal/app/lhmstreamdeckplugin"
+if [ ! -f "$dial_pkg/DejaVuSans-Bold.ttf" ]; then
+  cp DejaVuSans-Bold.ttf "$dial_pkg/DejaVuSans-Bold.ttf"
+  trap 'rm -f "'"$dial_pkg"'/DejaVuSans-Bold.ttf"' EXIT
+fi
 GOOS=windows GOARCH=amd64 GOCACHE=/tmp/go-build go test \
   ./cmd/lhm_streamdeck_plugin \
   ./internal/app/lhmstreamdeckplugin \
