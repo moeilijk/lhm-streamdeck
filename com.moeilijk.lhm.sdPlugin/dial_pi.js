@@ -175,6 +175,11 @@ function renderPages() {
     if (index === currentSettings.activeIndex) opt.selected = true;
     list.appendChild(opt);
   });
+  var pagesLabel = document.getElementById("pagesLabel");
+  if (pagesLabel) {
+    var pageCount = currentSettings.pages.length;
+    pagesLabel.textContent = pageCount ? "Pages (" + pageCount + ")" : "Pages";
+  }
   updatePageButtons();
   renderDialSettings();
   renderPageSettings();
@@ -190,12 +195,8 @@ function renderDialSettings() {
   setValue("indicatorSize", currentSettings.indicatorSize != null ? currentSettings.indicatorSize : 6);
   setValue("separatorWidth", currentSettings.separatorWidth != null ? currentSettings.separatorWidth : 3);
   setValue("separatorColor", currentSettings.separatorColor || "#363e46");
-  // Overview style only applies to the overview, so hide it when the dial starts
-  // (and stays) in fullscreen.
-  var overviewStyleRow = document.getElementById("overviewStyleRow");
-  if (overviewStyleRow) {
-    overviewStyleRow.style.display = (currentSettings.defaultView || "fullscreen") === "overview" ? "" : "none";
-  }
+  // Overview style also applies when the default view is Fullscreen (the dial can
+  // be toggled into the overview at runtime), so the option is always shown.
 }
 
 function selectedPageIndex() {
@@ -240,11 +241,7 @@ function sensorMatchesFilter(sensor, term, category) {
 function readingsForSensor(sensorUid) {
   return (currentCatalog.readings || []).filter(function (reading) {
     return reading.sensorUid === sensorUid;
-  }).sort(function (a, b) {
-    var an = (a.label || "") + " " + (a.unit || "");
-    var bn = (b.label || "") + " " + (b.unit || "");
-    return an > bn ? 1 : an < bn ? -1 : 0;
-  });
+  }).sort(compareReadings);
 }
 
 function populateSelectedPageSensors() {
@@ -288,7 +285,7 @@ function populateSelectedPageReadings() {
   readings.forEach(function (reading) {
     var opt = document.createElement("option");
     opt.value = String(reading.id);
-    opt.textContent = reading.label + (reading.unit ? " (" + reading.unit + ")" : "");
+    opt.textContent = readingOptionLabel(reading);
     if (String(reading.id) === String(selectedReadingId)) opt.selected = true;
     sel.appendChild(opt);
   });
@@ -1040,7 +1037,6 @@ function generateBulkPreview() {
 function renderBulkPreview(candidates) {
   bulkPreviewCandidates = candidates || [];
   var list = document.getElementById("bulkPreviewList");
-  var addBtn = document.getElementById("bulkAddBtn");
   if (!list) return;
   list.innerHTML = "";
   bulkPreviewCandidates.forEach(function (candidate, index) {
@@ -1050,7 +1046,25 @@ function renderBulkPreview(candidates) {
     opt.selected = true;
     list.appendChild(opt);
   });
-  if (addBtn) addBtn.disabled = bulkPreviewCandidates.length === 0;
+  // Keep the Add button's count in sync as the tester (de)selects candidates.
+  if (!list.dataset.countListenerBound) {
+    list.addEventListener("change", updateBulkAddButton);
+    list.dataset.countListenerBound = "true";
+  }
+  updateBulkAddButton();
+}
+
+// updateBulkAddButton reflects how many pages the bulk-add would create in the
+// button label, so the count is visible before committing.
+function updateBulkAddButton() {
+  var list = document.getElementById("bulkPreviewList");
+  var addBtn = document.getElementById("bulkAddBtn");
+  if (!addBtn) return;
+  var selected = list
+    ? Array.from(list.options).filter(function (o) { return o.selected && !o.disabled; }).length
+    : 0;
+  addBtn.disabled = selected === 0;
+  addBtn.textContent = selected ? "Add Selected (" + selected + ")" : "Add Selected";
 }
 
 function clearBulkPreview() {

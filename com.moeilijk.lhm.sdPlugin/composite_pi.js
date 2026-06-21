@@ -175,7 +175,7 @@ function populateReadingSelect(slotIdx, readings) {
 
   readings.slice().sort(compareReadings).forEach(function (r) {
     var opt = document.createElement("option");
-    opt.text = r.label + (r.unit ? " (" + r.unit + ")" : "");
+    opt.text = readingOptionLabel(r);
     opt.value = String(r.id);
     if (String(r.id) === currentRid) opt.selected = true;
     el.add(opt);

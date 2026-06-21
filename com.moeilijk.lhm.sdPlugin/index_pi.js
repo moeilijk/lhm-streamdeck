@@ -330,19 +330,9 @@ function addReadings(el, readings, settings) {
   el.add(option);
 
   var sortedReadings = readings.slice().sort(compareReadings);
-  var maxL = 0;
-  sortedReadings.forEach((r) => {
-    var l = r.prefix.length;
-    if (l > maxL) {
-      maxL = l;
-    }
-  });
   sortedReadings.forEach((r) => {
     var option = document.createElement("option");
-    option.style = "white-space: pre";
-    var padLen = Math.max(0, maxL - r.prefix.length + 1);
-    var spaces = " ".repeat(padLen);
-    option.textContent = `${r.prefix}${spaces}${r.label}`;
+    option.textContent = readingOptionLabel(r);
     option.value = r.id;
     option.dataset.unit = r.unit || r.prefix; // store unit in data attribute
     if (settings.readingId === r.id) {

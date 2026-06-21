@@ -294,6 +294,34 @@ func TestDialViewOptionsResolve(t *testing.T) {
 	}
 }
 
+func TestDialOverviewRectsTwoUpReadable(t *testing.T) {
+	rects := dialOverviewRects(2)
+	if len(rects) != 2 {
+		t.Fatalf("expected 2 cards, got %d", len(rects))
+	}
+	left, right := rects[0], rects[1]
+
+	gap := right.Min.X - left.Max.X
+	if gap != 0 {
+		t.Fatalf("middle gap = %d, want no empty space between framed cards", gap)
+	}
+	if left.Max.X > right.Min.X {
+		t.Fatalf("cards overlap: %v %v", left, right)
+	}
+	if left.Dx() != right.Dx() || left.Dy() != right.Dy() {
+		t.Fatalf("cards must be equal size: %v vs %v", left, right)
+	}
+	for _, r := range rects {
+		if r.Min.X < 0 || r.Min.Y < 0 || r.Max.X > dialWidth || r.Max.Y > dialHeight {
+			t.Fatalf("card %v outside 0..%dx%d", r, dialWidth, dialHeight)
+		}
+		// Larger than the previous 86x46 layout so the scaled graphs/text read better.
+		if r.Dx() < 90 || r.Dy() < 50 {
+			t.Fatalf("card %v too small (want >=90x50), regressed readability", r)
+		}
+	}
+}
+
 func TestDialStackedLayout(t *testing.T) {
 	const gutter = 18
 	// Single page: one full-width strip starting after the reserved left column.
