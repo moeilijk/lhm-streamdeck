@@ -955,24 +955,27 @@ function existingBulkPageKeys() {
 
 // Three concrete bulk rules (the issuer's spec): all readings on the seed's sensor;
 // the whole numbered family on that sensor (all cores / all fans); the same reading
-// on all matching (same-category) sensors. Each INCLUDES the seed, so the count the
-// UI shows is the full set that will be added (existing pages are still skipped).
+// on all matching (same-category) sensors. Each INCLUDES the seed. Readings already
+// on this dial are still LISTED (so the skip is visible) but flagged duplicate, so the
+// preview shows them greyed-out and deselected instead of silently dropping them.
 function buildBulkCandidates(rule) {
   var selected = selectedDraftReading();
   if (!selected) return [];
   var seed = selected.reading;
   var seedSensor = selected.sensorUid;
   var seedCat = readingCategory(seed, seedSensor);
-  var seen = existingBulkPageKeys();
+  var existing = existingBulkPageKeys();
+  var batchSeen = {};
   var candidates = [];
   function addCandidate(sensorUid, reading) {
     var key = bulkCandidateKey(sensorUid, reading.id, currentSettings.sourceProfileId);
-    if (seen[key]) return;
-    seen[key] = true;
+    if (batchSeen[key]) return; // never list the same reading twice within one rule
+    batchSeen[key] = true;
     var sensor = sensorByUid(sensorUid) || {};
     candidates.push({
       sensorUid: sensorUid,
       reading: reading,
+      duplicate: !!existing[key], // already a page on this dial — show it, don't add it
       label: (sensor.name || sensorUid) + " — " + (reading.label || reading.id)
     });
   }
@@ -1042,8 +1045,16 @@ function renderBulkPreview(candidates) {
   bulkPreviewCandidates.forEach(function (candidate, index) {
     var opt = document.createElement("option");
     opt.value = String(index);
-    opt.textContent = candidate.label;
-    opt.selected = true;
+    if (candidate.duplicate) {
+      // Already on the dial: list it so the skip is visible, but deselect + disable
+      // so it cannot be re-added and reads as a duplicate, not a candidate.
+      opt.textContent = candidate.label + " (added)";
+      opt.selected = false;
+      opt.disabled = true;
+    } else {
+      opt.textContent = candidate.label;
+      opt.selected = true;
+    }
     list.appendChild(opt);
   });
   // Keep the Add button's count in sync as the tester (de)selects candidates.
