@@ -496,12 +496,13 @@ func dialOverviewRects(count int) []image.Rectangle {
 		return []image.Rectangle{image.Rect(17, 8, 183, 94)}
 	}
 	if count == 2 {
-		// Each card already has its own border, so the two cards touch directly.
-		// The outer margins stay 3px to clear the edge separators. Inner area
-		// stays close to 2:1 to show the full graph preview without distortion.
+		// Each card already has its own border, so the two cards touch directly at the
+		// centre (no middle gap). Cards are 96x51; with the 3px inset the preview area is
+		// exactly 90x45 = 2:1, so the graph is not distorted. The 4px outer margins clear
+		// the edge separators. Bigger than the old 86x46 layout for readability.
 		return []image.Rectangle{
-			image.Rect(3, 24, 100, 75),
-			image.Rect(100, 24, 197, 75),
+			image.Rect(4, 24, 100, 75),
+			image.Rect(100, 24, 196, 75),
 		}
 	}
 	return []image.Rectangle{

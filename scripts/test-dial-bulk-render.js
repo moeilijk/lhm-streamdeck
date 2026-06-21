@@ -164,6 +164,45 @@ test("de-selecting a previewed page excludes it from the add", () => {
   assert.deepStrictEqual(pageListTitles(win).slice().sort(), ["Virtual Disk (sda) Read", "Virtual Disk (sdc) Read"], "pages " + JSON.stringify(pageListTitles(win)));
 });
 
+// #56 feedback item 6: readings already on the dial must be VISIBLE in the preview
+// (marked + deselected + disabled), not silently dropped, so the skip is communicated.
+test("a reading already on the dial is shown as a disabled, deselected duplicate", () => {
+  const win = bootPi();
+  select(win, "/cpu", "1");
+  // Pre-add CPU Core #1 so it is an existing page when we preview the family.
+  preview(win, "numbered-family");
+  Array.from($(win, "bulkPreviewList").options).forEach((o) => {
+    if (o.textContent.indexOf("CPU Core #2") !== -1) o.selected = false;
+  });
+  $(win, "bulkAddBtn").click();
+  assert.deepStrictEqual(pageListTitles(win), ["CPU Core #1"], "only #1 added: " + JSON.stringify(pageListTitles(win)));
+
+  // Re-preview the same family WITHOUT wiping the existing pages (the select() helper
+  // resets currentSettings, so re-drive the draft selection directly instead).
+  win.pageSelectionDraft = { sensorUid: "/cpu", readingId: "" };
+  win.renderSelectedPageSelection();
+  $(win, "pageSensorSelect").value = "/cpu";
+  fire(win, $(win, "pageSensorSelect"), "change");
+  $(win, "pageReadingSelect").value = "1";
+  fire(win, $(win, "pageReadingSelect"), "change");
+  preview(win, "numbered-family");
+  const opts = Array.from($(win, "bulkPreviewList").options);
+  const dup = opts.find((o) => o.textContent.indexOf("CPU Core #1") !== -1);
+  const fresh = opts.find((o) => o.textContent.indexOf("CPU Core #2") !== -1);
+  assert.ok(dup, "duplicate still listed (not dropped): " + JSON.stringify(previewLabels(win)));
+  assert.strictEqual(dup.disabled, true, "duplicate is disabled");
+  assert.strictEqual(dup.selected, false, "duplicate is deselected");
+  assert.ok(dup.textContent.indexOf("(added)") !== -1, "duplicate is marked: " + dup.textContent);
+  assert.strictEqual(fresh.disabled, false, "non-duplicate stays enabled");
+  assert.strictEqual(fresh.selected, true, "non-duplicate stays selected");
+  // The Add button counts only the addable (non-duplicate) selection.
+  assert.ok($(win, "bulkAddBtn").textContent.indexOf("(1)") !== -1, "add count excludes duplicate: " + $(win, "bulkAddBtn").textContent);
+
+  // Adding now appends only #2; #1 is not duplicated.
+  $(win, "bulkAddBtn").click();
+  assert.deepStrictEqual(pageListTitles(win).slice().sort(), ["CPU Core #1", "CPU Core #2"], "no duplicate page added: " + JSON.stringify(pageListTitles(win)));
+});
+
 if (failures > 0) {
   console.error("\n" + failures + " test(s) failed");
   process.exit(1);
