@@ -25,9 +25,12 @@
 const fs = require("fs");
 const path = require("path");
 
+const { noData } = require("./live-e2e-guard");
+
 const repoRoot = path.resolve(__dirname, "..");
 const BASE = process.env.DECKBRIDGE_URL || "http://127.0.0.1:34075";
 const PLUGIN_ID = "com.moeilijk.lhm";
+const LABEL = "dial stacked live e2e";
 const W = 200;
 const H = 100;
 const LEFT_COL = 18; // dialStackedGutter(size=6 default): reserved for the vertical indicator
@@ -208,26 +211,19 @@ function pickThreeReadings(readings) {
 }
 
 async function main() {
-  if (!jsdomMod || !WebSocket || !sharp) {
-    console.log("skip: dial stacked live e2e (jsdom/ws/sharp not reachable)");
-    return 0;
-  }
+  if (!jsdomMod || !WebSocket || !sharp) return noData(LABEL, "jsdom/ws/sharp not installed");
   let state;
   try {
     state = await getState();
   } catch (e) {
-    console.log("skip: dial stacked live e2e (DeckBridge not reachable at " + BASE + ")");
-    return 0;
+    return noData(LABEL, "DeckBridge not reachable at " + BASE);
   }
   // Prefer an already-empty dial, but fall back to ANY configured dial: a real deck
   // never has a spare empty dial, so requiring one made this whole e2e self-skip and
   // validate nothing. We snapshot the target's settings up front and RESTORE them in
   // the finally block, so mutating a configured dial stays non-destructive.
   const slots = dialSlots(state);
-  if (slots.length === 0) {
-    console.log("skip: dial stacked live e2e (no dial on the deck)");
-    return 0;
-  }
+  if (slots.length === 0) return noData(LABEL, "no dial on the deck");
   const target = slots.find((s) => (((s.settings || {}).pages) || []).length === 0) || slots[0];
   const originalSettings = JSON.parse(JSON.stringify(target.settings || { pages: [], activeIndex: 0 }));
 
@@ -235,10 +231,7 @@ async function main() {
   const ctx = target.context;
   const readings = win.currentCatalog.readings || [];
   const chosen = pickThreeReadings(readings);
-  if (chosen.length < 3) {
-    console.log("skip: dial stacked live e2e (live catalog has fewer than 3 readings)");
-    return 0;
-  }
+  if (chosen.length < 3) return noData(LABEL, "live catalog has fewer than 3 readings");
 
   let failures = 0;
   const assert = require("assert");

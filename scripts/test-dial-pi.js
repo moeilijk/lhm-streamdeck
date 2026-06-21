@@ -312,8 +312,8 @@ function testRemoveSelectedPage() {
 function testBuildRefVisibleInPi() {
   const html = fs.readFileSync("com.moeilijk.lhm.sdPlugin/dial_pi.html", "utf8");
   assert(html.includes('id="pluginBuildRef"'), "plugin build ref row present");
-  assert(html.includes("3c5e9b5 + V5-prep.33"), "plugin V5 build ref visible in PI");
-  assert(html.includes('dial_pi.js?v=V5-prep.33'), "dial PI script is cache-busted with build ref");
+  assert(html.includes("3c5e9b5 + V5-prep.34"), "plugin V5 build ref visible in PI");
+  assert(html.includes('dial_pi.js?v=V5-prep.34'), "dial PI script is cache-busted with build ref");
   assert(html.includes("Dial press"), "dial-press row present");
   assert(html.includes("Toggle overview"), "dial-press behavior visible");
   assert(html.includes('id="globalThresholdsSection" hidden'), "global thresholds section starts hidden");
@@ -611,8 +611,29 @@ function testDialViewOptionsAreActionLevel() {
   assert(!("indicatorFullscreen" in (sb.currentSettings.pages[0] || {})), "indicator-in-fullscreen is not stored per page");
 }
 
+// #56 feedback item 9: the reverse-dial toggle is an action-level boolean that
+// round-trips through renderDialSettings (read) and bindDialSettings (write).
+function testReverseRotationActionLevel() {
+  const reverseRotation = { tagName: "INPUT", type: "checkbox", checked: false, dataset: {}, _h: {}, addEventListener(t, h) { this._h[t] = h; } };
+  const sb = loadDialSandbox(autoStubElements({ reverseRotation }));
+  sb.renderPages = () => {};
+  sb.saveSettings = () => {};
+  sb.currentSettings = { activeIndex: 0, pages: [{}], reverseRotation: true };
+  sb.renderDialSettings();
+  assert(reverseRotation.checked === true, "reverse checkbox reflects settings=true");
+  sb.bindDialSettings();
+  reverseRotation.checked = false;
+  reverseRotation._h.change();
+  assert(sb.currentSettings.reverseRotation === false, "unchecking writes false");
+  reverseRotation.checked = true;
+  reverseRotation._h.change();
+  assert(sb.currentSettings.reverseRotation === true, "checking writes true");
+  assert(!("reverseRotation" in (sb.currentSettings.pages[0] || {})), "reverse is action-level, not per page");
+}
+
 const tests = [
   ["normalizePage defaults", testNormalizePageDefaults],
+  ["reverse rotation is action-level", testReverseRotationActionLevel],
   ["separator is action-level with current default", testSeparatorIsActionLevelWithCurrentDefault],
   ["dial view options are action-level", testDialViewOptionsAreActionLevel],
   // Bulk behaviour is covered end-to-end against the real DOM in

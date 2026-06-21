@@ -191,6 +191,7 @@ function renderDialSettings() {
   setValue("overviewStyle", currentSettings.overviewStyle || "stacked");
   setValue("indicatorStyle", currentSettings.indicatorStyle || "auto");
   setValue("indicatorFullscreen", currentSettings.indicatorFullscreen === true);
+  setValue("reverseRotation", currentSettings.reverseRotation === true);
   setValue("indicatorColor", currentSettings.indicatorColor || "#bec6ce");
   setValue("indicatorSize", currentSettings.indicatorSize != null ? currentSettings.indicatorSize : 6);
   setValue("separatorWidth", currentSettings.separatorWidth != null ? currentSettings.separatorWidth : 3);
@@ -387,6 +388,7 @@ function bindDialSettings() {
   bindActionField("overviewStyle", "overviewStyle");
   bindActionField("indicatorStyle", "indicatorStyle");
   bindActionField("indicatorFullscreen", "indicatorFullscreen", function (v) { return !!v; });
+  bindActionField("reverseRotation", "reverseRotation", function (v) { return !!v; });
   bindActionField("indicatorColor", "indicatorColor");
   bindActionField("indicatorSize", "indicatorSize", function (v) { return Number(v) || 6; });
   bindActionField("separatorWidth", "separatorWidth", function (v) { return Number(v) || 0; });
