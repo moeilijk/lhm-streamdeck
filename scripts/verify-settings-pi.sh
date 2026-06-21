@@ -52,6 +52,9 @@ node scripts/test-dial-indicator-fullscreen-live-e2e.js
 echo "test: dial stacked overview live e2e (skips if DeckBridge not running)"
 node scripts/test-dial-stacked-live-e2e.js
 
+echo "test: dial reverse-rotation live e2e (skips if DeckBridge not running)"
+node scripts/test-dial-reverse-live-e2e.js
+
 echo "test: Go targets (windows)"
 # Text-rendering tests load DejaVuSans-Bold.ttf from the package CWD; provide it
 # for the dial package and clean it up afterwards.

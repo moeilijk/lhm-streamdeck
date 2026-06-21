@@ -201,6 +201,15 @@ func initDialState(s *dialActionSettings) *dialState {
 	return state
 }
 
+// dialRotateTicks applies the reverse-direction setting to the raw encoder ticks,
+// so a clockwise turn can be made to step to the previous page instead of the next.
+func dialRotateTicks(ticks int, reverse bool) int {
+	if reverse {
+		return -ticks
+	}
+	return ticks
+}
+
 func wrapDialIndex(current, ticks, count int) int {
 	if count <= 0 {
 		return 0
@@ -1421,7 +1430,8 @@ func (p *Plugin) OnDialRotate(event *streamdeck.EvDialRotate) {
 		p.mu.Unlock()
 		return
 	}
-	settings.ActiveIndex = wrapDialIndex(settings.ActiveIndex, event.Payload.Ticks, len(settings.Pages))
+	ticks := dialRotateTicks(event.Payload.Ticks, settings.ReverseRotation)
+	settings.ActiveIndex = wrapDialIndex(settings.ActiveIndex, ticks, len(settings.Pages))
 	settingsCopy := *settings
 	p.mu.Unlock()
 

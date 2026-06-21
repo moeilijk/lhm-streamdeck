@@ -38,6 +38,24 @@ func TestWrapDialIndex(t *testing.T) {
 	}
 }
 
+// #56 feedback item 9: a reverse-direction toggle flips the encoder ticks, so the
+// same clockwise turn steps to the previous page instead of the next.
+func TestDialRotateTicks(t *testing.T) {
+	if got := dialRotateTicks(1, false); got != 1 {
+		t.Fatalf("normal +1 tick = %d, want 1", got)
+	}
+	if got := dialRotateTicks(1, true); got != -1 {
+		t.Fatalf("reversed +1 tick = %d, want -1", got)
+	}
+	if got := dialRotateTicks(-3, true); got != 3 {
+		t.Fatalf("reversed -3 ticks = %d, want 3", got)
+	}
+	// Composed with wrapping: a clockwise turn under reverse lands on the previous page.
+	if got := wrapDialIndex(0, dialRotateTicks(1, true), 4); got != 3 {
+		t.Fatalf("reversed clockwise from 0 = %d, want 3 (previous page)", got)
+	}
+}
+
 func TestDialOverviewIndices(t *testing.T) {
 	tests := []struct {
 		name   string

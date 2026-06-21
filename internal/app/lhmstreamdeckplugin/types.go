@@ -276,6 +276,9 @@ type dialActionSettings struct {
 	// it from adjacent dials. Width is per edge in px (0 = off); nil = default.
 	SeparatorWidth *int   `json:"separatorWidth,omitempty"`
 	SeparatorColor string `json:"separatorColor,omitempty"`
+	// ReverseRotation flips the dial turn direction so a clockwise turn goes to the
+	// previous page instead of the next (some users / RTL layouts prefer this).
+	ReverseRotation bool `json:"reverseRotation,omitempty"`
 }
 
 type evSdpiCollection struct {
