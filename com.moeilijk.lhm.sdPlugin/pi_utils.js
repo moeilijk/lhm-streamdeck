@@ -55,6 +55,15 @@ function compareReadings(a, b) {
   return naturalCompare(String(a.id || ""), String(b.id || ""));
 }
 
+// readingOptionLabel is the single source of truth for how a reading is shown in
+// every sensor/reading dropdown (key, dial, derived, composite). Keeping it here
+// means the actions can never drift apart again (e.g. "Memory (%)" vs "% Memory").
+function readingOptionLabel(reading) {
+  if (!reading) return "";
+  var label = reading.label || "";
+  return reading.unit ? label + " (" + reading.unit + ")" : label;
+}
+
 function byId(id) {
   return document.getElementById(id);
 }

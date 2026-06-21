@@ -41,6 +41,29 @@ function loadDialSandbox(elementsById = {}) {
   return sandbox;
 }
 
+// autoStubElements returns an elementsById map where any id resolves to a usable
+// stub DOM node (so render cascades don't crash), while letting the caller supply
+// real spy objects for the ids it wants to assert against.
+function autoStubElements(overrides = {}) {
+  return new Proxy(overrides, {
+    get(target, id) {
+      if (typeof id !== "string") return target[id];
+      if (!(id in target)) {
+        target[id] = {
+          style: {}, dataset: {}, options: [], value: "", textContent: "",
+          disabled: false, selected: false, checked: false, innerHTML: "",
+          appendChild(child) { this.options.push(child); },
+          addEventListener() {}, removeEventListener() {}, setAttribute() {},
+          querySelector() { return null; }, querySelectorAll() { return []; },
+          classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
+        };
+      }
+      return target[id];
+    },
+    has(target, id) { return true; },
+  });
+}
+
 function testNormalizePageDefaults() {
   const { normalizePage } = loadDialSandbox();
   const p = normalizePage({});
@@ -115,6 +138,72 @@ function testReadingsForSensor() {
   const r = sb.readingsForSensor("cpu");
   assert(r.length === 2, "filters by sensor uid");
   assert(r[0].label === "A" && r[1].label === "B", "sorted by label");
+}
+
+// Phase 1 / #56 feedback item 5: the dial must share the catalog's sort
+// (compareReadings: unit/prefix first, then label) with key/derived/composite,
+// so the reading dropdown groups identically across all actions.
+function testReadingsForSensorGroupsByUnit() {
+  const sb = loadDialSandbox();
+  sb.currentCatalog = { readings: [
+    { id: 1, sensorUid: "cpu", label: "Zeta", unit: "%" },
+    { id: 2, sensorUid: "cpu", label: "Alpha", unit: "V" },
+    { id: 3, sensorUid: "cpu", label: "Beta", unit: "%" },
+  ] };
+  const r = sb.readingsForSensor("cpu").map((x) => x.label).join(",");
+  // unit "%" group (Beta, Zeta) before unit "V" group (Alpha).
+  assert(r === "Beta,Zeta,Alpha", "grouped by unit then label, got " + r);
+}
+
+// Phase 1 / #56 feedback item 5: one shared label formatter for every action.
+function testReadingOptionLabelShared() {
+  const sb = loadDialSandbox();
+  assert(sb.readingOptionLabel({ label: "Memory", unit: "%" }) === "Memory (%)", "label (unit)");
+  assert(sb.readingOptionLabel({ label: "Fan", unit: "" }) === "Fan", "no unit -> bare label");
+  assert(sb.readingOptionLabel(null) === "", "null reading -> empty");
+}
+
+// Phase 1 / #56 feedback item 1: the Overview-style row must stay visible even
+// when the default view is Fullscreen (it can be toggled to overview at runtime).
+function testOverviewStyleAlwaysShown() {
+  const row = { style: { display: "" } };
+  const sb = loadDialSandbox(autoStubElements({ overviewStyleRow: row }));
+  sb.currentSettings = { defaultView: "fullscreen", pages: [] };
+  sb.renderDialSettings();
+  assert(row.style.display !== "none", "overviewStyleRow not hidden in fullscreen");
+}
+
+// Phase 1 / #56 feedback item 7: the Pages label shows the page count.
+function testPageCountLabel() {
+  const label = { textContent: "" };
+  const sb = loadDialSandbox(autoStubElements({ pagesLabel: label }));
+  sb.currentSettings = { activeIndex: 0, pages: [{}, {}, {}] };
+  sb.renderPages();
+  assert(label.textContent === "Pages (3)", "page count shown, got " + label.textContent);
+}
+
+// Phase 1 / #56 feedback item 8: the bulk Add button shows how many pages it adds.
+function testBulkAddCount() {
+  const addBtn = { textContent: "Add Selected", disabled: false };
+  const sb = loadDialSandbox(autoStubElements({ bulkAddBtn: addBtn }));
+  sb.renderBulkPreview([
+    { label: "A", reading: { id: 1 } },
+    { label: "B", reading: { id: 2 } },
+  ]);
+  assert(addBtn.textContent === "Add Selected (2)", "add count shown, got " + addBtn.textContent);
+  assert(addBtn.disabled === false, "add enabled with candidates");
+}
+
+// Phase 1 / #56 feedback item 2: the Up/Down/Delete actions sit directly under
+// the page list, above the Dial-press hint and the view options.
+function testActionsUnderPageList() {
+  const html = fs.readFileSync("com.moeilijk.lhm.sdPlugin/dial_pi.html", "utf8");
+  const actions = html.indexOf('id="moveUpBtn"');
+  const dialPress = html.indexOf("Dial press");
+  const defaultView = html.indexOf('id="defaultView"');
+  assert(actions > -1 && dialPress > -1 && defaultView > -1, "markers present");
+  assert(actions < dialPress, "actions before dial-press hint");
+  assert(actions < defaultView, "actions before view options");
 }
 
 function testResetPageSelectionDraft() {
@@ -223,8 +312,8 @@ function testRemoveSelectedPage() {
 function testBuildRefVisibleInPi() {
   const html = fs.readFileSync("com.moeilijk.lhm.sdPlugin/dial_pi.html", "utf8");
   assert(html.includes('id="pluginBuildRef"'), "plugin build ref row present");
-  assert(html.includes("3c5e9b5 + V5-prep.25"), "plugin V5 build ref visible in PI");
-  assert(html.includes('dial_pi.js?v=V5-prep.25'), "dial PI script is cache-busted with build ref");
+  assert(html.includes("3c5e9b5 + V5-prep.27"), "plugin V5 build ref visible in PI");
+  assert(html.includes('dial_pi.js?v=V5-prep.27'), "dial PI script is cache-busted with build ref");
   assert(html.includes("Dial press"), "dial-press row present");
   assert(html.includes("Toggle overview"), "dial-press behavior visible");
   assert(html.includes('id="globalThresholdsSection" hidden'), "global thresholds section starts hidden");
@@ -483,7 +572,7 @@ function testDialViewOptionsAreActionLevel() {
   sb.renderDialSettings();
   assert(defaultView.value === "fullscreen", "default view defaults to fullscreen");
   assert(overviewStyle.value === "stacked", "overview style defaults to stacked");
-  assert(overviewStyleRow.style.display === "none", "overview style hidden when default view is fullscreen");
+  assert(overviewStyleRow.style.display !== "none", "overview style stays shown even in fullscreen");
   assert(indicatorStyle.value === "auto", "indicator style defaults to auto");
   assert(indicatorFullscreen.checked === false, "indicator-in-fullscreen defaults off");
   assert(indicatorColor.value === "#bec6ce", "indicator color defaults to light grey");
@@ -505,9 +594,9 @@ function testDialViewOptionsAreActionLevel() {
   assert(sb.currentSettings.defaultView === "overview", "default view writes to action settings");
   assert(sb.currentSettings.overviewStyle === "stacked", "overview style writes to action settings");
   assert(sb.currentSettings.indicatorStyle === "count", "indicator style writes to action settings");
-  // Switching the default view to overview must reveal the overview style row.
+  // The overview style row is always shown regardless of the default view.
   sb.renderDialSettings();
-  assert(overviewStyleRow.style.display === "", "overview style shown when default view is overview");
+  assert(overviewStyleRow.style.display !== "none", "overview style shown when default view is overview");
   indicatorFullscreen._h.change();
   indicatorColor.value = "#ff0000";
   indicatorColor._h.change();
@@ -533,6 +622,12 @@ const tests = [
   ["pageTitle fallbacks", testPageTitle],
   ["sensorMatchesFilter", testSensorMatchesFilter],
   ["readingsForSensor filter+sort", testReadingsForSensor],
+  ["readingsForSensor groups by unit (shared sort)", testReadingsForSensorGroupsByUnit],
+  ["readingOptionLabel shared formatter", testReadingOptionLabelShared],
+  ["overview style row always shown", testOverviewStyleAlwaysShown],
+  ["pages label shows count", testPageCountLabel],
+  ["bulk add button shows count", testBulkAddCount],
+  ["actions sit under page list", testActionsUnderPageList],
   ["resetPageSelectionDraft", testResetPageSelectionDraft],
   ["addSelectedPage derive sentinel", testAddSelectedPageSentinel],
   ["dial page palette covers bulk add", testDialPagePaletteCoversBulkAdd],

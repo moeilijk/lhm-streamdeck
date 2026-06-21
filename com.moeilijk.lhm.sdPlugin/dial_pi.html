@@ -48,7 +48,7 @@
 
     <div class="sdpi-item" id="pluginBuildRef">
       <div class="sdpi-item-label">Build</div>
-      <div class="sdpi-item-value" title="Plugin commit 3c5e9b5 plus local V5 prep fixes">3c5e9b5 + V5-prep.25</div>
+      <div class="sdpi-item-value" title="Plugin commit 3c5e9b5 plus local V5 prep fixes">3c5e9b5 + V5-prep.27</div>
     </div>
 
     <div class="sdpi-item">
@@ -127,8 +127,17 @@
     </details>
 
     <div class="sdpi-item">
-      <div class="sdpi-item-label">Pages</div>
+      <div class="sdpi-item-label" id="pagesLabel">Pages</div>
       <select class="sdpi-item-value select" id="pageList" size="8"></select>
+    </div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label empty-label">Actions</div>
+      <div class="sdpi-item-value dial-actions">
+        <button id="moveUpBtn" type="button" disabled>Up</button>
+        <button id="moveDownBtn" type="button" disabled>Down</button>
+        <button id="removePageBtn" type="button" disabled>Delete</button>
+      </div>
     </div>
 
     <div class="sdpi-item">
@@ -185,15 +194,6 @@
           <input type="range" min="1" max="8" step="0.5" value="6" />
         </div>
         <span value="8">8</span>
-      </div>
-    </div>
-
-    <div class="sdpi-item">
-      <div class="sdpi-item-label empty-label">Actions</div>
-      <div class="sdpi-item-value dial-actions">
-        <button id="moveUpBtn" type="button" disabled>Up</button>
-        <button id="moveDownBtn" type="button" disabled>Down</button>
-        <button id="removePageBtn" type="button" disabled>Delete</button>
       </div>
     </div>
 
@@ -519,8 +519,8 @@
     </template>
   </div>
 
-  <script src="pi_utils.js?v=V5-prep.25"></script>
-  <script src="dial_pi.js?v=V5-prep.25"></script>
+  <script src="pi_utils.js?v=V5-prep.27"></script>
+  <script src="dial_pi.js?v=V5-prep.27"></script>
 </body>
 
 </html>
