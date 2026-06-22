@@ -203,6 +203,21 @@ test("a reading already on the dial is shown as a disabled, deselected duplicate
   assert.deepStrictEqual(pageListTitles(win).slice().sort(), ["CPU Core #1", "CPU Core #2"], "no duplicate page added: " + JSON.stringify(pageListTitles(win)));
 });
 
+// #56 feedback item 4: a name template renames bulk-added pages; the preview shows
+// the resulting titles live and the added pages use them.
+test("a name template renames bulk-added pages and previews them live", () => {
+  const win = bootPi();
+  select(win, "/cpu", "1");
+  preview(win, "numbered-family");
+  // Type a short template; the preview must re-render to the resulting titles.
+  const fmt = $(win, "bulkNameFormat");
+  fmt.value = "Core %n";
+  fire(win, fmt, "input");
+  assert.deepStrictEqual(previewLabels(win).slice().sort(), ["Core 1", "Core 2"], "preview shows templated names: " + JSON.stringify(previewLabels(win)));
+  $(win, "bulkAddBtn").click();
+  assert.deepStrictEqual(pageListTitles(win).slice().sort(), ["Core 1", "Core 2"], "added pages use the template: " + JSON.stringify(pageListTitles(win)));
+});
+
 if (failures > 0) {
   console.error("\n" + failures + " test(s) failed");
   process.exit(1);

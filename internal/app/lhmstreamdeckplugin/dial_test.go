@@ -1072,6 +1072,70 @@ func TestUpdateDialPageKeepsSnoozeWhenThresholdDrops(t *testing.T) {
 	}
 }
 
+// #56 feedback item 3: a threshold with BringToFront set must flag its page on
+// the tick its alarm fires (edge), and not on later ticks while it stays active.
+func newBringToFrontPlugin(bringToFront bool) (*Plugin, *dialActionSettings, *dialState) {
+	const (
+		sensorUID = "/cpu"
+		readingID = int32(42)
+	)
+	p := &Plugin{
+		sources:          make(map[string]*sourceRuntime),
+		thresholdStates:  make(map[string]map[string]*thresholdRuntimeState),
+		thresholdSnoozes: make(map[string]*thresholdSnoozeState),
+		thresholdDirty:   make(map[string]bool),
+		lastPollTime:     make(map[string]uint64),
+		lastRenderTime:   make(map[string]time.Time),
+		smoothedValues:   make(map[string]float64),
+		divisorCache:     make(map[string]divisorCacheEntry),
+		pollTimeCacheTTL: time.Second,
+	}
+	p.sources[""] = &sourceRuntime{
+		hw: stubHardwareService{
+			readingsBySensor: map[string][]hwsensorsservice.Reading{
+				sensorUID: {stubReading{id: readingID, typ: "Load", label: "CPU Total", unit: "%"}},
+			},
+		},
+	}
+	settings := &dialActionSettings{Pages: []actionSettings{{
+		SensorUID:       sensorUID,
+		ReadingID:       readingID,
+		ReadingLabel:    "CPU Total",
+		IsValid:         true,
+		Min:             0,
+		Max:             100,
+		ForegroundColor: "#005128",
+		BackgroundColor: "#000000",
+		HighlightColor:  "#009e00",
+		ValueTextColor:  "#ffffff",
+		TitleColor:      "#b7b7b7",
+		// stubReading.Value()==0, so "<= 50" fires immediately.
+		Thresholds: []Threshold{{ID: "t1", Enabled: true, Operator: "<=", Value: 50, BringToFront: bringToFront}},
+	}}}
+	return p, settings, initDialState(settings)
+}
+
+func TestUpdateDialPageBringToFront(t *testing.T) {
+	now := time.Unix(1200, 0)
+
+	p, settings, state := newBringToFrontPlugin(true)
+	render, _ := p.updateDialPage("ctx", settings, state, 0, true, now)
+	if !render.bringToFront {
+		t.Fatalf("expected bringToFront on the alarm edge")
+	}
+	// Second tick: threshold stays active, no edge -> must not keep requesting.
+	render2, _ := p.updateDialPage("ctx", settings, state, 0, true, now.Add(time.Second))
+	if render2.bringToFront {
+		t.Fatalf("bringToFront must be edge-triggered, not sticky across ticks")
+	}
+
+	// Same firing threshold without the flag must never request bring-to-front.
+	pOff, settingsOff, stateOff := newBringToFrontPlugin(false)
+	if r, _ := pOff.updateDialPage("ctx", settingsOff, stateOff, 0, true, now); r.bringToFront {
+		t.Fatalf("bringToFront must stay off when the threshold does not opt in")
+	}
+}
+
 func TestHandleDialPageTouchStartsSnoozeForConfiguredThresholdPage(t *testing.T) {
 	p := &Plugin{
 		thresholdSnoozes: make(map[string]*thresholdSnoozeState),

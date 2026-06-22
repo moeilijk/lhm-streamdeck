@@ -674,12 +674,14 @@ function createThresholdElement(threshold, index, total) {
 
   var toggleBtn = clone.querySelector(".threshold-toggle");
   var stickyBtn = clone.querySelector(".threshold-sticky-toggle");
+  var bringFrontBtn = clone.querySelector(".threshold-bringfront-toggle");
   var advancedToggleBtn = clone.querySelector(".threshold-advanced-toggle");
   var advancedPanel = clone.querySelector(".threshold-advanced-panel");
   var settingsDiv = clone.querySelector(".threshold-settings");
   var thresholdId = threshold.id;
   var isEnabled = threshold.enabled !== false;
   var isSticky = threshold.sticky === true;
+  var isBringFront = threshold.bringToFront === true;
   var isAdvancedOpen = thresholdAdvancedOpen[thresholdId] === true;
 
   function updateToggleState() {
@@ -695,6 +697,13 @@ function createThresholdElement(threshold, index, total) {
     stickyBtn.style.color = "#fff";
   }
 
+  function updateBringFrontState() {
+    if (!bringFrontBtn) return;
+    bringFrontBtn.textContent = isBringFront ? "on" : "off";
+    bringFrontBtn.style.background = isBringFront ? "#4a4" : "#a44";
+    bringFrontBtn.style.color = "#fff";
+  }
+
   function updateAdvancedState() {
     if (!advancedToggleBtn || !advancedPanel) return;
     advancedToggleBtn.textContent = isAdvancedOpen ? "Advanced ▼" : "Advanced ▶";
@@ -703,6 +712,7 @@ function createThresholdElement(threshold, index, total) {
 
   updateToggleState();
   updateStickyState();
+  updateBringFrontState();
   updateAdvancedState();
 
   toggleBtn.addEventListener("click", function () {
@@ -722,6 +732,13 @@ function createThresholdElement(threshold, index, total) {
       isSticky = !isSticky;
       updateStickyState();
       updateSelectedPageThreshold(thresholdId, "sticky", isSticky);
+    });
+  }
+  if (bringFrontBtn) {
+    bringFrontBtn.addEventListener("click", function () {
+      isBringFront = !isBringFront;
+      updateBringFrontState();
+      updateSelectedPageThreshold(thresholdId, "bringToFront", isBringFront);
     });
   }
   if (advancedToggleBtn) {
@@ -1044,17 +1061,21 @@ function renderBulkPreview(candidates) {
   var list = document.getElementById("bulkPreviewList");
   if (!list) return;
   list.innerHTML = "";
+  var template = bulkNameFormatValue();
   bulkPreviewCandidates.forEach(function (candidate, index) {
     var opt = document.createElement("option");
     opt.value = String(index);
+    // With a name template, preview the RESULTING title so the format is visible
+    // before adding; otherwise show the sensor/reading identity.
+    var name = template ? (applyBulkNameTemplate(template, candidate) || candidate.label) : candidate.label;
     if (candidate.duplicate) {
       // Already on the dial: list it so the skip is visible, but deselect + disable
       // so it cannot be re-added and reads as a duplicate, not a candidate.
-      opt.textContent = candidate.label + " (added)";
+      opt.textContent = name + " (added)";
       opt.selected = false;
       opt.disabled = true;
     } else {
-      opt.textContent = candidate.label;
+      opt.textContent = name;
       opt.selected = true;
     }
     list.appendChild(opt);
@@ -1089,7 +1110,38 @@ function clearBulkPreview() {
 // ("Read", "Read", "Read"). Qualify with the sensor name when the match is on a
 // different sensor than the seed — skipping it when the label already names the
 // sensor, to avoid doubling ("GPU GPU Core").
+// bulkReadingNumber pulls the trailing index out of a numbered reading label
+// ("CPU Core #11" -> "11"), so a name template can render just the number.
+function bulkReadingNumber(label) {
+  var m = String(label || "").match(/(\d+)\s*$/);
+  return m ? m[1] : "";
+}
+
+// bulkNameFormatValue is the user's optional title template for bulk-added pages.
+function bulkNameFormatValue() {
+  var el = document.getElementById("bulkNameFormat");
+  return el && el.value ? el.value : "";
+}
+
+// applyBulkNameTemplate expands the supported tokens against one candidate. Empty
+// template -> "" so callers fall back to the default title logic.
+//   %n = number in the reading label, %r = full reading label, %s = sensor name
+function applyBulkNameTemplate(template, candidate) {
+  if (!template) return "";
+  var reading = candidate.reading || {};
+  var label = reading.label || String(reading.id || "");
+  var sensor = sensorByUid(candidate.sensorUid) || {};
+  return template
+    .replace(/%n/g, bulkReadingNumber(label))
+    .replace(/%r/g, label)
+    .replace(/%s/g, sensor.name || candidate.sensorUid || "")
+    .trim();
+}
+
 function bulkPageTitle(candidate, seedSensorUid, qualifyAll) {
+  // A non-empty name template wins over the default sensor/reading title logic.
+  var templated = applyBulkNameTemplate(bulkNameFormatValue(), candidate);
+  if (templated) return templated;
   var label = candidate.reading.label || String(candidate.reading.id);
   // Same-label-across-sensors adds must qualify EVERY page (incl. the seed sensor) so
   // they stay distinguishable; same-sensor adds keep their already-distinct labels.
@@ -1149,6 +1201,15 @@ function bindBulkControls() {
     addBtn.addEventListener("click", function (e) {
       e.preventDefault();
       addBulkSelectedPages();
+    });
+  }
+  var nameFormat = document.getElementById("bulkNameFormat");
+  if (nameFormat && !nameFormat.dataset.bound) {
+    nameFormat.dataset.bound = "1";
+    // Re-render the preview names live as the template is edited (only when a
+    // preview is showing), so the user sees the resulting titles immediately.
+    nameFormat.addEventListener("input", function () {
+      if (bulkPreviewCandidates && bulkPreviewCandidates.length) renderBulkPreview(bulkPreviewCandidates);
     });
   }
 }
