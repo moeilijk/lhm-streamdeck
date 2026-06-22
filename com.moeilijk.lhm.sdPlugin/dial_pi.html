@@ -81,7 +81,7 @@
 
     <div class="sdpi-item" id="pluginBuildRef">
       <div class="sdpi-item-label">Build</div>
-      <div class="sdpi-item-value" title="Plugin commit 3c5e9b5 plus local V5 prep fixes">3c5e9b5 + V5-prep.34</div>
+      <div class="sdpi-item-value" title="Plugin commit 3c5e9b5 plus local V5 prep fixes">3c5e9b5 + V5-prep.37</div>
     </div>
 
     <div class="sdpi-item">
@@ -143,6 +143,17 @@
           <option value="matching-category">This reading on all matching sensors</option>
           <option value="numbered-family">All readings in this numbered set (cores, fans…)</option>
         </select>
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">
+          Name format
+          <span
+            class="field-help"
+            title="Optional title template for the added pages. Tokens: %n = number in the reading label, %r = reading label, %s = sensor name. Leave blank for the default titles."
+          >(i)</span>
+        </div>
+        <input class="sdpi-item-value" id="bulkNameFormat" type="text" placeholder="e.g. Core %n" />
       </div>
 
       <div class="sdpi-item">
@@ -536,6 +547,19 @@
                 <button class="threshold-sticky-toggle" type="button">off</button>
               </div>
             </div>
+
+            <div class="sdpi-item threshold-bringfront-row">
+              <div class="sdpi-item-label">
+                Bring to front
+                <span
+                  class="field-help"
+                  title="When this alarm fires (or its snooze times out), make this page the active one on the dial. Edge-triggered, so you can still scroll to other pages afterwards. Toggle on or off."
+                >(i)</span>
+              </div>
+              <div class="sdpi-item-value threshold-bringfront-cell">
+                <button class="threshold-bringfront-toggle" type="button">off</button>
+              </div>
+            </div>
           </div>
 
           <div type="color" class="sdpi-item">
@@ -561,8 +585,8 @@
     </template>
   </div>
 
-  <script src="pi_utils.js?v=V5-prep.34"></script>
-  <script src="dial_pi.js?v=V5-prep.34"></script>
+  <script src="pi_utils.js?v=V5-prep.37"></script>
+  <script src="dial_pi.js?v=V5-prep.37"></script>
 </body>
 
 </html>

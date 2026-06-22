@@ -36,6 +36,11 @@ type dialPageRender struct {
 	image        []byte
 	messageTitle string
 	messageValue string
+	// bringToFront is set on the tick a page's threshold becomes active (and is
+	// not snoozed) when that threshold has BringToFront enabled, so the feedback
+	// loop can make this the active page. Edge-triggered, so it does not lock out
+	// manual navigation afterwards.
+	bringToFront bool
 }
 
 var dialPageColorPalette = []struct {
@@ -1091,6 +1096,9 @@ func (p *Plugin) updateDialPage(ctx string, settings *dialActionSettings, state 
 	if forceUpdate || newThresholdID != page.CurrentThresholdID {
 		if activeThreshold != nil && !snoozed {
 			p.applyThresholdColors(g, activeThreshold)
+			// Edge into an active, non-snoozed alarm (incl. snooze just timing out):
+			// request bring-to-front when the firing threshold asks for it.
+			render.bringToFront = activeThreshold.BringToFront
 		} else {
 			p.applyNormalColors(g, page)
 		}
@@ -1167,15 +1175,26 @@ func (p *Plugin) updateDialFeedback(ctx string) {
 	}
 	now := time.Now()
 	settingsChanged := false
+	bringToFront := -1
 	var activeRender dialPageRender
 	for i := range settings.Pages {
 		render, changed := p.updateDialPage(ctx, settings, state, i, i == settings.ActiveIndex, now)
 		if changed {
 			settingsChanged = true
 		}
+		if render.bringToFront && bringToFront == -1 {
+			bringToFront = i
+		}
 		if i == settings.ActiveIndex {
 			activeRender = render
 		}
+	}
+	// A page whose alarm just fired (with bring-to-front) becomes the active page.
+	// The new page renders on the next tick; we only move the selection here to
+	// avoid double-advancing graphs by re-rendering within this tick.
+	if bringToFront >= 0 && bringToFront != settings.ActiveIndex {
+		settings.ActiveIndex = bringToFront
+		settingsChanged = true
 	}
 	if settingsChanged {
 		_ = p.sd.SetSettings(ctx, settings)

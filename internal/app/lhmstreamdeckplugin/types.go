@@ -45,6 +45,7 @@ type Threshold struct {
 	DwellMs         int     `json:"dwellMs,omitempty"`
 	CooldownMs      int     `json:"cooldownMs,omitempty"`
 	Sticky          bool    `json:"sticky,omitempty"`
+	BringToFront    bool    `json:"bringToFront,omitempty"` // dial: make this page the active one when the alarm fires / snooze times out
 	BackgroundColor string  `json:"backgroundColor"`       // Background color when triggered
 	ForegroundColor string  `json:"foregroundColor"`       // Graph foreground color
 	HighlightColor  string  `json:"highlightColor"`        // Graph highlight color

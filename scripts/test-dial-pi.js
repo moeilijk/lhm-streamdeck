@@ -312,8 +312,8 @@ function testRemoveSelectedPage() {
 function testBuildRefVisibleInPi() {
   const html = fs.readFileSync("com.moeilijk.lhm.sdPlugin/dial_pi.html", "utf8");
   assert(html.includes('id="pluginBuildRef"'), "plugin build ref row present");
-  assert(html.includes("3c5e9b5 + V5-prep.34"), "plugin V5 build ref visible in PI");
-  assert(html.includes('dial_pi.js?v=V5-prep.34'), "dial PI script is cache-busted with build ref");
+  assert(html.includes("3c5e9b5 + V5-prep.37"), "plugin V5 build ref visible in PI");
+  assert(html.includes('dial_pi.js?v=V5-prep.37'), "dial PI script is cache-busted with build ref");
   assert(html.includes("Dial press"), "dial-press row present");
   assert(html.includes("Toggle overview"), "dial-press behavior visible");
   assert(html.includes('id="globalThresholdsSection" hidden'), "global thresholds section starts hidden");
@@ -343,10 +343,12 @@ function testThresholdHelpers() {
   sb.updateThresholdField(t, "hysteresis", "");
   sb.updateThresholdField(t, "dwellMs", "1250");
   sb.updateThresholdField(t, "sticky", true);
+  sb.updateThresholdField(t, "bringToFront", true);
   assert(t.value === 72.5, "threshold value parsed");
   assert(t.hysteresis === 0, "empty hysteresis -> 0");
   assert(t.dwellMs === 1250, "dwellMs parsed");
   assert(t.sticky === true, "sticky boolean parsed");
+  assert(t.bringToFront === true, "bringToFront boolean parsed");
 }
 
 function testGlobalThresholdHelpersPerPage() {
@@ -631,9 +633,35 @@ function testReverseRotationActionLevel() {
   assert(!("reverseRotation" in (sb.currentSettings.pages[0] || {})), "reverse is action-level, not per page");
 }
 
+// #56 feedback item 4: the bulk name template expands %n/%r/%s; blank falls back.
+function testBulkNameTemplate() {
+  const sb = loadDialSandbox();
+  sb.currentCatalog = { sensors: [{ uid: "cpu", name: "Ryzen 7" }], readings: [] };
+  assert(sb.bulkReadingNumber("CPU Core #11") === "11", "number extracted from label");
+  assert(sb.bulkReadingNumber("Package Total") === "", "no trailing number -> empty");
+  const cand = { sensorUid: "cpu", reading: { label: "CPU Core #3", id: 3 } };
+  assert(sb.applyBulkNameTemplate("CPU Core %n", cand) === "CPU Core 3", "%n expands to the number");
+  assert(sb.applyBulkNameTemplate("%s %r", cand) === "Ryzen 7 CPU Core #3", "%s + %r expand");
+  assert(sb.applyBulkNameTemplate("", cand) === "", "blank template -> empty (fallback)");
+}
+
+// #56 feedback item 4: bulkPageTitle uses the template when the field has a value,
+// and falls back to the default reading label when it is blank.
+function testBulkPageTitleUsesTemplate() {
+  const cand = { sensorUid: "cpu", reading: { label: "CPU Core #5", id: 5 } };
+  const withTpl = loadDialSandbox({ bulkNameFormat: { value: "Core %n" } });
+  withTpl.currentCatalog = { sensors: [{ uid: "cpu", name: "Ryzen 7" }], readings: [] };
+  assert(withTpl.bulkPageTitle(cand, "cpu", false) === "Core 5", "templated title used on add");
+  const noTpl = loadDialSandbox({ bulkNameFormat: { value: "" } });
+  noTpl.currentCatalog = { sensors: [{ uid: "cpu", name: "Ryzen 7" }], readings: [] };
+  assert(noTpl.bulkPageTitle(cand, "cpu", false) === "CPU Core #5", "blank template -> default label");
+}
+
 const tests = [
   ["normalizePage defaults", testNormalizePageDefaults],
   ["reverse rotation is action-level", testReverseRotationActionLevel],
+  ["bulk name template expands tokens", testBulkNameTemplate],
+  ["bulkPageTitle uses name template", testBulkPageTitleUsesTemplate],
   ["separator is action-level with current default", testSeparatorIsActionLevelWithCurrentDefault],
   ["dial view options are action-level", testDialViewOptionsAreActionLevel],
   // Bulk behaviour is covered end-to-end against the real DOM in
