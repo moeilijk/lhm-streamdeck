@@ -4,10 +4,17 @@ var websocket = null,
   currentSettings = { activeIndex: 0, pages: [] },
   currentCatalog = { sensors: [], readings: [], sourceProfiles: [] },
   pageSelectionDraft = { sensorUid: "", readingId: "" },
-  thresholdAdvancedOpen = {};
+  thresholdAdvancedOpen = Object.create(null);
 
 var globalThresholds = [];
 var bulkPreviewCandidates = [];
+
+// Reject the prototype-pollution keys before any dynamic property write whose key
+// can originate from settings/catalog data, so a malicious sensor/reading name
+// (e.g. "__proto__") cannot reach Object.prototype.
+function isUnsafeKey(k) {
+  return k === "__proto__" || k === "constructor" || k === "prototype";
+}
 var snoozeDurationOptions = [300000, 900000, 3600000, 0];
 var dialPageColorPalette = [
   { foregroundColor: "#005128", highlightColor: "#009e00" },
@@ -203,7 +210,11 @@ function renderDialSettings() {
 
 function selectedPageIndex() {
   var list = document.getElementById("pageList");
-  return list.selectedIndex >= 0 ? list.selectedIndex : currentSettings.activeIndex || 0;
+  var raw = list.selectedIndex >= 0 ? list.selectedIndex : currentSettings.activeIndex;
+  var idx = parseInt(raw, 10);
+  // Always a non-negative integer: prevents a string key (e.g. "__proto__") from
+  // reaching currentSettings.pages[idx] as a prototype-pollution gadget.
+  return Number.isInteger(idx) && idx >= 0 ? idx : 0;
 }
 
 function updatePageButtons() {
@@ -358,7 +369,7 @@ function bindPageField(id, key, parser) {
   el.dataset.bound = "1";
   var handler = function () {
     var page = selectedPage();
-    if (!page) return;
+    if (!page || isUnsafeKey(key)) return;
     var raw = el.type === "checkbox" ? el.checked : el.value;
     page[key] = parser ? parser(raw) : raw;
     if (el.type === "range" && typeof positionRangeVal === "function") positionRangeVal(el);
@@ -375,6 +386,7 @@ function bindActionField(id, key, parser) {
   if (!el || el.dataset.bound) return;
   el.dataset.bound = "1";
   var handler = function () {
+    if (isUnsafeKey(key)) return;
     var raw = el.type === "checkbox" ? el.checked : el.value;
     currentSettings[key] = parser ? parser(raw) : raw;
     if (el.type === "range" && typeof positionRangeVal === "function") positionRangeVal(el);
@@ -422,7 +434,7 @@ function bindPageSettings() {
 
 function normalizeSnoozeDurations(values) {
   if (!Array.isArray(values)) return [];
-  var seen = {};
+  var seen = Object.create(null);
   values.forEach(function (value) {
     var parsed = parseInt(value, 10);
     if (!isNaN(parsed)) seen[parsed] = true;
@@ -449,7 +461,7 @@ function setSnoozePresetSelected(button, selected) {
 
 function applySnoozeDurationsToUI(page) {
   var selected = normalizeSnoozeDurations(page && page.snoozeDurations ? page.snoozeDurations : []);
-  var selectedMap = {};
+  var selectedMap = Object.create(null);
   selected.forEach(function (value) {
     selectedMap[String(value)] = true;
   });
@@ -504,7 +516,7 @@ function createThreshold(name) {
 }
 
 function updateThresholdField(threshold, key, value) {
-  if (!threshold) return;
+  if (!threshold || isUnsafeKey(key)) return;
   if (key === "enabled" || key === "sticky") {
     threshold[key] = value === true || value === "true";
     return;
@@ -966,7 +978,7 @@ function bulkCandidateKey(sensorUid, readingId, sourceProfileId) {
 }
 
 function existingBulkPageKeys() {
-  var seen = {};
+  var seen = Object.create(null);
   (currentSettings.pages || []).forEach(function (page) {
     if (!page || !page.sensorUid || page.readingId == null) return;
     seen[bulkCandidateKey(page.sensorUid, page.readingId, page.sourceProfileId)] = true;
@@ -986,7 +998,7 @@ function buildBulkCandidates(rule) {
   var seedSensor = selected.sensorUid;
   var seedCat = readingCategory(seed, seedSensor);
   var existing = existingBulkPageKeys();
-  var batchSeen = {};
+  var batchSeen = Object.create(null);
   var candidates = [];
   function addCandidate(sensorUid, reading) {
     var key = bulkCandidateKey(sensorUid, reading.id, currentSettings.sourceProfileId);
@@ -1021,7 +1033,7 @@ function buildBulkCandidates(rule) {
         bulkMatchText(r.label) === bulkMatchText(seed.label) &&
         sameBulkField(seed.type, r.type) && sameBulkField(seed.unit, r.unit);
     });
-    var sensorsSeen = {};
+    var sensorsSeen = Object.create(null);
     matched.forEach(function (r) { sensorsSeen[r.sensorUid] = 1; });
     if (Object.keys(sensorsSeen).length < 2) return []; // needs >1 matching sensor
     matched.forEach(function (r) { addCandidate(r.sensorUid, r); });
