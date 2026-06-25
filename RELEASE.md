@@ -40,6 +40,14 @@ Short user-facing explanation.
 
 For Marketplace updates, write only the Windows-relevant delta since the currently published Marketplace version.
 
+### Finding the current Marketplace version
+
+Do not ask which version is live on the Marketplace; look it up. The plugin's public listing is:
+
+`https://marketplace.elgato.com/product/libre-hardware-monitor-af576388-8cbb-4d59-bdec-206dc3f4168e`
+
+Fetch that page and read the **Version** field (it also shows the "Last Updated" date). That value is the currently published Marketplace version. Write the Marketplace changelog as the Windows-relevant delta between it and the version now being published. For example, if the listing shows `1.9.1` and you are publishing `2.0.0`, the changelog covers only what changed for Windows between 1.9.1 and 2.0.0.
+
 ## Steps
 
 1. Confirm the release scope and current latest release.
