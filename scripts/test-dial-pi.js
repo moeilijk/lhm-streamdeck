@@ -312,8 +312,8 @@ function testRemoveSelectedPage() {
 function testBuildRefVisibleInPi() {
   const html = fs.readFileSync("com.moeilijk.lhm.sdPlugin/dial_pi.html", "utf8");
   assert(html.includes('id="pluginBuildRef"'), "plugin build ref row present");
-  assert(html.includes("3c5e9b5 + V5-prep.37"), "plugin V5 build ref visible in PI");
-  assert(html.includes('dial_pi.js?v=V5-prep.37'), "dial PI script is cache-busted with build ref");
+  assert(html.includes("3c5e9b5 + V5-prep.39"), "plugin V5 build ref visible in PI");
+  assert(html.includes('dial_pi.js?v=V5-prep.39'), "dial PI script is cache-busted with build ref");
   assert(html.includes("Dial press"), "dial-press row present");
   assert(html.includes("Toggle overview"), "dial-press behavior visible");
   assert(html.includes('id="globalThresholdsSection" hidden'), "global thresholds section starts hidden");
@@ -613,6 +613,30 @@ function testDialViewOptionsAreActionLevel() {
   assert(!("indicatorFullscreen" in (sb.currentSettings.pages[0] || {})), "indicator-in-fullscreen is not stored per page");
 }
 
+// #56 tester ask: cap the overview to 2 bigger cards even with more pages. The
+// "Overview pages" select is an action-level field that round-trips through
+// renderDialSettings (read, default "auto") and bindDialSettings (write).
+function testOverviewPagesActionLevel() {
+  const overviewPages = { tagName: "SELECT", type: "select-one", value: "", dataset: {}, _h: {}, addEventListener(t, h) { this._h[t] = h; } };
+  const sb = loadDialSandbox(autoStubElements({ overviewPages }));
+  sb.renderPages = () => {};
+  sb.saveSettings = () => {};
+  sb.currentSettings = { activeIndex: 0, pages: [{}] };
+
+  sb.renderDialSettings();
+  assert(overviewPages.value === "3", "overview pages defaults to 3");
+
+  sb.bindDialSettings();
+  overviewPages.value = "2";
+  overviewPages._h.change();
+  assert(sb.currentSettings.overviewPages === "2", "overview pages writes to action settings");
+  assert(!("overviewPages" in (sb.currentSettings.pages[0] || {})), "overview pages is not stored per page");
+
+  sb.currentSettings.overviewPages = "2";
+  sb.renderDialSettings();
+  assert(overviewPages.value === "2", "overview pages reflects saved value");
+}
+
 // #56 feedback item 9: the reverse-dial toggle is an action-level boolean that
 // round-trips through renderDialSettings (read) and bindDialSettings (write).
 function testReverseRotationActionLevel() {
@@ -664,6 +688,7 @@ const tests = [
   ["bulkPageTitle uses name template", testBulkPageTitleUsesTemplate],
   ["separator is action-level with current default", testSeparatorIsActionLevelWithCurrentDefault],
   ["dial view options are action-level", testDialViewOptionsAreActionLevel],
+  ["overview pages cap is action-level", testOverviewPagesActionLevel],
   // Bulk behaviour is covered end-to-end against the real DOM in
   // scripts/test-dial-bulk-render.js (and live in test-dial-bulk-live-e2e.js).
   ["normalizeSettings clamps activeIndex", testNormalizeSettingsClampsActiveIndex],

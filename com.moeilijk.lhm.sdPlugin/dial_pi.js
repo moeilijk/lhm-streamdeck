@@ -189,6 +189,7 @@ function renderPages() {
 function renderDialSettings() {
   setValue("defaultView", currentSettings.defaultView || "fullscreen");
   setValue("overviewStyle", currentSettings.overviewStyle || "stacked");
+  setValue("overviewPages", currentSettings.overviewPages || "3");
   setValue("indicatorStyle", currentSettings.indicatorStyle || "auto");
   setValue("indicatorFullscreen", currentSettings.indicatorFullscreen === true);
   setValue("reverseRotation", currentSettings.reverseRotation === true);
@@ -386,6 +387,7 @@ function bindActionField(id, key, parser) {
 function bindDialSettings() {
   bindActionField("defaultView", "defaultView");
   bindActionField("overviewStyle", "overviewStyle");
+  bindActionField("overviewPages", "overviewPages");
   bindActionField("indicatorStyle", "indicatorStyle");
   bindActionField("indicatorFullscreen", "indicatorFullscreen", function (v) { return !!v; });
   bindActionField("reverseRotation", "reverseRotation", function (v) { return !!v; });

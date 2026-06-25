@@ -261,7 +261,12 @@ type dialActionSettings struct {
 	// "" / "carousel" = the original horizontal carousel; "stacked" = vertically
 	// scrolling full-width strips with the active reading dominant and a peek of
 	// the previous/next pages.
-	OverviewStyle  string `json:"overviewStyle,omitempty"`
+	OverviewStyle string `json:"overviewStyle,omitempty"`
+	// OverviewPages caps how many pages the overview shows at once, regardless of
+	// how many pages are defined: "" / "auto" = up to 3 (previous/active/next),
+	// "2" = active + next only (bigger, more legible cards/strips). The page
+	// indicator still reflects the full page count.
+	OverviewPages  string `json:"overviewPages,omitempty"`
 	IndicatorStyle string `json:"indicatorStyle,omitempty"` // "", "auto", "dots", "count", "off"
 	// IndicatorFullscreen draws the page indicator in the fullscreen view too.
 	// Off by default so fullscreen keeps its original look; the indicator style
