@@ -294,6 +294,19 @@ voorwaarden):
 - **V5** ✅ emu-akkoord (`V5-prep.16`): bulk-apply UX (kort "No matching
   readings", uitgegrijsd/niet-aanklikbaar), tests groen, gecommit + gepusht
   (`0bf49a2`).
+- **V5b — Overview-pagina-cap (2 cards)** — code + tests klaar (`V5-prep.39`),
+  emu-gevalideerd (cap-2 live-e2e groen), **niet gecommit** (wacht op akkoord).
+  Tester-wens (24 juni): overview begrenzen tot 2 grotere cards ook bij meer
+  pagina's. Action-level select "Overview pages" met kale waarden 3 / 2 (default
+  3), zelfde patroon als `overviewStyle`. Go:
+  `dialOverviewCap` + `limit`-arg op `dialOverviewIndices`/`dialStackedLayout`
+  (cap 2 → active + volgende; default/`auto` = 3, geen regressie). Page-indicator
+  blijft het volledige `len(Pages)` tonen. Tests: Go `dialOverviewCap`-resolver +
+  cap-cases in `TestDialOverviewIndices`/`TestDialStackedLayout`; PI
+  `testOverviewPagesActionLevel` (round-trip + per-action opslag); cap-2-fase in
+  `test-dial-stacked-live-e2e.js`. `make verify` (op de live-e2e na, DeckBridge
+  uit) + `scripts/verify-settings-pi.sh` deterministisch groen. **Open:** emu-deploy
+  + live-e2e draaien + gebruiker-akkoord vóór commit.
 
 ### V2 — alerts/interactie per pagina (valideren + testen)
 - [x] Alert Snooze, Thresholds, Global-threshold-suppressie per pagina werken,

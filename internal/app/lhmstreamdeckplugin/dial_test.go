@@ -61,19 +61,28 @@ func TestDialOverviewIndices(t *testing.T) {
 		name   string
 		active int
 		count  int
+		limit  int
 		want   []int
 	}{
-		{name: "empty", active: 0, count: 0, want: nil},
-		{name: "single", active: 0, count: 1, want: []int{0}},
-		{name: "two", active: 1, count: 2, want: []int{0, 1}},
-		{name: "middle", active: 2, count: 5, want: []int{1, 2, 3}},
-		{name: "wrap left", active: 0, count: 5, want: []int{4, 0, 1}},
-		{name: "wrap right", active: 4, count: 5, want: []int{3, 4, 0}},
+		{name: "empty", active: 0, count: 0, limit: 3, want: nil},
+		{name: "single", active: 0, count: 1, limit: 3, want: []int{0}},
+		{name: "two", active: 1, count: 2, limit: 3, want: []int{0, 1}},
+		{name: "middle", active: 2, count: 5, limit: 3, want: []int{1, 2, 3}},
+		{name: "wrap left", active: 0, count: 5, limit: 3, want: []int{4, 0, 1}},
+		{name: "wrap right", active: 4, count: 5, limit: 3, want: []int{3, 4, 0}},
+		// Capping a larger set to two cards: active first, next second.
+		{name: "cap2 middle", active: 2, count: 5, limit: 2, want: []int{2, 3}},
+		{name: "cap2 wrap right", active: 4, count: 5, limit: 2, want: []int{4, 0}},
+		// Cap never shrinks the natural single/two-page windows.
+		{name: "cap2 single", active: 0, count: 1, limit: 2, want: []int{0}},
+		{name: "cap2 two", active: 1, count: 2, limit: 2, want: []int{0, 1}},
+		// A bad limit falls back to the two-card minimum, not zero cards.
+		{name: "limit0 caps to two", active: 2, count: 5, limit: 0, want: []int{2, 3}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := dialOverviewIndices(tt.active, tt.count)
+			got := dialOverviewIndices(tt.active, tt.count, tt.limit)
 			if len(got) != len(tt.want) {
 				t.Fatalf("len = %d, want %d (%v)", len(got), len(tt.want), got)
 			}
@@ -310,6 +319,15 @@ func TestDialViewOptionsResolve(t *testing.T) {
 	if got := dialOverviewStyle(&dialActionSettings{OverviewStyle: "bad"}); got != "stacked" {
 		t.Fatalf("bad overview style = %q, want stacked default", got)
 	}
+	if got := dialOverviewCap(&dialActionSettings{}); got != 3 {
+		t.Fatalf("unset overview pages = %d, want 3", got)
+	}
+	if got := dialOverviewCap(&dialActionSettings{OverviewPages: "2"}); got != 2 {
+		t.Fatalf("overview pages 2 = %d, want 2", got)
+	}
+	if got := dialOverviewCap(&dialActionSettings{OverviewPages: "bad"}); got != 3 {
+		t.Fatalf("bad overview pages = %d, want 3 default", got)
+	}
 }
 
 func TestDialOverviewRectsTwoUpReadable(t *testing.T) {
@@ -343,7 +361,7 @@ func TestDialOverviewRectsTwoUpReadable(t *testing.T) {
 func TestDialStackedLayout(t *testing.T) {
 	const gutter = 18
 	// Single page: one full-width strip starting after the reserved left column.
-	idx, slot, rects := dialStackedLayout(0, 1, gutter)
+	idx, slot, rects := dialStackedLayout(0, 1, gutter, 3)
 	if len(idx) != 1 || len(rects) != 1 || slot != 0 {
 		t.Fatalf("count 1 layout = idx %v slot %d rects %d", idx, slot, len(rects))
 	}
@@ -352,7 +370,7 @@ func TestDialStackedLayout(t *testing.T) {
 	// centred in the middle. Every strip is full width starting at the reserved
 	// left column (so the indicator column on the left stays clear and the graph
 	// reaches the right edge).
-	idx, slot, rects = dialStackedLayout(2, 5, gutter)
+	idx, slot, rects = dialStackedLayout(2, 5, gutter, 3)
 	if slot != 1 {
 		t.Fatalf("active slot = %d, want middle slot 1", slot)
 	}
@@ -384,12 +402,25 @@ func TestDialStackedLayout(t *testing.T) {
 	}
 
 	// Two pages: two EQUAL strips, active on top; both full width.
-	idx, slot, rects = dialStackedLayout(0, 2, gutter)
+	idx, slot, rects = dialStackedLayout(0, 2, gutter, 3)
 	if len(idx) != 2 || slot != 0 {
 		t.Fatalf("count 2 layout idx %v slot %d", idx, slot)
 	}
 	if d := rects[0].Dy() - rects[1].Dy(); d < -1 || d > 1 {
 		t.Fatalf("count 2 strips must be equal height: %d vs %d", rects[0].Dy(), rects[1].Dy())
+	}
+
+	// Cap a five-page set to two strips: active on top, next below, both bigger
+	// than the three-strip layout. The page indicator still reflects all pages.
+	idx, slot, rects = dialStackedLayout(2, 5, gutter, 2)
+	if len(idx) != 2 || len(rects) != 2 || slot != 0 {
+		t.Fatalf("cap2 layout idx %v slot %d rects %d", idx, slot, len(rects))
+	}
+	if idx[0] != 2 || idx[1] != 3 {
+		t.Fatalf("cap2 indices = %v, want [2 3] (active, next)", idx)
+	}
+	if rects[0].Dy() <= 33 {
+		t.Fatalf("cap2 strip height %d not bigger than the three-strip layout", rects[0].Dy())
 	}
 }
 

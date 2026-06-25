@@ -226,17 +226,29 @@ func wrapDialIndex(current, ticks, count int) int {
 	return next
 }
 
-func dialOverviewIndices(active, count int) []int {
+func dialOverviewIndices(active, count, limit int) []int {
 	if count <= 0 {
 		return nil
+	}
+	if limit < 2 {
+		limit = 2
 	}
 	if count == 1 {
 		return []int{active}
 	}
 	if count == 2 {
+		// Exactly two pages: previous wraps to the other page, active on the right.
 		return []int{
 			wrapDialIndex(active, -1, count),
 			wrapDialIndex(active, 0, count),
+		}
+	}
+	if limit == 2 {
+		// Capping a larger set to two cards: active on the left, next on the right
+		// so the active page reads first.
+		return []int{
+			wrapDialIndex(active, 0, count),
+			wrapDialIndex(active, 1, count),
 		}
 	}
 	return []int{
@@ -361,6 +373,16 @@ func dialOverviewStyle(s *dialActionSettings) string {
 		return "carousel"
 	}
 	return "stacked"
+}
+
+// dialOverviewCap resolves how many pages the overview shows at once: 2 when the
+// user picked "2" (bigger cards/strips), otherwise the default 3. Empty / "auto"
+// keeps the original previous/active/next window.
+func dialOverviewCap(s *dialActionSettings) int {
+	if s != nil && s.OverviewPages == "2" {
+		return 2
+	}
+	return 3
 }
 
 // dialIndicatorDefaultColor is the original active page-indicator colour, used as
@@ -552,7 +574,7 @@ func (p *Plugin) renderDialOverview(settings *dialActionSettings, state *dialSta
 	canvas := image.NewRGBA(image.Rect(0, 0, dialWidth, dialHeight))
 	fillRect(canvas, canvas.Bounds(), color.RGBA{5, 8, 11, 255})
 
-	indices := dialOverviewIndices(settings.ActiveIndex, len(settings.Pages))
+	indices := dialOverviewIndices(settings.ActiveIndex, len(settings.Pages), dialOverviewCap(settings))
 	if len(indices) == 0 {
 		return nil, nil
 	}
@@ -625,13 +647,18 @@ func dialStackedGutter(size float64) int {
 // the active page sits in the middle (with three pages) and is marked by its
 // border, with the previous/next page above and below. The strips start after
 // the reserved indicator gutter (gutter px wide).
-func dialStackedLayout(active, count, gutter int) (indices []int, activeSlot int, rects []image.Rectangle) {
+func dialStackedLayout(active, count, gutter, limit int) (indices []int, activeSlot int, rects []image.Rectangle) {
 	x0, x1 := gutter, dialWidth
+	if limit < 2 {
+		limit = 2
+	}
 	if count <= 1 {
 		return []int{active}, 0, []image.Rectangle{image.Rect(x0, 2, x1, 98)}
 	}
-	if count == 2 {
-		// Two equal strips: active on top, the other below.
+	if count == 2 || limit == 2 {
+		// Two equal strips: active on top, next below. When exactly two pages exist
+		// the lower strip wraps to the other page; when capping a larger set to two
+		// it shows the next page.
 		return []int{active, wrapDialIndex(active, 1, count)}, 0, []image.Rectangle{
 			image.Rect(x0, 1, x1, 49),
 			image.Rect(x0, 51, x1, 99),
@@ -949,7 +976,7 @@ func (p *Plugin) renderDialStacked(settings *dialActionSettings, state *dialStat
 	if count == 0 {
 		return nil, nil
 	}
-	indices, activeSlot, rects := dialStackedLayout(settings.ActiveIndex, count, dialStackedGutter(dialIndicatorSize(settings)))
+	indices, activeSlot, rects := dialStackedLayout(settings.ActiveIndex, count, dialStackedGutter(dialIndicatorSize(settings)), dialOverviewCap(settings))
 
 	for slot, pageIndex := range indices {
 		if pageIndex < 0 || pageIndex >= len(state.graphs) || state.graphs[pageIndex] == nil {

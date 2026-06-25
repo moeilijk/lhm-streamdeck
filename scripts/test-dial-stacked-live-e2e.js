@@ -350,6 +350,32 @@ async function main() {
       assert.strictEqual(countRegion(im, LEFT_COL + 2, W, 0, H, isRed), 0, "indicator colour bled into the graph area");
     });
 
+    // 5. #56 tester ask: cap the overview to 2 bigger strips even with 3 pages.
+    //    The layout splits at y~50 instead of into thirds, so the active (top)
+    //    strip's blue border now reaches into y 40..48 (where the three-strip
+    //    layout had none) and there is no third active strip below y 60. The page
+    //    indicator still reflects ALL three pages.
+    win.currentSettings.activeIndex = 1; // active goes on the TOP strip when capped to 2
+    win.currentSettings.overviewPages = "2";
+    win.saveSettings();
+    const imCap = await captureWhen(ctx, (img) =>
+      countRegion(img, LEFT_COL, W, 40, 48, isBlue) >= 4 && countRegion(img, LEFT_COL, W, 60, H, isBlue) === 0);
+    check("cap to 2: the active top strip grows past the old top-third (blue border at y 40..48)", () => {
+      assert.ok(imCap, "no capped image came back");
+      assert.ok(countRegion(imCap, LEFT_COL, W, 40, 48, isBlue) >= 4, "the top strip did not grow taller than a third");
+    });
+    check("cap to 2: there is no third strip (no active border below y 60)", () => {
+      assert.strictEqual(countRegion(imCap, LEFT_COL, W, 60, H, isBlue), 0, "a third/active strip is still drawn below");
+    });
+    check("cap to 2: both visible strips render their reading", () => {
+      assert.ok(countRegion(imCap, LEFT_COL, W, 2, 48, isText) > 0, "top strip has no content");
+      assert.ok(countRegion(imCap, LEFT_COL, W, 52, 98, isText) > 0, "bottom strip has no content");
+    });
+    check("cap to 2: the indicator still shows all three pages", () => {
+      const allDots = columnRuns(imCap, dotsX0, dotsX1, isAnyDot);
+      assert.strictEqual(allDots.length, 3, "saw " + allDots.length + " dots, want 3 (full page count preserved)");
+    });
+
     console.log(
       "\nstacked render: blue(mid)=" + countRegion(im, LEFT_COL, W, 34, 66, isBlue) +
       " text/strip=[" + contentTop + "," + contentMid + "," + contentBot + "]" +
