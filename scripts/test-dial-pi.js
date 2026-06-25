@@ -309,11 +309,12 @@ function testRemoveSelectedPage() {
   assert(sb.currentSettings.activeIndex === 0, "active index clamped");
 }
 
-function testBuildRefVisibleInPi() {
+function testBuildRefTraceableNotVisible() {
   const html = fs.readFileSync("com.moeilijk.lhm.sdPlugin/dial_pi.html", "utf8");
-  assert(html.includes('id="pluginBuildRef"'), "plugin build ref row present");
-  assert(html.includes("3c5e9b5 + V5-prep.39"), "plugin V5 build ref visible in PI");
-  assert(html.includes('dial_pi.js?v=V5-prep.39'), "dial PI script is cache-busted with build ref");
+  // The build ref is traceable as a comment but must NOT occupy a visible PI row.
+  assert(!html.includes('id="pluginBuildRef"'), "build ref must not be a visible PI row");
+  assert(/<!--[^>]*Build: 3c5e9b5 \+ V5-prep\.40/.test(html), "build ref present as a comment");
+  assert(html.includes('dial_pi.js?v=V5-prep.40'), "dial PI script is cache-busted with build ref");
   assert(html.includes("Dial press"), "dial-press row present");
   assert(html.includes("Toggle overview"), "dial-press behavior visible");
   assert(html.includes('id="globalThresholdsSection" hidden'), "global thresholds section starts hidden");
@@ -708,7 +709,7 @@ const tests = [
   ["add page button sends settings", testAddPageButtonSendsSettings],
   ["moveSelectedPage", testMoveSelectedPage],
   ["removeSelectedPage", testRemoveSelectedPage],
-  ["build ref visible in PI", testBuildRefVisibleInPi],
+  ["build ref traceable as comment, not a visible row", testBuildRefTraceableNotVisible],
   ["bulk preview list uses dark PI select style", testBulkPreviewListUsesDarkPiSelectStyle],
   ["snooze duration normalization", testSnoozeDurationNormalization],
   ["threshold helpers", testThresholdHelpers],
