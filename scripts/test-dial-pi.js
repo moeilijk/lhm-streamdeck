@@ -313,8 +313,8 @@ function testBuildRefTraceableNotVisible() {
   const html = fs.readFileSync("com.moeilijk.lhm.sdPlugin/dial_pi.html", "utf8");
   // The build ref is traceable as a comment but must NOT occupy a visible PI row.
   assert(!html.includes('id="pluginBuildRef"'), "build ref must not be a visible PI row");
-  assert(/<!--[^>]*Build: 3c5e9b5 \+ V5-prep\.40/.test(html), "build ref present as a comment");
-  assert(html.includes('dial_pi.js?v=V5-prep.40'), "dial PI script is cache-busted with build ref");
+  assert(/<!--[^>]*Build: 3c5e9b5 \+ V5-prep\.41/.test(html), "build ref present as a comment");
+  assert(html.includes('dial_pi.js?v=V5-prep.41'), "dial PI script is cache-busted with build ref");
   assert(html.includes("Dial press"), "dial-press row present");
   assert(html.includes("Toggle overview"), "dial-press behavior visible");
   assert(html.includes('id="globalThresholdsSection" hidden'), "global thresholds section starts hidden");
@@ -350,6 +350,24 @@ function testThresholdHelpers() {
   assert(t.dwellMs === 1250, "dwellMs parsed");
   assert(t.sticky === true, "sticky boolean parsed");
   assert(t.bringToFront === true, "bringToFront boolean parsed");
+}
+
+// CodeQL js/prototype-polluting-assignment: dynamic property writes whose key can
+// come from settings/catalog data must not be able to reach Object.prototype.
+function testPrototypePollutionGuards() {
+  const sb = loadDialSandbox(autoStubElements({ pageList: { selectedIndex: -1 } }));
+  assert(sb.isUnsafeKey("__proto__") && sb.isUnsafeKey("constructor") && sb.isUnsafeKey("prototype"), "isUnsafeKey flags proto keys");
+  assert(!sb.isUnsafeKey("min") && !sb.isUnsafeKey("value"), "isUnsafeKey allows normal keys");
+
+  // A string activeIndex (e.g. "__proto__") must coerce to 0, never index pages["__proto__"].
+  sb.currentSettings = { activeIndex: "__proto__", pages: [{}] };
+  assert(sb.selectedPageIndex() === 0, "string activeIndex coerces to a safe integer");
+
+  // updateThresholdField must drop a "__proto__" key instead of assigning through it.
+  const t = sb.createThreshold("X");
+  sb.updateThresholdField(t, "__proto__", { polluted: true });
+  assert({}.polluted === undefined, "updateThresholdField does not pollute Object.prototype");
+  assert(t.value === undefined || !("polluted" in {}), "no prototype pollution side effect");
 }
 
 function testGlobalThresholdHelpersPerPage() {
@@ -713,6 +731,7 @@ const tests = [
   ["bulk preview list uses dark PI select style", testBulkPreviewListUsesDarkPiSelectStyle],
   ["snooze duration normalization", testSnoozeDurationNormalization],
   ["threshold helpers", testThresholdHelpers],
+  ["prototype-pollution guards", testPrototypePollutionGuards],
   ["global threshold helpers per page", testGlobalThresholdHelpersPerPage],
   ["global threshold section only when active", testGlobalThresholdSectionOnlyWhenActive],
   ["global threshold toggle click saves page suppression", testGlobalThresholdToggleClickSavesPageSuppression],
