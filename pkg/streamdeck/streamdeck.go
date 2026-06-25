@@ -29,6 +29,10 @@ type EventDelegate interface {
 	OnWillAppear(*EvWillAppear)
 	OnWillDisappear(*EvWillDisappear)
 	OnKeyDown(*EvKeyDown)
+	OnDialDown(*EvDialDown)
+	OnDialUp(*EvDialUp)
+	OnDialRotate(*EvDialRotate)
+	OnTouchTap(*EvTouchTap)
 	OnDidReceiveSettings(*EvDidReceiveSettings)
 	OnTitleParametersDidChange(*EvTitleParametersDidChange)
 	OnPropertyInspectorConnected(*EvSendToPlugin)
@@ -199,6 +203,42 @@ func (sd *StreamDeck) spawnMessageReader() {
 			}
 			if sd.delegate != nil {
 				sd.delegate.OnKeyDown(&ev)
+			}
+		case "dialDown":
+			var ev EvDialDown
+			if err := json.Unmarshal(message, &ev); err != nil {
+				log.Printf("dialDown unmarshal: %v", err)
+				continue
+			}
+			if sd.delegate != nil {
+				sd.delegate.OnDialDown(&ev)
+			}
+		case "dialUp":
+			var ev EvDialUp
+			if err := json.Unmarshal(message, &ev); err != nil {
+				log.Printf("dialUp unmarshal: %v", err)
+				continue
+			}
+			if sd.delegate != nil {
+				sd.delegate.OnDialUp(&ev)
+			}
+		case "dialRotate":
+			var ev EvDialRotate
+			if err := json.Unmarshal(message, &ev); err != nil {
+				log.Printf("dialRotate unmarshal: %v", err)
+				continue
+			}
+			if sd.delegate != nil {
+				sd.delegate.OnDialRotate(&ev)
+			}
+		case "touchTap":
+			var ev EvTouchTap
+			if err := json.Unmarshal(message, &ev); err != nil {
+				log.Printf("touchTap unmarshal: %v", err)
+				continue
+			}
+			if sd.delegate != nil {
+				sd.delegate.OnTouchTap(&ev)
 			}
 		case "didReceiveSettings":
 			var ev EvDidReceiveSettings
@@ -373,6 +413,56 @@ func (sd *StreamDeck) SetImage(context string, bts []byte) error {
 	sd.writeMu.Unlock()
 	if err != nil {
 		return fmt.Errorf("setImage write: %v", err)
+	}
+	return nil
+}
+
+// SetFeedback updates items in the current encoder feedback layout.
+func (sd *StreamDeck) SetFeedback(context string, payload interface{}) error {
+	event := evSetFeedback{Event: "setFeedback", Context: context, Payload: payload}
+	data, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("setFeedback: %v", err)
+	}
+	sd.writeMu.Lock()
+	err = sd.conn.WriteMessage(websocket.TextMessage, data)
+	sd.writeMu.Unlock()
+	if err != nil {
+		return fmt.Errorf("setFeedback write: %v", err)
+	}
+	return nil
+}
+
+// SetFeedbackLayout assigns an encoder feedback layout, such as "$A0".
+func (sd *StreamDeck) SetFeedbackLayout(context, layout string) error {
+	event := evSetFeedbackLayout{Event: "setFeedbackLayout", Context: context, Payload: evSetFeedbackLayoutPayload{
+		Layout: layout,
+	}}
+	data, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("setFeedbackLayout: %v", err)
+	}
+	sd.writeMu.Lock()
+	err = sd.conn.WriteMessage(websocket.TextMessage, data)
+	sd.writeMu.Unlock()
+	if err != nil {
+		return fmt.Errorf("setFeedbackLayout write: %v", err)
+	}
+	return nil
+}
+
+// SetTriggerDescription updates Stream Deck+ encoder trigger descriptions.
+func (sd *StreamDeck) SetTriggerDescription(context string, payload interface{}) error {
+	event := evSetTriggerDescription{Event: "setTriggerDescription", Context: context, Payload: payload}
+	data, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("setTriggerDescription: %v", err)
+	}
+	sd.writeMu.Lock()
+	err = sd.conn.WriteMessage(websocket.TextMessage, data)
+	sd.writeMu.Unlock()
+	if err != nil {
+		return fmt.Errorf("setTriggerDescription write: %v", err)
 	}
 	return nil
 }

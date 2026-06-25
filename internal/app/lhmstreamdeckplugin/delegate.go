@@ -110,6 +110,11 @@ func (p *Plugin) OnConnected(c *websocket.Conn) {
 
 // OnWillAppear event
 func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
+	if event.Action == dialAction && event.Payload.Controller == "Encoder" {
+		p.handleDialWillAppear(event)
+		return
+	}
+
 	// Handle settings action separately
 	if event.Action == "com.moeilijk.lhm.settings" {
 		// Decode tile appearance settings from payload
@@ -294,6 +299,11 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 
 // OnWillDisappear event
 func (p *Plugin) OnWillDisappear(event *streamdeck.EvWillDisappear) {
+	if event.Action == dialAction && event.Payload.Controller == "Encoder" {
+		p.handleDialWillDisappear(event)
+		return
+	}
+
 	// Handle settings action
 	if event.Action == "com.moeilijk.lhm.settings" {
 		p.mu.Lock()
@@ -475,6 +485,11 @@ func (p *Plugin) OnTitleParametersDidChange(event *streamdeck.EvTitleParametersD
 
 // OnPropertyInspectorConnected event
 func (p *Plugin) OnPropertyInspectorConnected(event *streamdeck.EvSendToPlugin) {
+	if event.Action == dialAction {
+		p.handleDialPropertyInspectorConnected(event)
+		return
+	}
+
 	if p.isSettingsAction(event.Action, event.Context) {
 		p.sendSettingsStatus("com.moeilijk.lhm.settings", event.Context, true)
 		return
@@ -577,6 +592,10 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 	err := json.Unmarshal(*event.Payload, &payload)
 	if err != nil {
 		log.Println("OnSendToPlugin unmarshal", err)
+	}
+
+	if event.Action == dialAction && p.handleDialSendToPlugin(event, payload) {
+		return
 	}
 
 	// Handle settings action commands

@@ -233,6 +233,23 @@ func nextThresholdSnoozeDuration(configured []int, current *thresholdSnoozeState
 	return thresholdDurationMs(normalized[0]), true
 }
 
+func (p *Plugin) advanceConfiguredThresholdSnooze(context string, configured []int, now time.Time) bool {
+	normalized := normalizeThresholdSnoozeDurations(configured)
+	if len(normalized) == 0 {
+		return false
+	}
+	currentSnooze, snoozed := p.currentThresholdSnooze(context, now)
+	var current *thresholdSnoozeState
+	if snoozed {
+		current = &currentSnooze
+	}
+	if nextDuration, ok := nextThresholdSnoozeDuration(normalized, current); ok {
+		p.setThresholdSnooze(context, nextDuration, now)
+		return true
+	}
+	return p.clearThresholdSnooze(context)
+}
+
 func containsThresholdSnoozeDuration(configured []int, duration time.Duration) bool {
 	currentMs := 0
 	if duration > 0 {

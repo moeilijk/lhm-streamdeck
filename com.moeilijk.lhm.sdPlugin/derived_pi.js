@@ -24,7 +24,7 @@ function wireRangeVal(id) {
 function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
   uuid = inUUID;
   actionInfo = JSON.parse(inActionInfo);
-  websocket = new WebSocket("ws://localhost:" + inPort);
+  websocket = new WebSocket("ws://" + ((typeof location !== "undefined" && location.hostname) ? location.hostname : "127.0.0.1") + ":" + inPort);
 
   websocket.onopen = function () {
     websocket.send(JSON.stringify({ event: inRegisterEvent, uuid: inUUID }));
@@ -227,7 +227,7 @@ function populateReadingSelect(slotIdx, readings) {
 
   readings.slice().sort(compareReadings).forEach(function (r) {
     var opt = document.createElement("option");
-    opt.text = r.label + (r.unit ? " (" + r.unit + ")" : "");
+    opt.text = readingOptionLabel(r);
     opt.value = String(r.id);
     if (String(r.id) === currentRid) opt.selected = true;
     el.add(opt);

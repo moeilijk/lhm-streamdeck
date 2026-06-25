@@ -264,6 +264,11 @@ func sensorIDFromReading(id string) string {
 		return ""
 	}
 	parts := strings.Split(trimmed, "/")
+	for i, part := range parts {
+		if i > 0 && isReadingTypePathPart(part) {
+			return "/" + strings.Join(parts[:i], "/")
+		}
+	}
 	switch len(parts) {
 	case 0:
 		return ""
@@ -273,6 +278,25 @@ func sensorIDFromReading(id string) string {
 		return "/" + parts[0]
 	default:
 		return "/" + strings.Join(parts[:len(parts)-2], "/")
+	}
+}
+
+func isReadingTypePathPart(part string) bool {
+	switch strings.ToLower(part) {
+	case "temperature", "temperatures",
+		"fan", "fans",
+		"voltage", "voltages",
+		"power",
+		"current",
+		"clock", "clocks",
+		"load",
+		"data",
+		"throughput",
+		"control",
+		"level":
+		return true
+	default:
+		return false
 	}
 }
 
