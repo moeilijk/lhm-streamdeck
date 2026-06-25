@@ -286,12 +286,12 @@ function testIndexReadingSortGroupsByPrefixAndNaturalLabel() {
 
   const got = optionTexts(select);
   const want = [
-    "%   CPU Core #1",
-    "%   CPU Core #2",
-    "%   CPU Core #10",
-    "MHz Core #1",
-    "MHz Core #2",
-    "MHz Core #10",
+    "CPU Core #1 (%)",
+    "CPU Core #2 (%)",
+    "CPU Core #10 (%)",
+    "Core #1 (MHz)",
+    "Core #2 (MHz)",
+    "Core #10 (MHz)",
   ];
   assert(got.join("|") === want.join("|"), `unexpected index reading order: ${got.join("|")}`);
 }

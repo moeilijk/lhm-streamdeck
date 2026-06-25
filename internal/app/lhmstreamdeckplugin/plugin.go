@@ -43,13 +43,13 @@ type Plugin struct {
 	mu       sync.RWMutex // protects maps and cached state below
 	sourceMu sync.RWMutex // protects sources map
 
-	sources  map[string]*sourceRuntime
-	sd     *streamdeck.StreamDeck
-	am     *actionManager
-	graphs map[string]*graph.Graph
+	sources map[string]*sourceRuntime
+	sd      *streamdeck.StreamDeck
+	am      *actionManager
+	graphs  map[string]*graph.Graph
 
 	// Cached assets and state for performance
-	placeholderImage []byte            // cached startup chip placeholder image (set once at init, read-only after)
+	placeholderImage []byte               // cached startup chip placeholder image (set once at init, read-only after)
 	lastPollTime     map[string]uint64    // last processed PollTime per context
 	lastRenderTime   map[string]time.Time // wall-time of last render per context (for per-tile interval override)
 	smoothedValues   map[string]float64   // last smoothed graph value per context (for EMA)
@@ -70,6 +70,10 @@ type Plugin struct {
 	// Derived metric tile state
 	derivedSettings map[string]*derivedActionSettings
 	derivedStates   map[string]*derivedState
+
+	// Stream Deck+ dial carousel state
+	dialSettings map[string]*dialActionSettings
+	dialStates   map[string]*dialState
 }
 
 type sensorResult struct {
@@ -172,18 +176,11 @@ func (p *Plugin) runtimeForSource(profileID string) *sourceRuntime {
 	rt := p.sources[profileID]
 	p.sourceMu.RUnlock()
 	if rt != nil {
+		p.reconcileSourceRuntime(profileID, rt)
 		return rt
 	}
 
-	p.mu.RLock()
-	var prof lhmSourceProfile
-	for _, sp := range p.globalSettings.SourceProfiles {
-		if sp.ID == profileID {
-			prof = sp
-			break
-		}
-	}
-	p.mu.RUnlock()
+	prof, _ := p.sourceProfileByID(profileID)
 
 	p.sourceMu.Lock()
 	// double-check after acquiring write lock
@@ -192,7 +189,48 @@ func (p *Plugin) runtimeForSource(profileID string) *sourceRuntime {
 		p.sources[profileID] = rt
 	}
 	p.sourceMu.Unlock()
+	p.reconcileSourceRuntime(profileID, rt)
 	return rt
+}
+
+func (p *Plugin) sourceProfileByID(profileID string) (lhmSourceProfile, bool) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	for _, sp := range p.globalSettings.SourceProfiles {
+		if sp.ID == profileID {
+			return sp, true
+		}
+	}
+	return lhmSourceProfile{}, false
+}
+
+func sameSourceProfileEndpoint(a, b lhmSourceProfile) bool {
+	return a.ID == b.ID && a.Host == b.Host && a.Port == b.Port
+}
+
+func (p *Plugin) reconcileSourceRuntime(profileID string, rt *sourceRuntime) {
+	prof, ok := p.sourceProfileByID(profileID)
+	if !ok {
+		return
+	}
+
+	rt.mu.Lock()
+	changed := !sameSourceProfileEndpoint(rt.profile, prof)
+	if changed {
+		if rt.c != nil {
+			rt.c.Kill()
+		}
+		rt.profile = prof
+		rt.c = nil
+		rt.hw = nil
+	}
+	rt.mu.Unlock()
+
+	if changed {
+		p.mu.Lock()
+		invalidatePollCacheForRuntime(rt)
+		p.mu.Unlock()
+	}
 }
 
 func bridgeBinaryName() string {
@@ -371,6 +409,8 @@ func NewPlugin(port, uuid, event, info string) (*Plugin, error) {
 		compositeStates:   make(map[string]*compositeState),
 		derivedSettings:   make(map[string]*derivedActionSettings),
 		derivedStates:     make(map[string]*derivedState),
+		dialSettings:      make(map[string]*dialActionSettings),
+		dialStates:        make(map[string]*dialState),
 	}
 
 	// Cache placeholder image at startup.
@@ -716,7 +756,7 @@ func (p *Plugin) updateTiles(data *actionData) {
 		if !ok {
 			prev = graphValue
 		}
-		smoothed := alpha*graphValue + (1-alpha)*prev
+		smoothed := emaSmooth(alpha, graphValue, prev)
 		p.smoothedValues[data.context] = smoothed
 		p.mu.Unlock()
 		if graphValue != 0 {
@@ -843,6 +883,7 @@ func (p *Plugin) refreshAction(action, context string) {
 func (p *Plugin) updateAuxTiles() {
 	p.updateCompositeTick()
 	p.updateDerivedTick()
+	p.updateDialTick()
 }
 
 func (p *Plugin) applyThresholdText(template, valueTextNoUnit, unit string) string {

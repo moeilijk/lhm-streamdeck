@@ -45,6 +45,7 @@ type Threshold struct {
 	DwellMs         int     `json:"dwellMs,omitempty"`
 	CooldownMs      int     `json:"cooldownMs,omitempty"`
 	Sticky          bool    `json:"sticky,omitempty"`
+	BringToFront    bool    `json:"bringToFront,omitempty"` // dial: make this page the active one when the alarm fires / snooze times out
 	BackgroundColor string  `json:"backgroundColor"`       // Background color when triggered
 	ForegroundColor string  `json:"foregroundColor"`       // Graph foreground color
 	HighlightColor  string  `json:"highlightColor"`        // Graph highlight color
@@ -249,6 +250,41 @@ type derivedActionSettings struct {
 	SuppressedGlobalIDs      []string    `json:"suppressedGlobalIDs,omitempty"`
 	CurrentThresholdID       string      `json:"currentThresholdId"`
 	SnoozeDurations          []int       `json:"snoozeDurations,omitempty"`
+}
+
+type dialActionSettings struct {
+	SourceProfileID string           `json:"sourceProfileId,omitempty"`
+	ActiveIndex     int              `json:"activeIndex"`
+	Pages           []actionSettings `json:"pages"`
+	DefaultView     string           `json:"defaultView,omitempty"`    // "", "fullscreen", "overview"
+	// OverviewStyle selects how the overview (non-fullscreen) view renders:
+	// "" / "carousel" = the original horizontal carousel; "stacked" = vertically
+	// scrolling full-width strips with the active reading dominant and a peek of
+	// the previous/next pages.
+	OverviewStyle string `json:"overviewStyle,omitempty"`
+	// OverviewPages caps how many pages the overview shows at once, regardless of
+	// how many pages are defined: "" / "auto" = up to 3 (previous/active/next),
+	// "2" = active + next only (bigger, more legible cards/strips). The page
+	// indicator still reflects the full page count.
+	OverviewPages  string `json:"overviewPages,omitempty"`
+	IndicatorStyle string `json:"indicatorStyle,omitempty"` // "", "auto", "dots", "count", "off"
+	// IndicatorFullscreen draws the page indicator in the fullscreen view too.
+	// Off by default so fullscreen keeps its original look; the indicator style
+	// above controls how it renders once enabled.
+	IndicatorFullscreen bool `json:"indicatorFullscreen,omitempty"`
+	// IndicatorColor sets the page-indicator colour (active dot / count text) so it
+	// can be made to contrast against the dial background; empty = default grey.
+	IndicatorColor string `json:"indicatorColor,omitempty"`
+	// IndicatorSize scales the page indicator in "points": value 4 matches the
+	// original size, 8 is double. Range 1-8; nil = default.
+	IndicatorSize *float64 `json:"indicatorSize,omitempty"`
+	// Edge separator drawn on this dial's left/right edges to visually separate
+	// it from adjacent dials. Width is per edge in px (0 = off); nil = default.
+	SeparatorWidth *int   `json:"separatorWidth,omitempty"`
+	SeparatorColor string `json:"separatorColor,omitempty"`
+	// ReverseRotation flips the dial turn direction so a clockwise turn goes to the
+	// previous page instead of the next (some users / RTL layouts prefer this).
+	ReverseRotation bool `json:"reverseRotation,omitempty"`
 }
 
 type evSdpiCollection struct {

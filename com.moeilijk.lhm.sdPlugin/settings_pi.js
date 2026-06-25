@@ -172,7 +172,7 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
   }
   inInfo = parseJSONOrEmpty(inInfo);
   bindUIHandlers();
-  websocket = new WebSocket("ws://localhost:" + inPort);
+  websocket = new WebSocket("ws://" + ((typeof location !== "undefined" && location.hostname) ? location.hostname : "127.0.0.1") + ":" + inPort);
 
   websocket.onopen = function () {
     // Register with Stream Deck
@@ -575,6 +575,7 @@ function bindUIHandlers() {
   showEl.addEventListener("input", scheduleTileSettingsSave);
   showEl.addEventListener("click", scheduleTileSettingsSave);
 
+  bindGlobalThresholdControls();
   appearanceSignature = tileSettingsSignature(readTileSettingsFromUI());
   uiBound = true;
 }
@@ -674,7 +675,7 @@ function createGlobalThresholdElement(threshold) {
   var advancedToggleBtn = clone.querySelector(".threshold-advanced-toggle");
   var advancedPanel = clone.querySelector(".threshold-advanced-panel");
 
-  var isEnabled = threshold.enabled;
+  var isEnabled = threshold.enabled !== false;
   var isSticky = threshold.sticky === true;
   var isAdvancedOpen = globalThresholdAdvancedOpen[threshold.id] === true;
   var thresholdId = threshold.id;
@@ -802,10 +803,13 @@ function createGlobalThresholdElement(threshold) {
   return clone;
 }
 
-document.addEventListener("DOMContentLoaded", function() {
+function bindGlobalThresholdControls() {
   var addBtn = byId("addGlobalThresholdBtn");
-  if (addBtn) {
-    addBtn.addEventListener("click", function() {
+  if (addBtn && !addBtn.dataset.bound) {
+    addBtn.dataset.bound = "1";
+    addBtn.addEventListener("click", function(e) {
+      e.preventDefault();
+      e.stopPropagation();
       var nameEl = byId("newGlobalThresholdName");
       var name = nameEl ? nameEl.value.trim() : "";
       sendJson({
@@ -817,4 +821,4 @@ document.addEventListener("DOMContentLoaded", function() {
       if (nameEl) nameEl.value = "";
     });
   }
-});
+}

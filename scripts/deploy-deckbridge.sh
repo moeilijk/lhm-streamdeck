@@ -7,7 +7,20 @@ root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 plugin_src="$root_dir/com.moeilijk.lhm.sdPlugin"
 plugin_dst="$HOME/.config/DeckBridge/plugins/com.moeilijk.lhm.sdPlugin"
 deckbridge_dir="$HOME/projects/GitHub/DeckBridge"
+companion_dir="$HOME/projects/GitHub/lhm-companion"
+companion_bin="$companion_dir/build/lhm-companion"
+companion_port=8085
+settings_file="$HOME/.config/DeckBridge/settings/com.moeilijk.lhm.json"
 log_file="/tmp/deckbridge.log"
+companion_log="/tmp/lhm-companion.log"
+
+# On WSL/Linux the plugin reads /sys/class/hwmon directly for 127.0.0.1 sources,
+# which is empty under WSL. lhm-companion serves real /proc + /sys data over HTTP,
+# but the plugin only takes the HTTP path for a NON-localhost host (see
+# internal/app/lhmstreamdeckplugin/source_linux.go). So point the source profile
+# at the WSL interface IP, not 127.0.0.1.
+host_ip="$(ip -4 addr show eth0 2>/dev/null | grep -oP 'inet \K[0-9.]+' | head -1)"
+host_ip="${host_ip:-127.0.0.1}"
 
 # ── build ──────────────────────────────────────────────────────────────────
 echo "build: $plugin_src/lhm.exe + lhm (linux)"
@@ -20,11 +33,50 @@ echo "build: $plugin_src/lhm.exe + lhm (linux)"
   chmod +x "$plugin_src/lhm" "$plugin_src/lhm-bridge"
 )
 
+# ── build + start lhm-companion (Linux sensor source) ──────────────────────
+# Provides CPU load, memory, network and disk readings that the empty WSL
+# /sys/class/hwmon cannot. Built from the sibling lhm-companion repo.
+if [[ -d "$companion_dir" ]]; then
+  echo "build: lhm-companion"
+  ( cd "$companion_dir" && go build -o "$companion_bin" ./cmd/lhm-companion )
+else
+  echo "warn: $companion_dir not found — skipping companion (no sensor data on WSL)"
+fi
+
 # ── stop existing DeckBridge daemon ────────────────────────────────────────
-echo "kill: DeckBridge + plugin processes"
-pkill -f "node.*DeckBridge" 2>/dev/null || true
+echo "kill: DeckBridge + plugin + companion processes"
+# DeckBridge installs a SIGTERM handler that does not reliably exit, so a plain
+# pkill (SIGTERM) leaves the old daemon alive; the next start then dies on
+# EADDRINUSE and the stale daemon keeps serving OLD code. Use SIGKILL.
+# Also: the real process is launched as "node dist/index.js" (cwd is the
+# DeckBridge dir, which is NOT part of the command line), so the historical
+# "node.*DeckBridge" pattern never matched it. Match the entry script instead.
+pkill -9 -f "dist/index.js"   2>/dev/null || true
+# Kill the spawned plugin binary too. On Linux DeckBridge runs the "lhm" binary
+# (not "lhm.exe"), so a "lhm.exe"-only match leaves a stale plugin process alive
+# and the deploy silently keeps running OLD plugin code. Match the plugin path so
+# both "sdPlugin/lhm" and "sdPlugin/lhm.exe" are killed.
+pkill -9 -f "sdPlugin/lhm"  2>/dev/null || true
 pkill -f "lhm.exe"          2>/dev/null || true
-sleep 1
+pkill -f "lhm-companion"    2>/dev/null || true
+
+# Wait until port 34075 is actually free before starting, so we never race a
+# half-dead daemon into EADDRINUSE.
+for _ in $(seq 1 20); do
+  if ! ss -ltn 2>/dev/null | grep -q ':34075 '; then break; fi
+  sleep 0.5
+done
+
+if [[ -x "$companion_bin" ]]; then
+  echo "start: lhm-companion on $host_ip:$companion_port"
+  setsid "$companion_bin" -port "$companion_port" >"$companion_log" 2>&1 </dev/null &
+  sleep 1
+  if curl -s -o /dev/null "http://$host_ip:$companion_port/data.json"; then
+    echo "       companion serving http://$host_ip:$companion_port/data.json"
+  else
+    echo "warn: companion not reachable at http://$host_ip:$companion_port/data.json (check $companion_log)"
+  fi
+fi
 
 # ── deploy plugin files ────────────────────────────────────────────────────
 echo "copy: $plugin_src -> $plugin_dst"
@@ -47,6 +99,39 @@ with open(path) as f:
 m['CodePathLinux'] = 'lhm'
 with open(path, 'w') as f:
     json.dump(m, f, indent=2)
+PYEOF
+fi
+
+# ── seed companion source profile into DeckBridge settings ─────────────────
+# Adds (or updates) a "lhm-companion (WSL)" source pointing at the WSL IP and
+# selects it as default, so tiles have a live data source on first boot.
+# Existing profiles are preserved.
+if [[ -x "$companion_bin" && "$host_ip" != "127.0.0.1" ]]; then
+  echo "settings: companion source $host_ip:$companion_port -> default"
+  mkdir -p "$(dirname "$settings_file")"
+  python3 - "$settings_file" "$host_ip" "$companion_port" <<'PYEOF'
+import json, os, sys
+path, host, port = sys.argv[1], sys.argv[2], int(sys.argv[3])
+data = {}
+if os.path.exists(path):
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, ValueError):
+        data = {}
+data.setdefault("pollInterval", 1000)
+profiles = data.setdefault("sourceProfiles", [])
+cid = "companion_wsl"
+entry = {"id": cid, "name": "lhm-companion (WSL)", "host": host, "port": port}
+for p in profiles:
+    if p.get("id") == cid:
+        p.update(entry)
+        break
+else:
+    profiles.append(entry)
+data["defaultSourceProfileId"] = cid
+with open(path, "w") as f:
+    json.dump(data, f, indent=2)
 PYEOF
 fi
 

@@ -7,6 +7,8 @@ import (
 	"math"
 	"os"
 	"regexp"
+	"strings"
+	"unicode"
 
 	"github.com/golang/freetype/truetype"
 	"golang.org/x/image/font"
@@ -261,7 +263,7 @@ func (g *Graph) drawGraph(x, vay, maxx int) {
 			} else {
 				clr = g.bgColor
 			}
-			i := g.img.PixOffset(x, g.width-1-y)
+			i := g.img.PixOffset(x, g.height-1-y)
 			g.img.Pix[i+0] = clr.R
 			g.img.Pix[i+1] = clr.G
 			g.img.Pix[i+2] = clr.B
@@ -336,6 +338,60 @@ func (g *Graph) EncodePNG() ([]byte, error) {
 	return bts, nil
 }
 
+// Series returns a copy of the plotted history as y-positions in the range
+// [0, EffectiveHeight()-1], oldest first and newest last. It lets callers
+// re-plot the same data natively at a different size (e.g. the stacked dial
+// strips) without rescaling a pre-rendered tile.
+func (g *Graph) Series() []uint8 {
+	out := make([]uint8, len(g.yvals))
+	copy(out, g.yvals)
+	return out
+}
+
+// EffectiveHeight is the exported height (in pixels) the series y-positions are
+// scaled against, honouring SetHeightPct.
+func (g *Graph) EffectiveHeight() int {
+	return g.effectiveHeight()
+}
+
+func rgbaOr(c *color.RGBA, def color.RGBA) color.RGBA {
+	if c == nil {
+		return def
+	}
+	return *c
+}
+
+// ForegroundColor returns the filled-area colour.
+func (g *Graph) ForegroundColor() color.RGBA {
+	return rgbaOr(g.fgColor, color.RGBA{0, 81, 40, 255})
+}
+
+// HighlightColor returns the line colour.
+func (g *Graph) HighlightColor() color.RGBA {
+	return rgbaOr(g.hlColor, color.RGBA{0, 158, 0, 255})
+}
+
+// BackgroundColor returns the background colour.
+func (g *Graph) BackgroundColor() color.RGBA {
+	return rgbaOr(g.bgColor, color.RGBA{0, 0, 0, 255})
+}
+
+// LabelText returns the current text for the label at key, or "" if unset.
+func (g *Graph) LabelText(key int) string {
+	if l, ok := g.labels[key]; ok {
+		return l.text
+	}
+	return ""
+}
+
+// LabelColor returns the colour for the label at key and whether it exists.
+func (g *Graph) LabelColor(key int) (color.RGBA, bool) {
+	if l, ok := g.labels[key]; ok {
+		return rgbaOr(l.clr, color.RGBA{255, 255, 255, 255}), true
+	}
+	return color.RGBA{}, false
+}
+
 // Clear fills the canvas with the background color and resets graph history.
 func (g *Graph) Clear() {
 	for i := 0; i < len(g.img.Pix); i += 4 {
@@ -370,9 +426,21 @@ func unfix(x fixed.Int26_6) float64 {
 
 var newlineRegex = regexp.MustCompile("(\n|\\\\n)+")
 
+func printableLabelText(text string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\r' || r == '\t' {
+			return r
+		}
+		if r == unicode.ReplacementChar || unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, text)
+}
+
 func (g *Graph) drawLabel(l *Label) {
 	sh := shared()
-	lines := newlineRegex.Split(l.text, -1)
+	lines := newlineRegex.Split(printableLabelText(l.text), -1)
 	face, err := sh.fontFaceManager.GetFaceOfSize(l.fontSize)
 	if err != nil {
 		log.Printf("drawLabel font: %v", err)
@@ -383,7 +451,7 @@ func (g *Graph) drawLabel(l *Label) {
 	for _, line := range lines {
 		var lwidth float64
 		for _, x := range line {
-			awidth, ok := face.GlyphAdvance(rune(x))
+			awidth, ok := safeGlyphAdvance(face, rune(x))
 			if !ok {
 				log.Println("drawLabel: Failed to GlyphAdvance")
 				return
@@ -416,13 +484,33 @@ func (g *Graph) drawLabel(l *Label) {
 						X: point.X + fixed.Int26_6(dx*64),
 						Y: point.Y + fixed.Int26_6(dy*64),
 					}
-					d.DrawString(line)
+					safeDrawString(d, line)
 				}
 			}
 			d.Src = image.NewUniform(l.clr)
 			d.Dot = point
 		}
-		d.DrawString(line)
+		safeDrawString(d, line)
 		curY += 12
 	}
+}
+
+func safeGlyphAdvance(face font.Face, r rune) (advance fixed.Int26_6, ok bool) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			log.Printf("drawLabel glyph advance panic for %q: %v", r, recovered)
+			advance = 0
+			ok = false
+		}
+	}()
+	return face.GlyphAdvance(r)
+}
+
+func safeDrawString(d *font.Drawer, text string) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			log.Printf("drawLabel draw string panic: %v", recovered)
+		}
+	}()
+	d.DrawString(text)
 }
