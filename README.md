@@ -168,6 +168,31 @@ In its Property Inspector you can set:
 
 Changes to a profile's Host and Port take effect immediately; tiles that target that source reconnect automatically.
 
+### Stream Deck+ Dial Carousel
+
+The **LHM Dial Carousel** action turns a single dial into a scrollable list of sensor readings. Rotate the dial to cycle through the readings, press the dial to toggle an overview, and tap the touch strip to acknowledge or snooze an active alert (the same as pressing a key). It is built on the Stream Deck `Encoder` controller and was tested on the Stream Deck +; any Stream Deck device that exposes a dial with a touch strip can use it.
+
+In its Property Inspector:
+
+- **Pages** – add, reorder, and remove readings; the selected page is the one shown on the device.
+- Per page (the same controls as a standard reading tile):
+  - **Sensor / Reading** – select the sensor and reading for this page.
+  - **Display** – `Both`, `Graph only`, or `Text only`, plus graph height, line thickness and text stroke.
+  - **Scale** – Min / Max (leave blank to auto-derive from the reading), Format, Divisor and Graph unit.
+  - **Smoothing** – optional EMA smoothing for the displayed value; threshold checks always use the raw value.
+  - **Colors / Fonts** – highlight, fill, value text, title text, background; title and value font size (`0` = automatic).
+  - **Thresholds / Snooze / Global thresholds** – the full standard threshold feature set per page, including type-scoped global thresholds with per-page suppression.
+- **Bulk Add** – create many pages at once by rule (all readings on a sensor, a numbered set such as all CPU cores, or the same reading across matching sensors), with a live preview, individual deselect, and a name template (tokens `%n` number, `%r` reading, `%s` sensor).
+- Dial-wide:
+  - **Default view** – start in `Fullscreen` or `Overview`.
+  - **Overview style** – `Stacked` (full-width strips) or `Carousel` (cards).
+  - **Overview pages** – show up to `3` cards/strips, or cap to `2` for larger, more legible previews.
+  - **Indicator** – page indicator style (`Auto`, `Dots`, `Count`, `Off`), colour, size, and whether to show it in fullscreen.
+  - **Separator** – width and colour of the divider drawn between adjacent dials.
+  - **Reverse dial** – flip the rotation direction.
+
+Each new page is given a distinct default colour from a palette so the list is easy to scan, and a page's graph history is preserved when you edit its settings.
+
 ### Display options (standard tile)
 
 The standard **Libre Hardware Monitor** tile has a **Display** section in its Property Inspector:
