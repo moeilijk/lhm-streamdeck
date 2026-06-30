@@ -53,6 +53,9 @@ CLAUDE.md
 AGENTS.md
 .github/copilot-instructions.md
 
+# Codex agent artifact (internal, never commit)
+.codex
+
 # Local implementation plans (keep local, never push)
 PLAN-*.md
 
