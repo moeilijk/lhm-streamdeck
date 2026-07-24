@@ -42,6 +42,8 @@ debug:
 
 verify:
 	$(GOTARGETENV) $(GOCMD) build ./...
+	$(GOTARGETENV) $(GOBUILD) -o $(SDPLUGINDIR)/lhm.exe ./cmd/lhm_streamdeck_plugin
+	$(GOTARGETENV) $(GOBUILD) -o $(SDPLUGINDIR)/lhm-bridge.exe ./cmd/lhm-bridge
 	$(GOCMD) test $$($(GOCMD) list ./... 2>/dev/null | grep -v 'cmd/lhm_streamdeck_plugin\|cmd/lhm_debugger\|app/lhmstreamdeckplugin')
 	bash scripts/verify-settings-pi.sh
 	python3 scripts/test-linux-manifest.py

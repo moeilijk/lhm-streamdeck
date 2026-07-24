@@ -63,11 +63,25 @@ if [ ! -f "$dial_pkg/DejaVuSans-Bold.ttf" ]; then
   cp DejaVuSans-Bold.ttf "$dial_pkg/DejaVuSans-Bold.ttf"
   trap 'rm -f "'"$dial_pkg"'/DejaVuSans-Bold.ttf"' EXIT
 fi
-GOOS=windows GOARCH=amd64 GOCACHE=/tmp/go-build go test \
-  ./cmd/lhm_streamdeck_plugin \
-  ./internal/app/lhmstreamdeckplugin \
-  ./pkg/streamdeck \
-  ./internal/lhm/plugin \
-  ./cmd/lhm-bridge
+# On WSL the interop layer can execute Windows test binaries, so we test the
+# real GOOS=windows build. Elsewhere (CI on plain Linux) run the same packages
+# with the host GOOS; the windows compile itself is covered by the build step.
+if [ -f /proc/sys/fs/binfmt_misc/WSLInterop ]; then
+  echo "  (windows via WSL interop)"
+  GOOS=windows GOARCH=amd64 GOCACHE=/tmp/go-build go test \
+    ./cmd/lhm_streamdeck_plugin \
+    ./internal/app/lhmstreamdeckplugin \
+    ./pkg/streamdeck \
+    ./internal/lhm/plugin \
+    ./cmd/lhm-bridge
+else
+  echo "  (host GOOS)"
+  GOCACHE=/tmp/go-build go test \
+    ./cmd/lhm_streamdeck_plugin \
+    ./internal/app/lhmstreamdeckplugin \
+    ./pkg/streamdeck \
+    ./internal/lhm/plugin \
+    ./cmd/lhm-bridge
+fi
 
 echo "verify-settings-pi: ok"
