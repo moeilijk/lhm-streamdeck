@@ -73,11 +73,13 @@ verifier = importlib.util.module_from_spec(verifier_spec)
 verifier_spec.loader.exec_module(verifier)
 
 
-def make_package(path, manifest, with_elf=True, elf_magic=b"\x7fELF"):
+def make_package(path, manifest, with_elf=True, elf_magic=b"\x7fELF", with_companion=True):
     with zipfile.ZipFile(path, "w") as z:
         z.writestr("com.moeilijk.lhm.sdPlugin/manifest.json", json.dumps(manifest))
         if with_elf:
             z.writestr("com.moeilijk.lhm.sdPlugin/lhm", elf_magic + b"\x00" * 16)
+        if with_companion:
+            z.writestr("com.moeilijk.lhm.sdPlugin/lhm-companion", b"\x7fELF" + b"\x00" * 16)
 
 
 good_manifest = mod.transform({"CodePath": "lhm.exe", "Version": "9.9.9.0", "OS": [{"Platform": "windows", "MinimumVersion": "10"}]})
@@ -101,6 +103,9 @@ with tempfile.TemporaryDirectory() as d:
 
     make_package(pkg, good_manifest, elf_magic=b"MZ\x90\x00")
     check("gate rejects a non-ELF (PE) 'lhm' binary", any("ELF" in e for e in verifier.verify(pkg)))
+
+    make_package(pkg, good_manifest, with_companion=False)
+    check("gate rejects missing bundled lhm-companion (#77)", any("lhm-companion" in e for e in verifier.verify(pkg)))
 
     legacy_name = os.path.join(d, "com.moeilijk.lhm-linux.streamDeckPlugin")
     make_package(legacy_name, good_manifest)

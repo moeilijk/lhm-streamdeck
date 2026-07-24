@@ -14,13 +14,10 @@ settings_file="$HOME/.config/DeckBridge/settings/com.moeilijk.lhm.json"
 log_file="/tmp/deckbridge.log"
 companion_log="/tmp/lhm-companion.log"
 
-# On WSL/Linux the plugin reads /sys/class/hwmon directly for 127.0.0.1 sources,
-# which is empty under WSL. lhm-companion serves real /proc + /sys data over HTTP,
-# but the plugin only takes the HTTP path for a NON-localhost host (see
-# internal/app/lhmstreamdeckplugin/source_linux.go). So point the source profile
-# at the WSL interface IP, not 127.0.0.1.
-host_ip="$(ip -4 addr show eth0 2>/dev/null | grep -oP 'inet \K[0-9.]+' | head -1)"
-host_ip="${host_ip:-127.0.0.1}"
+# Since #77 lhm-companion is the only Linux sensor source: localhost profiles
+# poll companion over HTTP (the old hwmon path and its WSL-IP workaround are
+# gone), so the source profile simply points at 127.0.0.1.
+host_ip="127.0.0.1"
 
 # ── build ──────────────────────────────────────────────────────────────────
 echo "build: $plugin_src/lhm.exe + lhm (linux)"
@@ -32,6 +29,12 @@ echo "build: $plugin_src/lhm.exe + lhm (linux)"
   GOOS=linux   GOARCH=amd64 go build -o "$plugin_src/lhm-bridge"     ./cmd/lhm-bridge
   chmod +x "$plugin_src/lhm" "$plugin_src/lhm-bridge"
 )
+# Bundle lhm-companion next to the plugin binary (#77): the plugin spawns it
+# for local profiles when nothing is listening on the endpoint.
+if [[ -d "$companion_dir" ]]; then
+  (cd "$companion_dir" && GOOS=linux GOARCH=amd64 go build -o "$plugin_src/lhm-companion" ./cmd/lhm-companion)
+  chmod +x "$plugin_src/lhm-companion"
+fi
 
 # ── build + start lhm-companion (Linux sensor source) ──────────────────────
 # Provides CPU load, memory, network and disk readings that the empty WSL
@@ -103,10 +106,10 @@ PYEOF
 fi
 
 # ── seed companion source profile into DeckBridge settings ─────────────────
-# Adds (or updates) a "lhm-companion (WSL)" source pointing at the WSL IP and
+# Adds (or updates) a "lhm-companion (WSL)" source pointing at localhost and
 # selects it as default, so tiles have a live data source on first boot.
 # Existing profiles are preserved.
-if [[ -x "$companion_bin" && "$host_ip" != "127.0.0.1" ]]; then
+if [[ -x "$companion_bin" ]]; then
   echo "settings: companion source $host_ip:$companion_port -> default"
   mkdir -p "$(dirname "$settings_file")"
   python3 - "$settings_file" "$host_ip" "$companion_port" <<'PYEOF'

@@ -3,7 +3,7 @@
 // Tests auto-apply by ReadingType, type-filter, and per-tile suppress/unsuppress.
 //
 // Prerequisites (all started by run-integration-tests.sh):
-//   - mock-sensor-server on :9999
+//   - mock-sensor-server on :9997
 //   - DeckBridge running (ports from /tmp/deckbridge.log)
 //   - lhm plugin deployed and running under DeckBridge
 

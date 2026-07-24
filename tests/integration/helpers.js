@@ -148,22 +148,14 @@ function deleteSlot(piPort, keyIndex, deviceId) {
 }
 
 // ── Mock sensor server ───────────────────────────────────────────────────────
-const MOCK_PORT = 9999;
+// 9997 deliberately avoids :9999, which the com.exension.hwinfo plugin's
+// mock-bridge claims inside the same DeckBridge instance.
+const MOCK_PORT = 9997;
 
-// On Linux the plugin routes localhost source profiles to /sys/class/hwmon
-// (see internal/app/lhmstreamdeckplugin/source_linux.go), so a 127.0.0.1
-// profile would shadow the HTTP mock server. Use a non-internal interface IP
-// so the plugin takes the HTTP path to the mock, like deploy-deckbridge.sh
-// does for lhm-companion.
-const MOCK_HOST = process.env.MOCK_SENSOR_HOST || (() => {
-  const ifaces = require('os').networkInterfaces();
-  for (const addrs of Object.values(ifaces)) {
-    for (const a of addrs || []) {
-      if (a.family === 'IPv4' && !a.internal) return a.address;
-    }
-  }
-  return '127.0.0.1';
-})();
+// Since #77 the Linux plugin polls every source profile over HTTP (the old
+// localhost→hwmon shadow path is gone), so the mock profile deliberately uses
+// 127.0.0.1: the suite then also proves the new localhost routing end-to-end.
+const MOCK_HOST = process.env.MOCK_SENSOR_HOST || '127.0.0.1';
 
 function mockSet(path, value) {
   return new Promise((resolve, reject) => {

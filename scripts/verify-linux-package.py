@@ -42,11 +42,12 @@ def verify(path):
         if not any(e.get("Platform") == "linux" for e in manifest.get("OS", [])):
             errors.append(f"OS array has no Platform 'linux' entry: {manifest.get('OS')!r}")
 
-        try:
-            if z.read(PLUGIN_DIR + "lhm")[:4] != b"\x7fELF":
-                errors.append("packaged 'lhm' is not an ELF binary")
-        except KeyError:
-            errors.append("native binary 'lhm' missing from package")
+        for binary in ("lhm", "lhm-companion"):
+            try:
+                if z.read(PLUGIN_DIR + binary)[:4] != b"\x7fELF":
+                    errors.append(f"packaged {binary!r} is not an ELF binary")
+            except KeyError:
+                errors.append(f"native binary {binary!r} missing from package")
 
         name_match = FILENAME_RE.match(os.path.basename(path))
         if not name_match:

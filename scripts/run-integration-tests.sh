@@ -4,7 +4,7 @@
 #
 # Steps:
 #   1. Build plugin + mock-sensor-server
-#   2. Start mock-sensor-server on :9999
+#   2. Start mock-sensor-server on :9997
 #   3. Deploy plugin to DeckBridge and restart DeckBridge
 #   4. Run tests/integration/test-global-thresholds.js
 #   5. Tear down unless --keep-alive is passed
@@ -31,6 +31,10 @@ cleanup() {
   fi
   if [[ "$KEEP_ALIVE" == "false" ]]; then
     pkill -f "node.*DeckBridge" 2>/dev/null || true
+    # Also stop the plugin and any companion it supervises: a surviving plugin
+    # would respawn a companion onto the mock port once the mock is stopped.
+    pkill -9 -f "sdPlugin/lhm" 2>/dev/null || true
+    pkill -x lhm-companion 2>/dev/null || true
     echo "DeckBridge stopped"
   else
     echo "DeckBridge kept alive (--keep-alive)"
@@ -52,14 +56,23 @@ echo "build OK"
 
 # ── 2. Start mock sensor server ────────────────────────────────────────────────
 echo "── mock sensor server ──"
-/tmp/mock-sensor-server -port 9999 >/tmp/mock-sensor-server.log 2>&1 &
+# Kill stale mocks from crashed earlier runs so the bind below cannot fail.
+pkill -x mock-sensor-server 2>/dev/null || true
+sleep 0.3
+/tmp/mock-sensor-server -port 9997 >/tmp/mock-sensor-server.log 2>&1 &
 echo $! > "$MOCK_PID_FILE"
 echo "mock-sensor-server started (PID $(cat $MOCK_PID_FILE))"
-sleep 0.5
-
-# verify it's up
-if ! curl -sf http://127.0.0.1:9999/list >/dev/null 2>&1; then
-  echo "ERROR: mock-sensor-server not responding on :9999"
+# verify it's up (retry: bind/startup can take a moment)
+mock_up=false
+for _ in $(seq 1 20); do
+  if curl -sf http://127.0.0.1:9997/list >/dev/null 2>&1; then
+    mock_up=true
+    break
+  fi
+  sleep 0.25
+done
+if [[ "$mock_up" != "true" ]]; then
+  echo "ERROR: mock-sensor-server not responding on :9997 (see /tmp/mock-sensor-server.log)"
   exit 1
 fi
 echo "mock-sensor-server: OK"

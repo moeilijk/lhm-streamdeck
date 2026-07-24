@@ -15,9 +15,15 @@ plugin:
 	$(GOTARGETENV) $(GOBUILD) -o $(SDPLUGINDIR)/lhm-bridge.exe ./cmd/lhm-bridge
 	-@install-plugin.bat
 
+# The Linux plugin bundles lhm-companion (built from the sibling repo): it is
+# the only sensor source on Linux (#77) and gets spawned by the plugin when no
+# companion is already listening on the local endpoint.
+COMPANION_DIR?=$(HOME)/projects/GitHub/lhm-companion
+
 plugin-linux:
 	GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(SDPLUGINDIR)/lhm ./cmd/lhm_streamdeck_plugin
 	GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(SDPLUGINDIR)/lhm-bridge ./cmd/lhm-bridge
+	cd $(COMPANION_DIR) && GOOS=linux GOARCH=amd64 go build -o $(abspath $(SDPLUGINDIR))/lhm-companion ./cmd/lhm-companion
 
 proto: $(PROTOPB)
 
@@ -44,7 +50,7 @@ verify:
 	$(GOTARGETENV) $(GOCMD) build ./...
 	$(GOTARGETENV) $(GOBUILD) -o $(SDPLUGINDIR)/lhm.exe ./cmd/lhm_streamdeck_plugin
 	$(GOTARGETENV) $(GOBUILD) -o $(SDPLUGINDIR)/lhm-bridge.exe ./cmd/lhm-bridge
-	$(GOCMD) test $$($(GOCMD) list ./... 2>/dev/null | grep -v 'cmd/lhm_streamdeck_plugin\|cmd/lhm_debugger\|app/lhmstreamdeckplugin')
+	$(GOCMD) test $$($(GOCMD) list ./... 2>/dev/null | grep -v 'cmd/lhm_streamdeck_plugin\|cmd/lhm_debugger')
 	bash scripts/verify-settings-pi.sh
 	python3 scripts/test-linux-manifest.py
 	streamdeck validate $(SDPLUGINDIR)

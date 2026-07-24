@@ -69,6 +69,7 @@ example.json
 # Plugin Linux binaries (built by deploy-deckbridge.sh)
 com.moeilijk.lhm.sdPlugin/lhm
 com.moeilijk.lhm.sdPlugin/lhm-bridge
+com.moeilijk.lhm.sdPlugin/lhm-companion
 com.moeilijk.lhm.sdPlugin/lhm.log
 
 # Mock sensor server binary (built to repo root by go build)
