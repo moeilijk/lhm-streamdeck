@@ -80,15 +80,16 @@ def make_package(path, manifest, with_elf=True, elf_magic=b"\x7fELF"):
             z.writestr("com.moeilijk.lhm.sdPlugin/lhm", elf_magic + b"\x00" * 16)
 
 
-good_manifest = mod.transform({"CodePath": "lhm.exe", "OS": [{"Platform": "windows", "MinimumVersion": "10"}]})
+good_manifest = mod.transform({"CodePath": "lhm.exe", "Version": "9.9.9.0", "OS": [{"Platform": "windows", "MinimumVersion": "10"}]})
 with tempfile.TemporaryDirectory() as d:
-    pkg = os.path.join(d, "pkg.streamDeckPlugin")
+    # Artifact filename must carry MAJOR.MINOR.PATCH matching the manifest (issue #78).
+    pkg = os.path.join(d, "com.moeilijk.lhm-linux-9.9.9.streamDeckPlugin")
 
     make_package(pkg, good_manifest)
-    check("gate passes a correct package", verifier.verify(pkg) == [], repr(verifier.verify(pkg)))
+    check("gate passes a correct, correctly-named package", verifier.verify(pkg) == [], repr(verifier.verify(pkg)))
 
     # The exact 2.0.0.0 regression: windows-only OS + legacy CodePathLinux key.
-    make_package(pkg, {"CodePath": "lhm.exe", "CodePathLinux": "lhm", "OS": [{"Platform": "windows", "MinimumVersion": "10"}]})
+    make_package(pkg, {"CodePath": "lhm.exe", "Version": "9.9.9.0", "CodePathLinux": "lhm", "OS": [{"Platform": "windows", "MinimumVersion": "10"}]})
     errs = verifier.verify(pkg)
     check("gate rejects the 2.0.0.0 regression shape", len(errs) >= 3, repr(errs))
 
@@ -100,6 +101,14 @@ with tempfile.TemporaryDirectory() as d:
 
     make_package(pkg, good_manifest, elf_magic=b"MZ\x90\x00")
     check("gate rejects a non-ELF (PE) 'lhm' binary", any("ELF" in e for e in verifier.verify(pkg)))
+
+    legacy_name = os.path.join(d, "com.moeilijk.lhm-linux.streamDeckPlugin")
+    make_package(legacy_name, good_manifest)
+    check("gate rejects the legacy unversioned filename", any("filename" in e for e in verifier.verify(legacy_name)))
+
+    mismatch = os.path.join(d, "com.moeilijk.lhm-linux-1.0.0.streamDeckPlugin")
+    make_package(mismatch, good_manifest)
+    check("gate rejects filename/manifest version mismatch", any("!= manifest version" in e for e in verifier.verify(mismatch)))
 
 if failures:
     print(f"\n{len(failures)} failure(s)")

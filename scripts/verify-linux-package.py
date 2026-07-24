@@ -9,13 +9,22 @@ so the Linux release can never again ship a package OpenDeck runs under Wine
   2. the native binary declared under "CodePathLin" (not "CodePathLinux").
 The native binary must also actually be an ELF executable in the package.
 
-Usage: verify-linux-package.py <path/to/com.moeilijk.lhm-linux.streamDeckPlugin>
+The artifact filename must carry the release version (issue #78):
+com.moeilijk.lhm-linux-<MAJOR.MINOR.PATCH>.streamDeckPlugin, matching the
+manifest Version inside the package, so downloaded files stay identifiable
+and the two cannot drift. (Windows artifact keeps the plain UUID name for
+Elgato Marketplace compatibility.)
+
+Usage: verify-linux-package.py <path/to/com.moeilijk.lhm-linux-X.Y.Z.streamDeckPlugin>
 """
 import json
+import os
+import re
 import sys
 import zipfile
 
 PLUGIN_DIR = "com.moeilijk.lhm.sdPlugin/"
+FILENAME_RE = re.compile(r"^com\.moeilijk\.lhm-linux-(\d+\.\d+\.\d+)\.streamDeckPlugin$")
 
 
 def verify(path):
@@ -38,6 +47,14 @@ def verify(path):
                 errors.append("packaged 'lhm' is not an ELF binary")
         except KeyError:
             errors.append("native binary 'lhm' missing from package")
+
+        name_match = FILENAME_RE.match(os.path.basename(path))
+        if not name_match:
+            errors.append(f"artifact filename {os.path.basename(path)!r} does not match com.moeilijk.lhm-linux-X.Y.Z.streamDeckPlugin")
+        else:
+            manifest_v3 = ".".join(manifest.get("Version", "").split(".")[:3])
+            if name_match.group(1) != manifest_v3:
+                errors.append(f"filename version {name_match.group(1)} != manifest version {manifest_v3}")
     return errors
 
 

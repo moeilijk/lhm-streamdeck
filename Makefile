@@ -49,9 +49,18 @@ verify:
 	python3 scripts/test-linux-manifest.py
 	streamdeck validate $(SDPLUGINDIR)
 
+# Both artifacts carry the manifest version in their filename (issue #78).
+# Verified against Elgato: the Marketplace guidelines and distribution docs set
+# no filename rule, the CLI's <uuid>.streamDeckPlugin is only its default
+# output name, and Marketplace itself serves downloads with the version in the
+# name (e.g. "Libre Hardware Monitor-2-windows.streamDeckPlugin").
 release: verify
-	-@rm build/com.moeilijk.lhm.streamDeckPlugin
+	@mkdir -p build
+	-@rm -f build/com.moeilijk.lhm.streamDeckPlugin build/com.moeilijk.lhm-[0-9]*.streamDeckPlugin
 	streamdeck pack com.moeilijk.lhm.sdPlugin --output build --force
+	@VER=$$(python3 scripts/manifest-version.py); \
+	mv build/com.moeilijk.lhm.streamDeckPlugin "build/com.moeilijk.lhm-$$VER.streamDeckPlugin"; \
+	echo "artifact: build/com.moeilijk.lhm-$$VER.streamDeckPlugin"
 
 # The Linux manifest tweaks (CodePathLin + OS linux entry, see
 # scripts/make-linux-manifest.py) are injected only into the packed copy. The
@@ -59,15 +68,16 @@ release: verify
 # the release path never leaves the working tree dirty (json.dumps would
 # otherwise reformat the file).
 release-linux: verify plugin-linux
-	-@rm build/com.moeilijk.lhm-linux.streamDeckPlugin
+	-@rm -f build/com.moeilijk.lhm-linux*.streamDeckPlugin
 	@mkdir -p build
 	@cp $(SDPLUGINDIR)/manifest.json build/.manifest.orig
 	python3 scripts/make-linux-manifest.py $(SDPLUGINDIR)/manifest.json
 	streamdeck pack $(SDPLUGINDIR) --output build --force --ignore-validation
-	mv build/com.moeilijk.lhm.streamDeckPlugin build/com.moeilijk.lhm-linux.streamDeckPlugin
 	@cp build/.manifest.orig $(SDPLUGINDIR)/manifest.json
 	@rm -f build/.manifest.orig
-	python3 scripts/verify-linux-package.py build/com.moeilijk.lhm-linux.streamDeckPlugin
+	@VER=$$(python3 scripts/manifest-version.py); \
+	mv build/com.moeilijk.lhm.streamDeckPlugin "build/com.moeilijk.lhm-linux-$$VER.streamDeckPlugin"; \
+	python3 scripts/verify-linux-package.py "build/com.moeilijk.lhm-linux-$$VER.streamDeckPlugin"
 	$(MAKE) plugin
 
 # Version bumps are explicit. Commit/release paths must not mutate manifest.json.
