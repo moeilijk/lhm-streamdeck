@@ -1,14 +1,15 @@
-/** Map LHM type string ("Temperature") to ReadingType short form ("Temp") */
-function lhmTypeToReadingType(t) {
+/** Normalize a reading type string to its canonical short form ("Temp") */
+function normalizeReadingType(t) {
   switch ((t || "").toLowerCase()) {
-    case "temperature": return "Temp";
-    case "voltage":     return "Volt";
-    case "fan":         return "Fan";
-    case "current":     return "Current";
-    case "power":       return "Power";
-    case "clock":       return "Clock";
-    case "load": case "control": case "level": return "Usage";
-    default:            return t ? "Other" : "";
+    case "temp": case "temperature": return "Temp";
+    case "volt": case "voltage":     return "Volt";
+    case "fan":                      return "Fan";
+    case "current":                  return "Current";
+    case "power":                    return "Power";
+    case "clock":                    return "Clock";
+    case "usage": case "load": case "control": case "level": return "Usage";
+    case "none":                     return "None";
+    default:                         return t ? "Other" : "";
   }
 }
 

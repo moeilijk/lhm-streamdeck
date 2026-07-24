@@ -316,7 +316,7 @@ function addReadings(el, readings, settings) {
   // Derive current reading type for active globals display
   // r.id is serialized as string (json:"id,string"); readingId is a number — compare loosely
   var matchedR = readings.find(function(r) { return String(r.id) === String(currentSensorSettings.readingId); });
-  currentReadingType = lhmTypeToReadingType(matchedR ? matchedR.type : "");
+  currentReadingType = normalizeReadingType(matchedR ? matchedR.type : "");
   renderActiveGlobals();
 
   el.removeAttribute("disabled");

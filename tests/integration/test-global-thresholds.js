@@ -314,20 +314,21 @@ async function run() {
     } else {
       pass(`test 5a — CPU Package reading received, raw type="${tempReading.type}"`);
 
-      // Simulate PI-side lhmTypeToReadingType mapping
-      function lhmTypeToReadingType(t) {
+      // Simulate PI-side normalizeReadingType mapping (same code as pi_utils.js)
+      function normalizeReadingType(t) {
         switch ((t || '').toLowerCase()) {
-          case 'temperature': return 'Temp';
-          case 'voltage':     return 'Volt';
-          case 'fan':         return 'Fan';
-          case 'current':     return 'Current';
-          case 'power':       return 'Power';
-          case 'clock':       return 'Clock';
-          case 'load': case 'control': case 'level': return 'Usage';
-          default: return t ? 'Other' : '';
+          case 'temp': case 'temperature': return 'Temp';
+          case 'volt': case 'voltage':     return 'Volt';
+          case 'fan':                      return 'Fan';
+          case 'current':                  return 'Current';
+          case 'power':                    return 'Power';
+          case 'clock':                    return 'Clock';
+          case 'usage': case 'load': case 'control': case 'level': return 'Usage';
+          case 'none':                     return 'None';
+          default:                         return t ? 'Other' : '';
         }
       }
-      const mappedType = lhmTypeToReadingType(tempReading.type);
+      const mappedType = normalizeReadingType(tempReading.type);
 
       // Verify global threshold with readingType="Temp" matches after mapping
       const globalGs = readGlobalSettings().globalThresholds || [];
@@ -343,7 +344,7 @@ async function run() {
       // Also verify a Load reading maps differently, confirming type filter blocks it
       const loadReading = readings.find(r => r.label === 'CPU Total');
       if (loadReading) {
-        const loadMapped = lhmTypeToReadingType(loadReading.type);
+        const loadMapped = normalizeReadingType(loadReading.type);
         if (loadMapped !== tempGlobal.readingType) {
           pass(`test 5c — Load reading maps to "${loadMapped}", correctly excluded from Temp global`);
         } else {
@@ -352,7 +353,7 @@ async function run() {
       }
 
       // 5d — Voltage type mismatch: LHM sends "Voltage", global stores "Volt"
-      // lhmTypeToReadingType is defined inline above (same code as pi_utils.js)
+      // normalizeReadingType is defined inline above (same code as pi_utils.js)
       const voltageTypes = [
         { raw: 'Voltage', expected: 'Volt' },
         { raw: 'Fan',     expected: 'Fan' },
@@ -362,9 +363,9 @@ async function run() {
       ];
       let type5dOk = true;
       for (const { raw, expected } of voltageTypes) {
-        const got = lhmTypeToReadingType(raw);
+        const got = normalizeReadingType(raw);
         if (got !== expected) {
-          fail(`test 5d — lhmTypeToReadingType("${raw}") = "${got}", expected "${expected}"`);
+          fail(`test 5d — normalizeReadingType("${raw}") = "${got}", expected "${expected}"`);
           type5dOk = false;
         }
       }
