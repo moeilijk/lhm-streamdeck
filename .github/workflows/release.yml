@@ -1,0 +1,56 @@
+name: Release
+
+permissions:
+  contents: read
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      # Needed to create the draft release and upload the artifacts.
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      # The Linux package bundles lhm-companion, built from the sibling repo.
+      - uses: actions/checkout@v5
+        with:
+          repository: moeilijk/lhm-companion
+          path: lhm-companion
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Install Elgato CLI (pack and manifest validation)
+        run: npm install -g @elgato/cli
+
+      - name: Check tag matches manifest version
+        run: |
+          VER=$(python3 scripts/manifest-version.py)
+          if [ "$GITHUB_REF_NAME" != "v$VER" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match manifest version $VER" >&2
+            exit 1
+          fi
+
+      # Single make invocation so the shared verify prerequisite runs once.
+      - name: Build release packages
+        run: DECKBRIDGE_OPTIONAL=1 COMPANION_DIR="$GITHUB_WORKSPACE/lhm-companion" make release release-linux
+
+      # SignPath code signing slots in here once the Foundation application is
+      # approved: upload the unsigned Windows binaries, wait for the signing
+      # approval, repack with the signed lhm.exe / lhm-bridge.exe.
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER=$(python3 scripts/manifest-version.py)
+          gh release create "$GITHUB_REF_NAME" \
+            "build/com.moeilijk.lhm-$VER.streamDeckPlugin" \
+            "build/com.moeilijk.lhm-linux-$VER.streamDeckPlugin" \
+            --draft --generate-notes --title "$GITHUB_REF_NAME"
