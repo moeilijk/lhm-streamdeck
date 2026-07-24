@@ -11,7 +11,7 @@ const {
 } = require('./helpers');
 
 const SETTINGS_ACTION = 'com.moeilijk.lhm.settings';
-const KEY_SETTINGS = 50;
+const KEY_SETTINGS = 27;
 
 async function run() {
   console.log('── settings tile tests ──');

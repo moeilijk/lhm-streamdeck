@@ -19,9 +19,9 @@ const POLL_MS          = 1000;
 const DWELL_MS         = 1000;
 const COOLDOWN_MS      = 5000;
 
-const KEY_SETTINGS  = 40;
-const KEY_COMPOSITE = 41;
-const KEY_READING   = 42;  // reference reading tile (not suppressed)
+const KEY_SETTINGS  = 17;
+const KEY_COMPOSITE = 18;
+const KEY_READING   = 19;  // reference reading tile (not suppressed)
 
 function waitForEval(extra = 0) { return sleep(POLL_MS * 3 + extra); }
 

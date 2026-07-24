@@ -19,9 +19,9 @@ const POLL_MS         = 1000;
 const DWELL_MS        = 1000;
 const COOLDOWN_MS     = 5000;
 
-const KEY_SETTINGS = 30;
-const KEY_DERIVED  = 31;
-const KEY_READING  = 32;  // reference tile to confirm global still fires
+const KEY_SETTINGS = 24;
+const KEY_DERIVED  = 25;
+const KEY_READING  = 26;  // reference tile to confirm global still fires
 
 function waitForEval(extra = 0) { return sleep(POLL_MS * 3 + extra); }
 

@@ -115,9 +115,14 @@ function httpPost(piPort, path, body) {
   });
 }
 
-async function createSlot(piPort, keyIndex, actionId) {
-  // POST /api/slots returns full state object; find the new slot by keyIndex
+async function createSlot(piPort, keyIndex, actionId, deviceId) {
+  // POST /api/slots returns full state object; find the new slot by keyIndex.
+  // Pass deviceId explicitly: the tests use key indices that assume the XL
+  // (32-key) emu device, while DeckBridge's active device may be e.g. the
+  // 8-key Plus left over from dial work.
+  deviceId = deviceId || 'deckbridge-xl-0';
   const state = await httpPost(piPort, '/api/slots', {
+    deviceId,
     keyIndex,
     pluginId: 'com.moeilijk.lhm',
     actionId,
@@ -125,7 +130,7 @@ async function createSlot(piPort, keyIndex, actionId) {
   if (!state || !Array.isArray(state.slots)) {
     throw new Error('createSlot: unexpected response: ' + JSON.stringify(state).slice(0, 200));
   }
-  const slot = state.slots.find(s => s.keyIndex === keyIndex && s.pluginId === 'com.moeilijk.lhm' && s.actionId === actionId);
+  const slot = state.slots.find(s => (s.deviceId || deviceId) === deviceId && s.keyIndex === keyIndex && s.pluginId === 'com.moeilijk.lhm' && s.actionId === actionId);
   if (!slot || !slot.context) {
     throw new Error(`createSlot: slot for keyIndex=${keyIndex} not found in state`);
   }
@@ -144,6 +149,21 @@ function deleteSlot(piPort, keyIndex, deviceId) {
 
 // ── Mock sensor server ───────────────────────────────────────────────────────
 const MOCK_PORT = 9999;
+
+// On Linux the plugin routes localhost source profiles to /sys/class/hwmon
+// (see internal/app/lhmstreamdeckplugin/source_linux.go), so a 127.0.0.1
+// profile would shadow the HTTP mock server. Use a non-internal interface IP
+// so the plugin takes the HTTP path to the mock, like deploy-deckbridge.sh
+// does for lhm-companion.
+const MOCK_HOST = process.env.MOCK_SENSOR_HOST || (() => {
+  const ifaces = require('os').networkInterfaces();
+  for (const addrs of Object.values(ifaces)) {
+    for (const a of addrs || []) {
+      if (a.family === 'IPv4' && !a.internal) return a.address;
+    }
+  }
+  return '127.0.0.1';
+})();
 
 function mockSet(path, value) {
   return new Promise((resolve, reject) => {
@@ -266,7 +286,7 @@ async function ensureMockSourceProfile(wsPort, settingsContext) {
 
   // Check if mock profile already exists
   const existingProfiles = payload.sourceProfiles || [];
-  const existing = existingProfiles.find(p => p.host === '127.0.0.1' && p.port === MOCK_PORT);
+  const existing = existingProfiles.find(p => p.host === MOCK_HOST && p.port === MOCK_PORT);
   if (existing) {
     // Make it default
     sendToPlugin(ws, settingsContext, SETTINGS_ACTION, { setDefaultSourceProfile: existing.id });
@@ -290,7 +310,7 @@ async function ensureMockSourceProfile(wsPort, settingsContext) {
 
   // Update host/port
   sendToPlugin(ws, settingsContext, SETTINGS_ACTION, {
-    setSourceProfile: { id: newProfile.id, name: 'Mock Sensor', host: '127.0.0.1', port: MOCK_PORT }
+    setSourceProfile: { id: newProfile.id, name: 'Mock Sensor', host: MOCK_HOST, port: MOCK_PORT }
   });
   await sleep(300);
 
@@ -309,5 +329,5 @@ module.exports = {
   readProfile, getSlotSettings, getTileSettings, getCompositeTileSettings, getDerivedTileSettings,
   readGlobalSettings,
   ensureMockSourceProfile,
-  MOCK_PORT,
+  MOCK_PORT, MOCK_HOST,
 };

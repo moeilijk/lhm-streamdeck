@@ -12,9 +12,9 @@ const {
 
 const SETTINGS_ACTION = 'com.moeilijk.lhm.settings';
 const READING_ACTION  = 'com.moeilijk.lhm.reading';
-const KEY_SETTINGS = 59;  // settings tile for ensureMockSourceProfile only
-const KEY_TILE_A   = 60;  // tile we save the favorite from
-const KEY_TILE_B   = 61;  // tile we apply the favorite to
+const KEY_SETTINGS = 28;  // settings tile for ensureMockSourceProfile only
+const KEY_TILE_A   = 29;  // tile we save the favorite from
+const KEY_TILE_B   = 30;  // tile we apply the favorite to
 
 // Wait for a sendToPropertyInspector message containing pl.catalog
 // (favorites may be null when empty — Go marshals nil slice as null)

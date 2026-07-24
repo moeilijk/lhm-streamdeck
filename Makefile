@@ -44,24 +44,28 @@ verify:
 	$(GOTARGETENV) $(GOCMD) build ./...
 	$(GOCMD) test $$($(GOCMD) list ./... 2>/dev/null | grep -v 'cmd/lhm_streamdeck_plugin\|cmd/lhm_debugger\|app/lhmstreamdeckplugin')
 	bash scripts/verify-settings-pi.sh
+	python3 scripts/test-linux-manifest.py
 	streamdeck validate $(SDPLUGINDIR)
 
 release: verify
 	-@rm build/com.moeilijk.lhm.streamDeckPlugin
 	streamdeck pack com.moeilijk.lhm.sdPlugin --output build --force
 
-# CodePathLinux is injected only into the packed copy. The source manifest.json
-# is backed up byte-for-byte and restored afterwards, so the release path never
-# leaves the working tree dirty (json.dumps would otherwise reformat the file).
+# The Linux manifest tweaks (CodePathLin + OS linux entry, see
+# scripts/make-linux-manifest.py) are injected only into the packed copy. The
+# source manifest.json is backed up byte-for-byte and restored afterwards, so
+# the release path never leaves the working tree dirty (json.dumps would
+# otherwise reformat the file).
 release-linux: verify plugin-linux
 	-@rm build/com.moeilijk.lhm-linux.streamDeckPlugin
 	@mkdir -p build
 	@cp $(SDPLUGINDIR)/manifest.json build/.manifest.orig
-	python3 -c "import json; f='$(SDPLUGINDIR)/manifest.json'; m=json.load(open(f)); m['CodePathLinux']='lhm'; open(f,'w').write(json.dumps(m,indent=2))"
+	python3 scripts/make-linux-manifest.py $(SDPLUGINDIR)/manifest.json
 	streamdeck pack $(SDPLUGINDIR) --output build --force --ignore-validation
 	mv build/com.moeilijk.lhm.streamDeckPlugin build/com.moeilijk.lhm-linux.streamDeckPlugin
 	@cp build/.manifest.orig $(SDPLUGINDIR)/manifest.json
 	@rm -f build/.manifest.orig
+	python3 scripts/verify-linux-package.py build/com.moeilijk.lhm-linux.streamDeckPlugin
 	$(MAKE) plugin
 
 # Version bumps are explicit. Commit/release paths must not mutate manifest.json.

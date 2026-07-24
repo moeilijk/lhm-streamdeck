@@ -11,7 +11,7 @@ const {
 } = require('./helpers');
 
 const SETTINGS_ACTION = 'com.moeilijk.lhm.settings';
-const KEY_SETTINGS = 70;
+const KEY_SETTINGS = 31;
 
 // Wait for a sendToPropertyInspector message containing sourceProfiles
 function waitForStatus(ws, timeoutMs = 8000) {
