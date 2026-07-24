@@ -1,0 +1,40 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly govulncheck against a fresh vulnerability database.
+    - cron: "0 6 * * 1"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Install Elgato CLI (manifest validation)
+        run: npm install -g @elgato/cli
+
+      - name: make verify
+        # Live e2e tests self-skip in CI (no DeckBridge emulator).
+        run: DECKBRIDGE_OPTIONAL=1 make verify
+
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: govulncheck (windows target)
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          GOOS=windows GOARCH=amd64 "$(go env GOPATH)/bin/govulncheck" ./...
