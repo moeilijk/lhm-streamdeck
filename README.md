@@ -231,4 +231,8 @@ Press the key while an alert is active to step through snooze presets: **5m**, *
 
 ## Credits
 
-Based on the excellent [hwinfo-streamdeck](https://github.com/shayne/hwinfo-streamdeck) project by Shayne. Portions of this implementation and README were drafted with AI assistance and reviewed before release.
+Based on the excellent [hwinfo-streamdeck](https://github.com/moeilijk/hwinfo-streamdeck) project by Shayne Sweeney. Portions of this implementation and README were drafted with AI assistance and reviewed before release.
+
+## License
+
+[GPL-3.0](LICENSE). As a derivative of the original hwinfo-streamdeck plugin, this project carries the same license, applied with the permission of the original author.
