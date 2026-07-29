@@ -233,12 +233,6 @@ Press the key while an alert is active to step through snooze presets: **5m**, *
 
 Based on the excellent [hwinfo-streamdeck](https://github.com/moeilijk/hwinfo-streamdeck) plugin, originally created by Shayne Sweeney and maintained by me since 2026. Portions of this implementation and README were drafted with AI assistance and reviewed before release.
 
-## Code signing
-
-Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
-
-Windows binaries in [releases](https://github.com/moeilijk/lhm-streamdeck/releases) will be signed through this program so that Windows and antivirus software can verify their origin and integrity.
-
 ## License
 
 [GPL-3.0](LICENSE). As a derivative of the hwinfo-streamdeck plugin, this project carries the same license, applied with the permission of Shayne Sweeney, the original author.
