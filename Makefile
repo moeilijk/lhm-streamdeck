@@ -53,6 +53,7 @@ verify:
 	$(GOCMD) test $$($(GOCMD) list ./... 2>/dev/null | grep -v 'cmd/lhm_streamdeck_plugin\|cmd/lhm_debugger')
 	bash scripts/verify-settings-pi.sh
 	python3 scripts/test-linux-manifest.py
+	python3 scripts/test-manifest-action-names.py
 	streamdeck validate $(SDPLUGINDIR)
 
 # Both artifacts carry the manifest version in their filename (issue #78).

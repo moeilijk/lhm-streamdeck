@@ -61,9 +61,9 @@ I wanted a local, open replacement for Stream Deck hardware monitoring without l
 
 5. The plugin includes four actions:
    - **Libre Hardware Monitor** for a single reading tile
-   - **LHM Composite Dashboard** for 2–4 readings on one key
-   - **LHM Derived Metric** for formulas across 2–8 readings
-   - **LHM Settings** for source profiles, polling, and default tile appearance
+   - **Composite Dashboard** for 2–4 readings on one key
+   - **Derived Metric** for formulas across 2–8 readings
+   - **Settings** for source profiles, polling, and default tile appearance
 
 6. Drag the action you want from the list to a tile in the canvas area
 
@@ -86,7 +86,7 @@ A separate `com.moeilijk.lhm-linux.streamDeckPlugin` is published alongside the 
 
 The plugin can monitor more than one Libre Hardware Monitor endpoint at the same time.
 
-- Use the **LHM Settings** action to create a source profile for each machine you want to monitor.
+- Use the **Settings** action to create a source profile for each machine you want to monitor.
 - Give each profile a name plus host/port so you can switch between local and remote systems cleanly.
 - Set a **default source** for new tiles, then override the **Profile** per reading, composite, or derived tile as needed.
 
@@ -98,7 +98,7 @@ For Linux machines, use [lhm-companion](https://github.com/moeilijk/lhm-companio
 
 ### Composite Dashboard tile
 
-The **LHM Composite Dashboard** action displays 2–4 sensor readings on a single Stream Deck key, each with its own graph. Drag it to a tile from the action list.
+The **Composite Dashboard** action displays 2–4 sensor readings on a single Stream Deck key, each with its own graph. Drag it to a tile from the action list.
 
 In its Property Inspector:
 
@@ -126,7 +126,7 @@ Graphs are composited with lighten blending so overlapping areas remain readable
 
 ### Derived Metric tile
 
-The **LHM Derived Metric** action combines 2–8 sensor readings into one computed value on a single key.
+The **Derived Metric** action combines 2–8 sensor readings into one computed value on a single key.
 
 In its Property Inspector:
 
@@ -153,7 +153,7 @@ In its Property Inspector:
 
 ### Plugin Settings tile
 
-The **LHM Settings** action (found under "Libre Hardware Monitor" in the action list) provides a dedicated tile for plugin-wide configuration. Drag it to any free tile on the canvas.
+The **Settings** action (found under "Libre Hardware Monitor" in the action list) provides a dedicated tile for plugin-wide configuration. Drag it to any free tile on the canvas.
 
 In its Property Inspector you can set:
 
@@ -170,7 +170,7 @@ Changes to a profile's Host and Port take effect immediately; tiles that target 
 
 ### Stream Deck+ Dial Carousel
 
-The **LHM Dial Carousel** action turns a single dial into a scrollable list of sensor readings. Rotate the dial to cycle through the readings, press the dial to toggle an overview, and tap the touch strip to acknowledge or snooze an active alert (the same as pressing a key). It is built on the Stream Deck `Encoder` controller and was tested on the Stream Deck +; any Stream Deck device that exposes a dial with a touch strip can use it.
+The **Dial Carousel** action turns a single dial into a scrollable list of sensor readings. Rotate the dial to cycle through the readings, press the dial to toggle an overview, and tap the touch strip to acknowledge or snooze an active alert (the same as pressing a key). It is built on the Stream Deck `Encoder` controller and was tested on the Stream Deck +; any Stream Deck device that exposes a dial with a touch strip can use it.
 
 In its Property Inspector:
 

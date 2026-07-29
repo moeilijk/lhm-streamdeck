@@ -23,7 +23,7 @@
 		},
 		{
 			"Icon": "actionIcon_composite",
-			"Name": "LHM Composite Dashboard",
+			"Name": "Composite Dashboard",
 			"States": [
 				{
 					"Image": "defaultImage",
@@ -37,7 +37,7 @@
 		},
 		{
 			"Icon": "actionIcon_derived",
-			"Name": "LHM Derived Metric",
+			"Name": "Derived Metric",
 			"States": [
 				{
 					"Image": "defaultImage",
@@ -51,7 +51,7 @@
 		},
 		{
 			"Icon": "actionIcon",
-			"Name": "LHM Dial Carousel",
+			"Name": "Dial Carousel",
 			"Controllers": [
 				"Encoder"
 			],
@@ -74,7 +74,7 @@
 		},
 		{
 			"Icon": "actionIcon_gear_white",
-			"Name": "LHM Settings",
+			"Name": "Settings",
 			"States": [
 				{
 					"Image": "settingsImage",

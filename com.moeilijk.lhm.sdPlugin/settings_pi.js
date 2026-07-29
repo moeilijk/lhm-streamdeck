@@ -1,4 +1,4 @@
-// Settings Property Inspector for LHM Settings tile
+// Settings Property Inspector for the Settings tile
 var websocket = null,
   uuid = null,
   action = "com.moeilijk.lhm.settings",
