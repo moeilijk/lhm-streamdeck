@@ -74,3 +74,4 @@ com.moeilijk.lhm.sdPlugin/lhm.log
 
 # Mock sensor server binary (built to repo root by go build)
 /mock-sensor-server
+.claude/settings.local.json
