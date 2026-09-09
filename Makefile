@@ -54,6 +54,7 @@ verify:
 	bash scripts/verify-settings-pi.sh
 	python3 scripts/test-linux-manifest.py
 	python3 scripts/test-manifest-action-names.py
+	bash scripts/test-av-check-files.sh
 	streamdeck validate $(SDPLUGINDIR)
 
 # Both artifacts carry the manifest version in their filename (issue #78).
@@ -68,6 +69,7 @@ release: verify
 	@VER=$$(python3 scripts/manifest-version.py); \
 	mv build/com.moeilijk.lhm.streamDeckPlugin "build/com.moeilijk.lhm-$$VER.streamDeckPlugin"; \
 	echo "artifact: build/com.moeilijk.lhm-$$VER.streamDeckPlugin"
+	$(MAKE) av-check AV_CHECK_PKG="build/com.moeilijk.lhm-$$(python3 scripts/manifest-version.py).streamDeckPlugin"
 
 # The Linux manifest tweaks (CodePathLin + OS linux entry, see
 # scripts/make-linux-manifest.py) are injected only into the packed copy. The
@@ -85,7 +87,21 @@ release-linux: verify plugin-linux
 	@VER=$$(python3 scripts/manifest-version.py); \
 	mv build/com.moeilijk.lhm.streamDeckPlugin "build/com.moeilijk.lhm-linux-$$VER.streamDeckPlugin"; \
 	python3 scripts/verify-linux-package.py "build/com.moeilijk.lhm-linux-$$VER.streamDeckPlugin"
+	$(MAKE) av-check AV_CHECK_PKG="build/com.moeilijk.lhm-linux-$$(python3 scripts/manifest-version.py).streamDeckPlugin"
 	$(MAKE) plugin
+
+# Antivirus check of a packed artifact (issue #93): the Microsoft Defender
+# engine with current definitions runs offline under wine64 and is the hard
+# gate; the Defender test VM joins when its baseline exists; VirusTotal,
+# MetaDefender and OpenTIP run when their API keys are set (shared file
+# ~/.config/av-check/av.env). Both release targets run it on the package they
+# just packed.
+# AV_CHECK_PKG: package to scan (default: newest build/com.moeilijk.lhm-*.streamDeckPlugin).
+# AV_CHECK_FLAGS: --upload (submit unknown files), --reanalyze (VirusTotal rescan), --offline, --update.
+AV_CHECK_FLAGS?=
+AV_CHECK_PKG?=
+av-check:
+	bash scripts/av-check.sh $(AV_CHECK_FLAGS) $(AV_CHECK_PKG)
 
 # Version bumps are explicit. Commit/release paths must not mutate manifest.json.
 bump-version:
