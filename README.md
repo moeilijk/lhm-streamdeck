@@ -236,3 +236,7 @@ Based on the excellent [hwinfo-streamdeck](https://github.com/moeilijk/hwinfo-st
 ## License
 
 [GPL-3.0](LICENSE). As a derivative of the hwinfo-streamdeck plugin, this project carries the same license, applied with the permission of Shayne Sweeney, the original author.
+
+### Optional soft graph styles
+
+Reading actions offer **Classic** (the unchanged default), **Soft** (configured line and fill colors), and **Soft spectrum** (a fixed green/yellow/red gradient clipped by the curve). Soft styles apply a five-sample display filter and monotone interpolation, with three pixels per sample; a 72-pixel tile therefore shows approximately 24 samples. This smooths the rendered curve without modifying numeric readings or alert evaluation. Spectrum colors indicate position within the configured graph range, not hardware safety thresholds.
