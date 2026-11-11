@@ -236,3 +236,11 @@ Based on the excellent [hwinfo-streamdeck](https://github.com/moeilijk/hwinfo-st
 ## License
 
 [GPL-3.0](LICENSE). As a derivative of the hwinfo-streamdeck plugin, this project carries the same license, applied with the permission of Shayne Sweeney, the original author.
+
+### Reset a sensor's extrema from a key
+
+Reading actions can optionally reset their selected sensor's MIN/MAX when pressed. This is disabled by default and requires an LHM HTTP server supporting `POST /Sensor?action=ResetMinMax&id=...`. An active alert retains priority: pressing its key snoozes or clears the alert as before.
+
+After a successful reset, the tile clears its graph history on the next fresh sample. Other sensors are unaffected. Unsupported servers or ambiguous sensor identifiers leave history intact and record an error in the plugin log.
+
+Compatibility: this command is currently available only in a modified LHM server, not upstream LHM. The integration remains opt-in pending an upstream server API.
