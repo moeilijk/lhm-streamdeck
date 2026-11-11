@@ -40,8 +40,9 @@ type sourceRuntime struct {
 
 // Plugin handles information between Libre Hardware Monitor and Stream Deck
 type Plugin struct {
-	mu       sync.RWMutex // protects maps and cached state below
-	sourceMu sync.RWMutex // protects sources map
+	clockContexts map[string]*clockState
+	mu            sync.RWMutex // protects maps and cached state below
+	sourceMu      sync.RWMutex // protects sources map
 
 	sources map[string]*sourceRuntime
 	sd      *streamdeck.StreamDeck
@@ -453,6 +454,9 @@ func (p *Plugin) RunForever() error {
 		}
 	}()
 
+	clockDone := make(chan struct{})
+	defer close(clockDone)
+	go p.runClocks(clockDone)
 	p.sd.SetDelegate(p)
 	p.am.Run(p.updateTiles, p.updateAuxTiles)
 

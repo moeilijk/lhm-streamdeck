@@ -236,3 +236,7 @@ Based on the excellent [hwinfo-streamdeck](https://github.com/moeilijk/hwinfo-st
 ## License
 
 [GPL-3.0](LICENSE). As a derivative of the hwinfo-streamdeck plugin, this project carries the same license, applied with the permission of Shayne Sweeney, the original author.
+
+### Clock action
+
+The Clock action displays local time with an uppercase weekday and abbreviated date, independently of LHM connectivity. Its property inspector offers English or Russian labels, 24-hour or 12-hour time (with AM/PM), and an eight-second colon fade or a static colon. Defaults are English, 24-hour time, and the slow fade. No existing action or profile is replaced.
