@@ -243,4 +243,4 @@ Reading actions can optionally reset their selected sensor's MIN/MAX when presse
 
 After a successful reset, the tile clears its graph history on the next fresh sample. Other sensors are unaffected. Unsupported servers or ambiguous sensor identifiers leave history intact and record an error in the plugin log.
 
-Compatibility: this command is currently available only in a modified LHM server, not upstream LHM. The integration remains opt-in pending an upstream server API.
+Compatibility: upstream LibreHardwareMonitor implements `ResetMinMax` in its `/Sensor` HTTP handler. This integration uses POST and checks the returned `result` before clearing local history.
