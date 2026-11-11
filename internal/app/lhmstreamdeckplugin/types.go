@@ -54,6 +54,8 @@ type Threshold struct {
 }
 
 type actionSettings struct {
+	CondensedFont            bool    `json:"condensedFont"`
+	TextShadow               bool    `json:"textShadow"`
 	SourceProfileID          string  `json:"sourceProfileId,omitempty"`
 	SensorUID                string  `json:"sensorUid"`
 	ReadingID                int32   `json:"readingId,string"`
