@@ -624,6 +624,12 @@ func (p *Plugin) handleGraphVisuals(event *streamdeck.EvSendToPlugin, sdpi *evSd
 		if sdpi.Value == "manual" {
 			g.SetRange(settings.Min, settings.Max)
 		}
+	case "graphStyle":
+		if sdpi.Value != "classic" && sdpi.Value != "soft" && sdpi.Value != "soft-load" {
+			return fmt.Errorf("unknown graph style: %s", sdpi.Value)
+		}
+		settings.GraphStyle = sdpi.Value
+		g.SetStyle(sdpi.Value)
 	case "graphHeightPct":
 		if v, err2 := strconv.Atoi(sdpi.Value); err2 == nil && v >= 10 && v <= 100 {
 			settings.GraphHeightPct = v

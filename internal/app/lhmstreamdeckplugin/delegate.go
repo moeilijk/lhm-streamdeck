@@ -250,6 +250,7 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 	if settings.GraphLineThickness > 0 {
 		g.SetLineThickness(settings.GraphLineThickness)
 	}
+	g.SetStyle(settings.GraphStyle)
 	g.SetTextStroke(settings.TextStroke)
 	if settings.TextStrokeColor != "" {
 		g.SetTextStrokeColor(hexToRGBA(settings.TextStrokeColor))
@@ -1066,7 +1067,7 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			if err != nil {
 				log.Println("handleSetTitleFontSize", err)
 			}
-		case "resetMinMaxOnPress", "scaleMode", "graphHeightPct", "graphLineThickness", "textStroke", "textStrokeColor", "updateIntervalOverrideMs", "smoothingAlpha":
+		case "resetMinMaxOnPress", "scaleMode", "graphStyle", "graphHeightPct", "graphLineThickness", "textStroke", "textStrokeColor", "updateIntervalOverrideMs", "smoothingAlpha":
 			err := p.handleGraphVisuals(event, &sdpi)
 			if err != nil {
 				log.Println("handleGraphVisuals", err)
