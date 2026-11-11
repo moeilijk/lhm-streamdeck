@@ -47,14 +47,17 @@ type Graph struct {
 	labels          map[int]*Label
 	drawn           bool
 	redraw          bool
-	heightPct       int         // 10–100; 0 means 100
-	lineThickness   int         // 1–4; 0 means 1
+	heightPct       int // 10–100; 0 means 100
+	lineThickness   int // 1–4; 0 means 1
+	condensedFont   bool
+	textShadow      bool
 	textStroke      bool        // draw outline around labels
 	textStrokeColor *color.RGBA // nil = use bgColor
 }
 
 // FontFaceManager builds and caches fonts based on size
 type FontFaceManager struct {
+	fontData  []byte
 	mux       sync.Mutex
 	fontCache map[float64]font.Face
 }
@@ -65,9 +68,13 @@ func NewFontFaceManager() *FontFaceManager {
 }
 
 func (f *FontFaceManager) newFace(size float64) (font.Face, error) {
-	b, err := os.ReadFile("DejaVuSans-Bold.ttf")
-	if err != nil {
-		return nil, fmt.Errorf("read font: %w", err)
+	b := f.fontData
+	if b == nil {
+		var err error
+		b, err = os.ReadFile("DejaVuSans-Bold.ttf")
+		if err != nil {
+			return nil, fmt.Errorf("read font: %w", err)
+		}
 	}
 	tt, err := truetype.Parse(b)
 	if err != nil {
@@ -441,7 +448,11 @@ func printableLabelText(text string) string {
 func (g *Graph) drawLabel(l *Label) {
 	sh := shared()
 	lines := newlineRegex.Split(printableLabelText(l.text), -1)
-	face, err := sh.fontFaceManager.GetFaceOfSize(l.fontSize)
+	manager := sh.fontFaceManager
+	if g.condensedFont {
+		manager = condensedFontManager
+	}
+	face, err := manager.GetFaceOfSize(l.fontSize)
 	if err != nil {
 		log.Printf("drawLabel font: %v", err)
 		return
@@ -467,6 +478,13 @@ func (g *Graph) drawLabel(l *Label) {
 			Src:  image.NewUniform(l.clr),
 			Face: face,
 			Dot:  point,
+		}
+		if g.textShadow {
+			clr := g.bgColor
+			if g.textStrokeColor != nil {
+				clr = g.textStrokeColor
+			}
+			DrawTextShadow(g.img, face, line, point, clr)
 		}
 		if g.textStroke {
 			strokeClr := g.bgColor

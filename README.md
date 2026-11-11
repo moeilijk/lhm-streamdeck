@@ -236,3 +236,7 @@ Based on the excellent [hwinfo-streamdeck](https://github.com/moeilijk/hwinfo-st
 ## License
 
 [GPL-3.0](LICENSE). As a derivative of the hwinfo-streamdeck plugin, this project carries the same license, applied with the permission of Shayne Sweeney, the original author.
+
+### Optional reading typography
+
+Reading actions can select Roboto Condensed Bold and a centered soft oval text backdrop independently. Both are disabled by default; existing font sizes and text outlines retain their behavior. The backdrop uses the outline color, falling back to the graph background. Roboto Condensed is embedded with its Apache License 2.0 in `pkg/graph/fonts/LICENSE.txt`.
