@@ -616,6 +616,14 @@ func (p *Plugin) handleGraphVisuals(event *streamdeck.EvSendToPlugin, sdpi *evSd
 	switch sdpi.Key {
 	case "resetMinMaxOnPress":
 		settings.ResetMinMaxOnPress = sdpi.Checked
+	case "scaleMode":
+		if sdpi.Value != "manual" && sdpi.Value != "auto" && sdpi.Value != "lhm" {
+			return fmt.Errorf("unknown scale mode: %s", sdpi.Value)
+		}
+		settings.ScaleMode = sdpi.Value
+		if sdpi.Value == "manual" {
+			g.SetRange(settings.Min, settings.Max)
+		}
 	case "graphHeightPct":
 		if v, err2 := strconv.Atoi(sdpi.Value); err2 == nil && v >= 10 && v <= 100 {
 			settings.GraphHeightPct = v

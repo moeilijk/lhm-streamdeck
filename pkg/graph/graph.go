@@ -38,7 +38,8 @@ type Graph struct {
 	min    int
 	max    int
 
-	yvals []uint8
+	yvals  []uint8
+	values []float64
 
 	fgColor *color.RGBA
 	bgColor *color.RGBA
@@ -183,12 +184,24 @@ func (g *Graph) SetTextStrokeColor(clr *color.RGBA) {
 
 // SetMin sets the min value for the graph scale
 func (g *Graph) SetMin(min int) {
-	g.min = min
+	g.SetRange(min, g.max)
 }
 
 // SetMax sets the max value for the graph scale
 func (g *Graph) SetMax(max int) {
-	g.max = max
+	g.SetRange(g.min, max)
+}
+
+// SetRange rescales stored samples so a changing scale does not distort history.
+func (g *Graph) SetRange(min, max int) {
+	if g.min == min && g.max == max {
+		return
+	}
+	g.min, g.max = min, max
+	for i, value := range g.values {
+		g.yvals[i] = uint8(vAsY(g.effectiveHeight()-1, value, min, max))
+	}
+	g.redraw = true
 }
 
 // SetLabel given a key, set the initial text, position and color
@@ -280,8 +293,10 @@ func (g *Graph) Update(value float64) {
 	if len(g.yvals) >= g.width {
 		_, a := g.yvals[0], g.yvals[1:]
 		g.yvals = a
+		g.values = g.values[1:]
 	}
 	g.yvals = append(g.yvals, uint8(vay))
+	g.values = append(g.values, value)
 
 	if g.redraw {
 		g.lvay = -1
@@ -402,9 +417,14 @@ func (g *Graph) Clear() {
 	}
 	g.drawn = false
 	g.yvals = g.yvals[:0]
+	g.values = g.values[:0]
 }
 
 func vAsY(maxY int, v float64, minV, maxV int) int {
+	if maxY <= 0 || maxV <= minV || math.IsNaN(v) {
+		return 0
+	}
+	v = math.Max(float64(minV), math.Min(float64(maxV), v))
 	r := maxV - minV
 	v1 := v - float64(minV)
 	yf := v1 / float64(r) * float64(maxY)

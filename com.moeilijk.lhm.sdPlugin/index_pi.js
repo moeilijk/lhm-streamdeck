@@ -194,6 +194,8 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       var tscEl = document.querySelector("#textStrokeColor");
       if (tscEl && settings.textStrokeColor) { tscEl.value = settings.textStrokeColor; }
       setSelectValue("updateIntervalOverrideMs", String(settings.updateIntervalOverrideMs || 0));
+      setSelectValue("scaleMode", settings.scaleMode || "manual");
+      document.querySelector("#paramsgroup").style.display = (settings.scaleMode === "lhm" || settings.scaleMode === "auto") ? "none" : "";
       var saInp = document.querySelector("#smoothingAlpha input[type=range]");
       if (saInp) { saInp.value = settings.smoothingAlpha > 0 ? settings.smoothingAlpha : 1; positionRangeVal(saInp); }
       if (settings.graphUnit !== undefined) {
@@ -375,6 +377,9 @@ function initPropertyInspector(initDelay) {
   bindSnoozeControls();
   wireRangeDisplays();
   prepareDOMElements(document);
+  document.querySelector("#scaleMode").addEventListener("change", function() {
+    document.querySelector("#paramsgroup").style.display = (this.value === "lhm" || this.value === "auto") ? "none" : "";
+  });
 }
 
 // Checkbox options of the reading tile whose element id equals their settings key.
