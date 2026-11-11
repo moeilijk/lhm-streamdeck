@@ -6,6 +6,23 @@
 	},
 	"Actions": [
 		{
+			"Icon": "actionIcon_clock",
+			"Name": "Clock",
+			"States": [
+				{
+					"Image": "clockImage",
+					"ShowTitle": false
+				}
+			],
+			"Controllers": [
+				"Keypad"
+			],
+			"SupportedInMultiActions": false,
+			"Tooltip": "Local time in the same style as your sensor tiles",
+			"UUID": "com.moeilijk.lhm.clock",
+			"PropertyInspectorPath": "clock_pi.html"
+		},
+		{
 			"Icon": "actionIcon",
 			"Name": "Libre Hardware Monitor",
 			"States": [
