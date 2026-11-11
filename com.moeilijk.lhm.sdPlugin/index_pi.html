@@ -206,6 +206,18 @@
         </div>
       </div>
 
+      <div class="sdpi-item show-label-row">
+        <div class="sdpi-item-label">Unavailable</div>
+        <div class="sdpi-item-value"><input type="checkbox" id="showTitleWhenUnavailable" />
+          <label for="showTitleWhenUnavailable"><span></span>Show title while waiting for data</label></div>
+      </div>
+      <div class="sdpi-item show-label-row">
+        <div class="sdpi-item-label">Idle display</div>
+        <div class="sdpi-item-value"><input type="checkbox" id="hideWhenZero" />
+          <label for="hideWhenZero"><span></span>Fade to title after zero readings</label></div>
+      </div>
+      <div class="sdpi-item"><div class="sdpi-item-label">Zero wait (s)</div>
+        <input class="sdpi-item-value" id="zeroHideDelaySeconds" type="number" min="1" max="3600" value="10" /></div>
       <div class="sdpi-item show-label-row" id="textStrokeRow">
         <div class="sdpi-item-label">Text stroke</div>
         <div class="show-label-cell">
