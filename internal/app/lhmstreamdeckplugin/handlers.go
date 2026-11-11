@@ -630,6 +630,12 @@ func (p *Plugin) handleGraphVisuals(event *streamdeck.EvSendToPlugin, sdpi *evSd
 		}
 		settings.GraphStyle = sdpi.Value
 		g.SetStyle(sdpi.Value)
+	case "condensedFont":
+		settings.CondensedFont = sdpi.Checked
+		g.SetCondensedFont(sdpi.Checked)
+	case "textShadow":
+		settings.TextShadow = sdpi.Checked
+		g.SetTextShadow(sdpi.Checked)
 	case "graphHeightPct":
 		if v, err2 := strconv.Atoi(sdpi.Value); err2 == nil && v >= 10 && v <= 100 {
 			settings.GraphHeightPct = v
