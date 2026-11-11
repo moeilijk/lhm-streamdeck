@@ -38,6 +38,7 @@ type Graph struct {
 	min    int
 	max    int
 
+	style string
 	yvals []uint8
 
 	fgColor *color.RGBA
@@ -171,6 +172,15 @@ func (g *Graph) SetLineThickness(t int) {
 	g.redraw = true
 }
 
+// SetStyle selects an optional soft renderer. Unknown styles use the classic renderer.
+func (g *Graph) SetStyle(style string) {
+	if style != "soft" && style != "soft-load" {
+		style = "classic"
+	}
+	g.style = style
+	g.redraw = true
+}
+
 // SetTextStroke enables or disables an outline around labels.
 func (g *Graph) SetTextStroke(b bool) {
 	g.textStroke = b
@@ -282,6 +292,12 @@ func (g *Graph) Update(value float64) {
 		g.yvals = a
 	}
 	g.yvals = append(g.yvals, uint8(vay))
+	if g.style == "soft" || g.style == "soft-load" {
+		g.drawSoftGraph()
+		g.drawn = true
+		g.redraw = false
+		return
+	}
 
 	if g.redraw {
 		g.lvay = -1

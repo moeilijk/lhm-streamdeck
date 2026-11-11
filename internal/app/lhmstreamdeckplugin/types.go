@@ -54,6 +54,7 @@ type Threshold struct {
 }
 
 type actionSettings struct {
+	GraphStyle               string  `json:"graphStyle"`
 	SourceProfileID          string  `json:"sourceProfileId,omitempty"`
 	SensorUID                string  `json:"sensorUid"`
 	ReadingID                int32   `json:"readingId,string"`
