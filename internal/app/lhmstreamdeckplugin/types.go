@@ -46,14 +46,15 @@ type Threshold struct {
 	CooldownMs      int     `json:"cooldownMs,omitempty"`
 	Sticky          bool    `json:"sticky,omitempty"`
 	BringToFront    bool    `json:"bringToFront,omitempty"` // dial: make this page the active one when the alarm fires / snooze times out
-	BackgroundColor string  `json:"backgroundColor"`       // Background color when triggered
-	ForegroundColor string  `json:"foregroundColor"`       // Graph foreground color
-	HighlightColor  string  `json:"highlightColor"`        // Graph highlight color
-	ValueTextColor  string  `json:"valueTextColor"`        // Value text color
-	ReadingType     string  `json:"readingType,omitempty"` // globals only: "Temp","Volt","Fan","Current","Power","Clock","Usage","Other" or "" = all
+	BackgroundColor string  `json:"backgroundColor"`        // Background color when triggered
+	ForegroundColor string  `json:"foregroundColor"`        // Graph foreground color
+	HighlightColor  string  `json:"highlightColor"`         // Graph highlight color
+	ValueTextColor  string  `json:"valueTextColor"`         // Value text color
+	ReadingType     string  `json:"readingType,omitempty"`  // globals only: "Temp","Volt","Fan","Current","Power","Clock","Usage","Other" or "" = all
 }
 
 type actionSettings struct {
+	ScaleMode                string  `json:"scaleMode"` // empty/manual, auto, or lhm
 	SourceProfileID          string  `json:"sourceProfileId,omitempty"`
 	SensorUID                string  `json:"sensorUid"`
 	ReadingID                int32   `json:"readingId,string"`
@@ -256,7 +257,7 @@ type dialActionSettings struct {
 	SourceProfileID string           `json:"sourceProfileId,omitempty"`
 	ActiveIndex     int              `json:"activeIndex"`
 	Pages           []actionSettings `json:"pages"`
-	DefaultView     string           `json:"defaultView,omitempty"`    // "", "fullscreen", "overview"
+	DefaultView     string           `json:"defaultView,omitempty"` // "", "fullscreen", "overview"
 	// OverviewStyle selects how the overview (non-fullscreen) view renders:
 	// "" / "carousel" = the original horizontal carousel; "stacked" = vertically
 	// scrolling full-width strips with the active reading dominant and a peek of

@@ -236,3 +236,12 @@ Based on the excellent [hwinfo-streamdeck](https://github.com/moeilijk/hwinfo-st
 ## License
 
 [GPL-3.0](LICENSE). As a derivative of the hwinfo-streamdeck plugin, this project carries the same license, applied with the permission of Shayne Sweeney, the original author.
+
+### Automatic ranges for reading keys
+
+The **Scale > Range** selector defaults to Manual. **Auto (recent history)** fits
+both bounds to the last 72 readings (about 72 seconds at one reading per second)
+with padding. **LibreHardwareMonitor Min / Max** follows the selected sensor's
+recorded extrema. Neither mode describes hardware safety limits. Manual limits
+are retained when switching modes, and recorded points are reprojected when the
+range changes. Interval overrides affect the duration covered by history.

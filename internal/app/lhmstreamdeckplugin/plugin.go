@@ -730,6 +730,21 @@ func (p *Plugin) updateTiles(data *actionData) {
 		graphValue = graphValue / divisor
 	}
 
+	if s.ScaleMode == "auto" {
+		min, max := g.AutoRange(graphValue)
+		g.SetRange(min, max)
+	} else if s.ScaleMode == "lhm" {
+		low, high := r.ValueMin(), r.ValueMax()
+		if s.GraphUnit != "" && strings.Contains(r.Unit(), "/s") {
+			low = p.normalizeForGraph(low, r.Unit(), s.GraphUnit)
+			high = p.normalizeForGraph(high, r.Unit(), s.GraphUnit)
+		}
+		min, max := sensorScale(low/divisor, high/divisor, graphValue, s.Min, s.Max)
+		g.SetRange(min, max)
+	} else {
+		g.SetRange(s.Min, s.Max)
+	}
+
 	// Determine display value and unit
 	displayValue := v
 	displayUnit := r.Unit()

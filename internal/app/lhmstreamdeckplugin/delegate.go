@@ -1061,7 +1061,7 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			if err != nil {
 				log.Println("handleSetTitleFontSize", err)
 			}
-		case "graphHeightPct", "graphLineThickness", "textStroke", "textStrokeColor", "updateIntervalOverrideMs", "smoothingAlpha":
+		case "scaleMode", "graphHeightPct", "graphLineThickness", "textStroke", "textStrokeColor", "updateIntervalOverrideMs", "smoothingAlpha":
 			err := p.handleGraphVisuals(event, &sdpi)
 			if err != nil {
 				log.Println("handleGraphVisuals", err)
