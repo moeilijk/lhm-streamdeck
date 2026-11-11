@@ -33,6 +33,7 @@ type node struct {
 
 // reading matches the exposed hardware reading.
 type reading struct {
+	path            string
 	id              int32
 	label           string
 	unit            string
@@ -341,6 +342,7 @@ func newReading(sensorID string, n *node) *reading {
 
 	return &reading{
 		id:              makeReadingID(sensorID, n.SensorID),
+		path:            n.SensorID,
 		label:           n.Text,
 		unit:            unit,
 		typ:             n.Type,

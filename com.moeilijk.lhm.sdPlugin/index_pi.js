@@ -188,6 +188,7 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       if (ghpInp) { ghpInp.value = settings.graphHeightPct || 100; positionRangeVal(ghpInp); }
       var gltInp = document.querySelector("#graphLineThickness input[type=range]");
       if (gltInp) { gltInp.value = settings.graphLineThickness || 1; positionRangeVal(gltInp); }
+      document.querySelector("#resetMinMaxOnPress").checked = settings.resetMinMaxOnPress === true;
       var tsEl = document.querySelector("#textStroke");
       if (tsEl) { tsEl.checked = settings.textStroke === true; }
       var tscEl = document.querySelector("#textStrokeColor");
@@ -384,6 +385,9 @@ function wireRangeDisplays() {
       inp.oninput = function() { positionRangeVal(this); };
     }
   });
+  document.querySelector("#resetMinMaxOnPress").onchange = function() {
+    sendValueToPlugin({ key: "resetMinMaxOnPress", value: "", checked: this.checked }, "sdpi_collection");
+  };
   var textStrokeEl = document.querySelector("#textStroke");
   if (textStrokeEl) {
     textStrokeEl.onchange = function() {

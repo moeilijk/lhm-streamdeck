@@ -614,6 +614,8 @@ func (p *Plugin) handleGraphVisuals(event *streamdeck.EvSendToPlugin, sdpi *evSd
 		return fmt.Errorf("handleGraphVisuals no graph for context: %s", event.Context)
 	}
 	switch sdpi.Key {
+	case "resetMinMaxOnPress":
+		settings.ResetMinMaxOnPress = sdpi.Checked
 	case "graphHeightPct":
 		if v, err2 := strconv.Atoi(sdpi.Value); err2 == nil && v >= 10 && v <= 100 {
 			settings.GraphHeightPct = v

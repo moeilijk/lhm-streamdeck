@@ -337,6 +337,7 @@ func (p *Plugin) OnWillDisappear(event *streamdeck.EvWillDisappear) {
 	}
 	p.mu.Lock()
 	delete(p.graphs, event.Context)
+	delete(p.scaleResetAfter, event.Context)
 	delete(p.divisorCache, event.Context)
 	p.mu.Unlock()
 	p.clearThresholdRuntimeState(event.Context)
@@ -356,6 +357,9 @@ func (p *Plugin) OnKeyDown(event *streamdeck.EvKeyDown) {
 	}
 
 	if settings.CurrentThresholdID == "" {
+		if settings.ResetMinMaxOnPress {
+			p.resetReadingScale(event.Context, settings)
+		}
 		return
 	}
 
@@ -1061,7 +1065,7 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			if err != nil {
 				log.Println("handleSetTitleFontSize", err)
 			}
-		case "graphHeightPct", "graphLineThickness", "textStroke", "textStrokeColor", "updateIntervalOverrideMs", "smoothingAlpha":
+		case "resetMinMaxOnPress", "graphHeightPct", "graphLineThickness", "textStroke", "textStrokeColor", "updateIntervalOverrideMs", "smoothingAlpha":
 			err := p.handleGraphVisuals(event, &sdpi)
 			if err != nil {
 				log.Println("handleGraphVisuals", err)

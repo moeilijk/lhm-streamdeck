@@ -54,6 +54,7 @@ type Threshold struct {
 }
 
 type actionSettings struct {
+	ResetMinMaxOnPress       bool    `json:"resetMinMaxOnPress"`
 	SourceProfileID          string  `json:"sourceProfileId,omitempty"`
 	SensorUID                string  `json:"sensorUid"`
 	ReadingID                int32   `json:"readingId,string"`
@@ -256,7 +257,7 @@ type dialActionSettings struct {
 	SourceProfileID string           `json:"sourceProfileId,omitempty"`
 	ActiveIndex     int              `json:"activeIndex"`
 	Pages           []actionSettings `json:"pages"`
-	DefaultView     string           `json:"defaultView,omitempty"`    // "", "fullscreen", "overview"
+	DefaultView     string           `json:"defaultView,omitempty"` // "", "fullscreen", "overview"
 	// OverviewStyle selects how the overview (non-fullscreen) view renders:
 	// "" / "carousel" = the original horizontal carousel; "stacked" = vertically
 	// scrolling full-width strips with the active reading dominant and a peek of

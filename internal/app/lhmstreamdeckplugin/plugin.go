@@ -40,8 +40,10 @@ type sourceRuntime struct {
 
 // Plugin handles information between Libre Hardware Monitor and Stream Deck
 type Plugin struct {
-	mu       sync.RWMutex // protects maps and cached state below
-	sourceMu sync.RWMutex // protects sources map
+	scaleResetBusy  map[string]bool
+	scaleResetAfter map[string]uint64
+	mu              sync.RWMutex // protects maps and cached state below
+	sourceMu        sync.RWMutex // protects sources map
 
 	sources map[string]*sourceRuntime
 	sd      *streamdeck.StreamDeck
@@ -705,6 +707,17 @@ func (p *Plugin) updateTiles(data *actionData) {
 		log.Printf("getReading failed: %v\n", err)
 		showUnavailable()
 		return
+	}
+	p.mu.Lock()
+	resetAt, pendingReset := p.scaleResetAfter[data.context]
+	resetHistory := pendingReset && pollTime > resetAt
+	if resetHistory {
+		delete(p.scaleResetAfter, data.context)
+		delete(p.smoothedValues, data.context)
+	}
+	p.mu.Unlock()
+	if resetHistory {
+		g.Clear()
 	}
 	if s.ShowTitleInGraph != nil && *s.ShowTitleInGraph && s.Title == "" {
 		g.SetLabelText(0, r.Label())
