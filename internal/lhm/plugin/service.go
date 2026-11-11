@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -114,6 +115,10 @@ func (s *Service) Recv() error {
 	var root node
 	if err := json.NewDecoder(resp.Body).Decode(&root); err != nil {
 		return fmt.Errorf("decode LHM response: %w", err)
+	}
+	// Decode may stop before HTTP EOF when the response has trailing whitespace.
+	if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+		return fmt.Errorf("finish LHM response: %w", err)
 	}
 
 	sensors, order, readings := buildSnapshot(&root)
