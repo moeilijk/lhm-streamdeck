@@ -236,3 +236,9 @@ Based on the excellent [hwinfo-streamdeck](https://github.com/moeilijk/hwinfo-st
 ## License
 
 [GPL-3.0](LICENSE). As a derivative of the hwinfo-streamdeck plugin, this project carries the same license, applied with the permission of Shayne Sweeney, the original author.
+
+### Optional idle reading display
+
+Reading actions can show a fitted, centered title while waiting for data at startup or after a disconnect. A separate option fades the graph and value into the title after continuous zero readings (1-3600 seconds, default 10); nonzero data reverses the fade. Both options are disabled by default and work for any reading, including FPS. Active threshold alerts prevent zero hiding.
+
+Transitions last 1.5 seconds and use a cosmetic 20 Hz timer; they do not add graph samples or change sensor polling. The title uses the configured title, then the reading label, then `LHM`.

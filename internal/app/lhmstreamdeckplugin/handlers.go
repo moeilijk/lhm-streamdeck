@@ -614,6 +614,16 @@ func (p *Plugin) handleGraphVisuals(event *streamdeck.EvSendToPlugin, sdpi *evSd
 		return fmt.Errorf("handleGraphVisuals no graph for context: %s", event.Context)
 	}
 	switch sdpi.Key {
+	case "showTitleWhenUnavailable":
+		settings.ShowTitleWhenUnavailable = sdpi.Checked
+	case "hideWhenZero":
+		settings.HideWhenZero = sdpi.Checked
+	case "zeroHideDelaySeconds":
+		delay, err := strconv.Atoi(sdpi.Value)
+		if err != nil || delay < 1 || delay > 3600 {
+			return fmt.Errorf("zero wait must be 1-3600 seconds")
+		}
+		settings.ZeroHideDelaySeconds = delay
 	case "graphHeightPct":
 		if v, err2 := strconv.Atoi(sdpi.Value); err2 == nil && v >= 10 && v <= 100 {
 			settings.GraphHeightPct = v

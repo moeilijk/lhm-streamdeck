@@ -54,6 +54,9 @@ type Threshold struct {
 }
 
 type actionSettings struct {
+	ShowTitleWhenUnavailable bool    `json:"showTitleWhenUnavailable"`
+	HideWhenZero             bool    `json:"hideWhenZero"`
+	ZeroHideDelaySeconds     int     `json:"zeroHideDelaySeconds"`
 	SourceProfileID          string  `json:"sourceProfileId,omitempty"`
 	SensorUID                string  `json:"sensorUid"`
 	ReadingID                int32   `json:"readingId,string"`
