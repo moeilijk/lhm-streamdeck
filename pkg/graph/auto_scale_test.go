@@ -53,3 +53,56 @@ func TestRangeChangeReprojectsHistory(t *testing.T) {
 		t.Fatal("Clear retained automatic range history")
 	}
 }
+
+// A value outside the range is drawn at the nearest edge. Without the clamp the
+// row was stored unclamped in a uint8, so a value far above the maximum wrapped
+// around and came back as a low line after a redraw.
+func TestValuesOutsideRangeClampToEdge(t *testing.T) {
+	for _, tc := range []struct {
+		value float64
+		want  uint8
+	}{
+		{-10, 0},
+		{0, 0},
+		{50, 36},
+		{100, 71},
+		{150, 71},
+		{400, 71},
+		{math.NaN(), 0},
+	} {
+		g := NewGraph(72, 72, 0, 100, &color.RGBA{}, &color.RGBA{}, &color.RGBA{})
+		g.Update(tc.value)
+		if got := g.Series()[0]; got != tc.want {
+			t.Errorf("value %v: row %d, want %d", tc.value, got, tc.want)
+		}
+	}
+}
+
+// An empty or inverted range cannot place a value. It draws at the bottom
+// instead of dividing by zero.
+func TestDegenerateRangeDrawsAtBottom(t *testing.T) {
+	for _, r := range [][2]int{{50, 50}, {100, 0}} {
+		g := NewGraph(72, 72, r[0], r[1], &color.RGBA{}, &color.RGBA{}, &color.RGBA{})
+		g.Update(75)
+		if got := g.Series()[0]; got != 0 {
+			t.Errorf("range %d..%d: row %d, want 0", r[0], r[1], got)
+		}
+	}
+}
+
+// SetMin and SetMax (used by the composite, derived and dial tiles) reproject
+// the recorded samples the same way SetRange does.
+func TestSetMinSetMaxReprojectHistory(t *testing.T) {
+	g := NewGraph(72, 72, 0, 100, &color.RGBA{}, &color.RGBA{}, &color.RGBA{})
+	for _, v := range []float64{0, 100, 50} {
+		g.Update(v)
+	}
+	g.SetMin(50)
+	g.SetMax(150)
+	want := []uint8{0, 36, 0}
+	for i, y := range g.Series() {
+		if y != want[i] {
+			t.Fatalf("sample %d: row %d, want %d", i, y, want[i])
+		}
+	}
+}

@@ -194,8 +194,6 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       var tscEl = document.querySelector("#textStrokeColor");
       if (tscEl && settings.textStrokeColor) { tscEl.value = settings.textStrokeColor; }
       setSelectValue("updateIntervalOverrideMs", String(settings.updateIntervalOverrideMs || 0));
-      setSelectValue("scaleMode", settings.scaleMode || "manual");
-      document.querySelector("#paramsgroup").style.display = (settings.scaleMode === "lhm" || settings.scaleMode === "auto") ? "none" : "";
       var saInp = document.querySelector("#smoothingAlpha input[type=range]");
       if (saInp) { saInp.value = settings.smoothingAlpha > 0 ? settings.smoothingAlpha : 1; positionRangeVal(saInp); }
       if (settings.graphUnit !== undefined) {
@@ -377,13 +375,14 @@ function initPropertyInspector(initDelay) {
   bindSnoozeControls();
   wireRangeDisplays();
   prepareDOMElements(document);
-  document.querySelector("#scaleMode").addEventListener("change", function() {
-    document.querySelector("#paramsgroup").style.display = (this.value === "lhm" || this.value === "auto") ? "none" : "";
-  });
 }
 
 // Checkbox options of the reading tile whose element id equals their settings key.
 var displayOptionCheckboxIds = ["resetMinMaxOnPress"];
+
+// Select options of the reading tile, keyed by element id (= settings key), with
+// the value shown when the setting is absent.
+var displayOptionSelectDefaults = { scaleMode: "manual" };
 
 // applyDisplayOptionSettings shows the saved options in their controls.
 function applyDisplayOptionSettings(settings) {
@@ -392,9 +391,24 @@ function applyDisplayOptionSettings(settings) {
     var el = document.querySelector("#" + id);
     if (el) { el.checked = settings[id] === true; }
   });
+  Object.keys(displayOptionSelectDefaults).forEach(function(id) {
+    setSelectValue(id, settings[id] || displayOptionSelectDefaults[id]);
+  });
+  updateScaleModeControls();
+}
+
+// updateScaleModeControls hides the manual Min/Max inputs while the range is
+// derived automatically. The stored manual limits are kept for switching back.
+function updateScaleModeControls() {
+  var mode = document.querySelector("#scaleMode");
+  var manual = document.querySelector("#paramsgroup");
+  if (!mode || !manual) { return; }
+  manual.style.display = (mode.value === "auto" || mode.value === "lhm") ? "none" : "";
 }
 
 // bindDisplayOptionControls sends an option to the plugin when its control changes.
+// The selects are sent by the generic sdpi change handling; only their effect on
+// the other controls is wired here.
 function bindDisplayOptionControls() {
   displayOptionCheckboxIds.forEach(function(id) {
     var el = document.querySelector("#" + id);
@@ -403,6 +417,8 @@ function bindDisplayOptionControls() {
       sendValueToPlugin({ key: id, value: "", checked: this.checked }, "sdpi_collection");
     };
   });
+  var mode = document.querySelector("#scaleMode");
+  if (mode) { mode.addEventListener("change", updateScaleModeControls); }
 }
 
 function wireRangeDisplays() {

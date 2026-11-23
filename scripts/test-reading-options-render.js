@@ -100,6 +100,61 @@ CHECKBOXES.forEach(({ id, section, label }) => {
   check(!!msg && msg.event === "sendToPlugin" && msg.context === "ctx-reading", `${id}: the message targets this tile`);
 });
 
+// Select options: element id (= settings key), section, row label, the option
+// values in order and the value shown for a tile without the setting.
+const SELECTS = [{ id: "scaleMode", section: "Scale", label: "Range", values: ["manual", "auto", "lhm"], fallback: "manual" }];
+
+win.prepareDOMElements(doc);
+win.bindDisplayOptionControls();
+
+SELECTS.forEach(({ id, section, label, values, fallback }) => {
+  const sel = doc.getElementById(id);
+  check(!!sel && sel.tagName === "SELECT", `${id}: select exists in index_pi.html`);
+  if (!sel) return;
+
+  const summary = sel.closest("details") && sel.closest("details").querySelector("summary");
+  check(!!summary && summary.textContent.trim() === section, `${id}: sits in the ${section} section`);
+  const rowLabel = sel.closest(".sdpi-item").querySelector(".sdpi-item-label");
+  check(!!rowLabel && rowLabel.textContent.trim() === label, `${id}: row label is "${label}"`);
+  check(sel.classList.contains("sdpi-item-value") && sel.classList.contains("select"), `${id}: uses the sdpi select pattern`);
+  check(JSON.stringify(Array.from(sel.options).map((o) => o.value)) === JSON.stringify(values), `${id}: offers ${values.join(", ")}`);
+  check(win.getComputedStyle(sel).display !== "none", `${id}: is visible`);
+
+  win.applyDisplayOptionSettings({});
+  check(sel.value === fallback, `${id}: a tile without the setting shows "${fallback}"`);
+  values.forEach((v) => {
+    win.applyDisplayOptionSettings({ [id]: v });
+    check(sel.value === v, `${id}: shows a saved "${v}" setting`);
+  });
+
+  win.applyDisplayOptionSettings({});
+  const before = sent.length;
+  sel.value = values[values.length - 1];
+  sel.dispatchEvent(new win.Event("change", { bubbles: true }));
+  const msg = sent[sent.length - 1];
+  const c = msg && msg.payload && msg.payload.sdpi_collection;
+  check(sent.length === before + 1 && !!c && c.key === id && c.value === values[values.length - 1], `${id}: a user change sends { key: "${id}", value: "${values[values.length - 1]}" }`);
+});
+
+// Range: the manual Min/Max inputs are only shown in Manual. Reset on press
+// stays available in every mode.
+{
+  const manual = doc.getElementById("paramsgroup");
+  const resetRow = doc.getElementById("resetMinMaxOnPressRow");
+  const shown = (el) => win.getComputedStyle(el).display !== "none";
+  [["manual", true], ["auto", false], ["lhm", false]].forEach(([mode, want]) => {
+    win.applyDisplayOptionSettings({ scaleMode: mode });
+    check(shown(manual) === want, `scaleMode ${mode} (saved): Min/Max inputs ${want ? "shown" : "hidden"}`);
+    check(shown(resetRow), `scaleMode ${mode} (saved): Reset on press stays shown`);
+  });
+  const sel = doc.getElementById("scaleMode");
+  [["auto", false], ["manual", true], ["lhm", false]].forEach(([mode, want]) => {
+    sel.value = mode;
+    sel.dispatchEvent(new win.Event("change", { bubbles: true }));
+    check(shown(manual) === want, `scaleMode ${mode} (picked by the user): Min/Max inputs ${want ? "shown" : "hidden"}`);
+  });
+}
+
 // Control: a bare checkbox computes to display:none, so the visibility checks
 // above fail if a control ever regresses to that markup.
 const ctrl = new JSDOM(`<!DOCTYPE html><html><head><style>${css}</style></head><body><input class="sdpi-item-value" id="bareBox" type="checkbox" /></body></html>`, { pretendToBeVisual: true }).window;
