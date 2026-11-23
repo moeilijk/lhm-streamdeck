@@ -3,8 +3,6 @@ package lhmstreamdeckplugin
 import (
 	"log"
 	"time"
-
-	lhmplugin "github.com/moeilijk/lhm-streamdeck/internal/lhm/plugin"
 )
 
 // keyPressResetsMinMax reports whether a key press resets the sensor's MIN/MAX.
@@ -28,10 +26,12 @@ func (p *Plugin) takePendingScaleReset(context string, pollTime uint64) bool {
 	return true
 }
 
+// resetReadingScale asks the sensor source to reset the MIN/MAX of the tile's
+// reading. What the source can do is the product-specific part: see
+// sourceResetSupported, resetSourceMinMax and sameResetTarget in
+// reset_source.go.
 func (p *Plugin) resetReadingScale(context string, settings actionSettings) {
-	profileID := p.resolvedSourceProfileID(settings.SourceProfileID)
-	profile, ok := p.sourceProfileByID(profileID)
-	if !ok {
+	if !p.sourceResetSupported() {
 		return
 	}
 	p.mu.Lock()
@@ -46,12 +46,12 @@ func (p *Plugin) resetReadingScale(context string, settings actionSettings) {
 	p.mu.Unlock()
 	go func() {
 		defer func() { p.mu.Lock(); delete(p.scaleResetBusy, context); p.mu.Unlock() }()
-		if err := lhmplugin.ResetReadingMinMax(profileEndpoint(profile), settings.SensorUID, settings.ReadingID); err != nil {
+		if err := p.resetSourceMinMax(settings); err != nil {
 			log.Printf("Reset MIN/MAX for %s: %v", settings.ReadingLabel, err)
 			return
 		}
 		current, err := p.am.getSettings(context)
-		if err != nil || current.SensorUID != settings.SensorUID || current.ReadingID != settings.ReadingID || current.SourceProfileID != settings.SourceProfileID {
+		if err != nil || !sameResetTarget(&current, &settings) {
 			return
 		}
 		p.mu.Lock()

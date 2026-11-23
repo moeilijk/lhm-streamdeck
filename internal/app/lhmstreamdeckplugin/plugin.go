@@ -812,7 +812,7 @@ func (p *Plugin) updateTiles(data *actionData) {
 	if s.ScaleMode == "auto" {
 		min, max := g.AutoRange(graphValue)
 		g.SetRange(min, max)
-	} else if s.ScaleMode == "lhm" {
+	} else if s.ScaleMode == "sensor" {
 		low, high := r.ValueMin(), r.ValueMax()
 		if s.GraphUnit != "" && strings.Contains(r.Unit(), "/s") {
 			low = p.normalizeForGraph(low, r.Unit(), s.GraphUnit)
