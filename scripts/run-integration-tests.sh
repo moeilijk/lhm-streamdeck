@@ -15,6 +15,8 @@ ROOT="$SCRIPT_DIR/.."
 LOG_FILE="/tmp/deckbridge.log"
 MOCK_PID_FILE="/tmp/mock-sensor-server.pid"
 KEEP_ALIVE=false
+# The companion deploy-deckbridge.sh starts next to the emulator.
+COMPANION_BIN="$HOME/projects/GitHub/lhm-companion/build/lhm-companion"
 
 for arg in "$@"; do
   [[ "$arg" == "--keep-alive" ]] && KEEP_ALIVE=true
@@ -30,12 +32,15 @@ cleanup() {
     echo "mock-sensor-server stopped"
   fi
   if [[ "$KEEP_ALIVE" == "false" ]]; then
-    pkill -f "node.*DeckBridge" 2>/dev/null || true
-    # Also stop the plugin and any companion it supervises: a surviving plugin
-    # would respawn a companion onto the mock port once the mock is stopped.
-    pkill -9 -f "sdPlugin/lhm" 2>/dev/null || true
-    pkill -x lhm-companion 2>/dev/null || true
-    echo "DeckBridge stopped"
+    # Stops the daemon with the processes of every plugin it loaded, not only
+    # ours: a helper of another plugin left running keeps its port and breaks
+    # that plugin's next run. Also stops the companion a plugin may have
+    # spawned onto the mock port.
+    if bash "$SCRIPT_DIR/stop-deckbridge.sh" /tmp/mock-sensor-server "$COMPANION_BIN"; then
+      echo "DeckBridge stopped"
+    else
+      echo "WARNING: DeckBridge cleanup left something running (see above)"
+    fi
   else
     echo "DeckBridge kept alive (--keep-alive)"
   fi
@@ -56,9 +61,9 @@ echo "build OK"
 
 # ── 2. Start mock sensor server ────────────────────────────────────────────────
 echo "── mock sensor server ──"
-# Kill stale mocks from crashed earlier runs so the bind below cannot fail.
-pkill -x mock-sensor-server 2>/dev/null || true
-sleep 0.3
+# Stop what an earlier run left behind (a stale mock, a daemon, plugin helpers)
+# so the binds below cannot fail and no test talks to an old process.
+bash "$SCRIPT_DIR/stop-deckbridge.sh" /tmp/mock-sensor-server
 /tmp/mock-sensor-server -port 9997 >/tmp/mock-sensor-server.log 2>&1 &
 echo $! > "$MOCK_PID_FILE"
 echo "mock-sensor-server started (PID $(cat $MOCK_PID_FILE))"
@@ -98,7 +103,8 @@ for TEST_FILE in \
   tests/integration/test-settings-tile.js \
   tests/integration/test-favorites.js \
   tests/integration/test-source-profiles.js \
-  tests/integration/test-reading-options.js; do
+  tests/integration/test-reading-options.js \
+  tests/integration/test-source-gone.js; do
   echo ""
   echo "── $TEST_FILE ──"
   # "|| FILE_EXIT=$?" keeps set -e from aborting the run at the first failing
