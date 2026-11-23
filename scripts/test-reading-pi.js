@@ -394,7 +394,7 @@ function testDerivedApplySettingsClearsStaleBoundsAndKeepsZero() {
 }
 
 // Checkbox options of the reading tile (index_pi.js displayOptionCheckboxIds).
-const DISPLAY_OPTION_CHECKBOXES = ["resetMinMaxOnPress"];
+const DISPLAY_OPTION_CHECKBOXES = ["resetMinMaxOnPress", "condensedFont", "textShadow"];
 
 function loadDisplayOptionSandbox(present) {
   const boxes = {};

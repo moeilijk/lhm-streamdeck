@@ -244,6 +244,7 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 	g.SetLabelFontSize(1, vfSize)
 	g.SetLabel(2, "", 56, vtColor)
 	g.SetLabelFontSize(2, vfSize)
+	g.SetLabel(labelUnit, "", valueBaseline, vtColor)
 	if settings.GraphHeightPct > 0 {
 		g.SetHeightPct(settings.GraphHeightPct)
 	}
@@ -257,6 +258,8 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 	if settings.TextStrokeColor != "" {
 		g.SetTextStrokeColor(hexToRGBA(settings.TextStrokeColor))
 	}
+	applyTextLayout(g, &settings)
+	applyUnitTextColor(g, &settings)
 	if drawTitle {
 		g.SetLabelText(0, settings.Title)
 	}
@@ -1068,6 +1071,11 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			err := p.handleSetFontSize(event, sdpi.Key, &sdpi)
 			if err != nil {
 				log.Println("handleSetTitleFontSize", err)
+			}
+		case "unitDisplay", "unitFontSize", "unitOffset", "unitTextColor", "valueOffset", "lineSpacing":
+			err := p.handleTextLayout(event, &sdpi)
+			if err != nil {
+				log.Println("handleTextLayout", err)
 			}
 		case "resetMinMaxOnPress", "scaleMode", "graphStyle", "condensedFont", "textShadow", "graphHeightPct", "graphLineThickness", "textStroke", "textStrokeColor", "updateIntervalOverrideMs", "smoothingAlpha":
 			err := p.handleGraphVisuals(event, &sdpi)

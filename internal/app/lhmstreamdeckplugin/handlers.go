@@ -378,6 +378,9 @@ func (p *Plugin) handleColorChange(event *streamdeck.EvSendToPlugin, key string,
 	case "valuetext":
 		settings.ValueTextColor = hex
 		g.SetLabelColor(1, clr)
+		if settings.UnitTextColor == "" {
+			g.SetLabelColor(labelUnit, clr)
+		}
 	case "warningBackground":
 		settings.WarningBackgroundColor = hex
 	case "warningForeground":
@@ -429,6 +432,7 @@ func (p *Plugin) handleSetFontSize(event *streamdeck.EvSendToPlugin, key string,
 	case "valueFontSize":
 		settings.ValueFontSize = size
 		g.SetLabelFontSize(1, size)
+		applyTextLayout(g, &settings)
 	default:
 		return fmt.Errorf("invalid key: %s", sdpi.Key)
 	}
@@ -633,6 +637,7 @@ func (p *Plugin) handleGraphVisuals(event *streamdeck.EvSendToPlugin, sdpi *evSd
 	case "condensedFont":
 		settings.CondensedFont = sdpi.Checked
 		g.SetCondensedFont(sdpi.Checked)
+		applyTextLayout(g, &settings)
 	case "textShadow":
 		settings.TextShadow = sdpi.Checked
 		g.SetTextShadow(sdpi.Checked)
@@ -702,6 +707,10 @@ func (p *Plugin) applyNormalColors(g *graph.Graph, s *actionSettings) {
 	} else {
 		g.SetLabelColor(2, &color.RGBA{255, 255, 255, 255})
 	}
+	// The unit label only exists on the reading tile. It follows the value
+	// colour unless it has one of its own.
+	_ = g.SetLabelColor(labelUnit, valueTextColorOf(s))
+	applyUnitTextColor(g, s)
 }
 
 // ============================================================================
@@ -940,6 +949,7 @@ func (p *Plugin) handleThresholdUpdate(event *streamdeck.EvSendToPlugin, sdpi *e
 		p.mu.RUnlock()
 		if ok {
 			p.applyThresholdColors(g, threshold)
+			applyUnitTextColor(g, &settings)
 		}
 	}
 
@@ -966,6 +976,9 @@ func (p *Plugin) applyThresholdColors(g *graph.Graph, t *Threshold) {
 	}
 	if t.ValueTextColor != "" {
 		g.SetLabelColor(1, hexToRGBA(t.ValueTextColor))
+		// The unit follows the value. A unit colour of its own is put back by
+		// the caller, see applyUnitTextColor.
+		_ = g.SetLabelColor(labelUnit, hexToRGBA(t.ValueTextColor))
 	}
 	if t.TextColor != "" {
 		g.SetLabelColor(2, hexToRGBA(t.TextColor))

@@ -57,8 +57,14 @@ type actionSettings struct {
 	ResetMinMaxOnPress       bool    `json:"resetMinMaxOnPress"`
 	ScaleMode                string  `json:"scaleMode,omitempty"` // empty/manual, auto, or lhm
 	GraphStyle               string  `json:"graphStyle,omitempty"` // empty/classic, soft, or soft-load
-	CondensedFont            bool    `json:"condensedFont"`
-	TextShadow               bool    `json:"textShadow"`
+	CondensedFont            bool    `json:"condensedFont,omitempty"` // Roboto Condensed Bold instead of DejaVu Sans Bold
+	TextShadow               bool    `json:"textShadow,omitempty"`    // soft oval backdrop behind the text
+	UnitDisplay              string  `json:"unitDisplay,omitempty"`   // empty/inline, below, or hidden
+	UnitFontSize             float64 `json:"unitFontSize,omitempty"`  // 0 = follow valueFontSize
+	UnitOffset               float64 `json:"unitOffset,omitempty"`    // px shift of the unit baseline
+	UnitTextColor            string  `json:"unitTextColor,omitempty"` // empty = follow the value colour
+	ValueOffset              float64 `json:"valueOffset,omitempty"`   // px shift of the value baseline
+	LineSpacing              float64 `json:"lineSpacing,omitempty"`   // multiplier on the line height, 0 = 1
 	SourceProfileID          string  `json:"sourceProfileId,omitempty"`
 	SensorUID                string  `json:"sensorUid"`
 	ReadingID                int32   `json:"readingId,string"`

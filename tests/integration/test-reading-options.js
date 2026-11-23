@@ -1,8 +1,9 @@
 'use strict';
 // Reading tile options that came in with #120.
 // Covers: reset of the selected sensor's MIN/MAX on key press (PR #113), the
-// Range modes Manual / Auto / Sensor Min / Max (PR #112) and the graph styles
-// Classic / Soft / Soft spectrum (PR #114).
+// Range modes Manual / Auto / Sensor Min / Max (PR #112), the graph styles
+// Classic / Soft / Soft spectrum (PR #114), the unit as its own element (#104)
+// and the condensed font and text backdrop (PR #115).
 //
 // Key indices 14–16 (not used by the other suites).
 
@@ -143,6 +144,40 @@ async function keyColors(piPort, keyIndex) {
   }
   const px = info.width * info.height;
   return { red: red / px, green: green / px };
+}
+
+// Where the text sits in the key image: rows and columns (as fractions of the
+// key size) that hold white pixels (the value) and magenta pixels (the unit,
+// once it is given that colour).
+async function keyText(piPort, keyIndex) {
+  const state = await new Promise((resolve, reject) => {
+    http.get({ host: '127.0.0.1', port: piPort, path: '/api/state' }, res => {
+      let out = '';
+      res.on('data', c => out += c);
+      res.on('end', () => { try { resolve(JSON.parse(out)); } catch (e) { reject(e); } });
+    }).on('error', reject);
+  });
+  const slot = (state.slots || []).find(x => x.deviceId === DEVICE && x.keyIndex === keyIndex);
+  if (!slot || !slot.imageDataUrl) throw new Error('no key image for index ' + keyIndex);
+  const buf = Buffer.from(slot.imageDataUrl.split(',')[1], 'base64');
+  const { data, info } = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const box = () => ({ n: 0, top: 1, bottom: 0, left: 1, right: 0 });
+  const white = box(), magenta = box();
+  const add = (b, x, y) => {
+    b.n++;
+    b.top = Math.min(b.top, y / info.height); b.bottom = Math.max(b.bottom, y / info.height);
+    b.left = Math.min(b.left, x / info.width); b.right = Math.max(b.right, x / info.width);
+  };
+  // The title is light grey and sits in the top third: only look below it.
+  for (let y = Math.floor(info.height * 0.35); y < info.height; y++) {
+    for (let x = 0; x < info.width; x++) {
+      const o = (y * info.width + x) * 4;
+      const [r, g, b] = [data[o], data[o + 1], data[o + 2]];
+      if (r > 215 && g > 215 && b > 215) add(white, x, y);
+      if (r > 170 && b > 170 && g < 110) add(magenta, x, y);
+    }
+  }
+  return { white, magenta };
 }
 
 async function setValue(wsPort, ctx, key, value) {
@@ -361,6 +396,90 @@ async function run() {
   // The fill keeps growing while 95 % scrolls in, so it is at least what it was.
   if (again.red === 0 && again.green > classic.green - 0.05) pass(`test 12 — the key is filled like Classic again (${(again.green * 100).toFixed(0)} %)`);
   else fail(`test 12 — after switching back: green on ${(again.green * 100).toFixed(0)} % (was ${(classic.green * 100).toFixed(0)} %), red ${(again.red * 100).toFixed(1)} %`);
+
+  // ── Unit as its own element (#104) ──────────────────────────────────────────
+  // Same tile, "CPU Total" at 95 %. The unit gets magenta so it can be told
+  // apart from the white value in the key image.
+  console.log('\n[test 13] the unit is next to the value by default');
+  s = await getTileSettings(wsPort, rangeCtx, READING_ACTION);
+  if (!s.unitDisplay && !s.unitTextColor && !s.unitFontSize) pass('test 13 — the tile has no unit settings');
+  else fail(`test 13 — unexpected unit settings: ${JSON.stringify({ unitDisplay: s.unitDisplay, unitTextColor: s.unitTextColor, unitFontSize: s.unitFontSize })}`);
+  await setValue(wsPort, rangeCtx, 'valueFontSize', '16');
+  await setValue(wsPort, rangeCtx, 'unitTextColor', '#ff00ff');
+  await sleep(POLL_MS * 2);
+  const inline = await keyText(piPort, KEY_RANGE);
+  if (inline.white.n > 0 && inline.magenta.n === 0) pass('test 13 — one white "95%" label, no separate unit');
+  else fail(`test 13 — inline: ${inline.white.n} white and ${inline.magenta.n} magenta pixels`);
+
+  console.log('\n[test 14] Below value draws the unit under the value');
+  await setValue(wsPort, rangeCtx, 'unitDisplay', 'below');
+  await setValue(wsPort, rangeCtx, 'unitFontSize', '9');
+  s = await getTileSettings(wsPort, rangeCtx, READING_ACTION);
+  if (s.unitDisplay === 'below' && s.unitFontSize === 9 && s.unitTextColor === '#ff00ff') pass('test 14 — unitDisplay, unitFontSize and unitTextColor persisted');
+  else fail(`test 14 — not persisted: ${JSON.stringify({ unitDisplay: s.unitDisplay, unitFontSize: s.unitFontSize, unitTextColor: s.unitTextColor })}`);
+  await sleep(POLL_MS * 2);
+  const belowText = await keyText(piPort, KEY_RANGE);
+  if (belowText.white.n > 0 && belowText.magenta.n > 0 && belowText.magenta.top > belowText.white.bottom) {
+    pass(`test 14 — the unit starts at ${(belowText.magenta.top * 100).toFixed(0)} % of the key height, below the value that ends at ${(belowText.white.bottom * 100).toFixed(0)} %`);
+  } else {
+    fail(`test 14 — value rows ${(belowText.white.top * 100).toFixed(0)}..${(belowText.white.bottom * 100).toFixed(0)} %, unit rows ${(belowText.magenta.top * 100).toFixed(0)}..${(belowText.magenta.bottom * 100).toFixed(0)} % (${belowText.magenta.n} px)`);
+  }
+  const unitHeight = belowText.magenta.bottom - belowText.magenta.top;
+  const valueHeight = belowText.white.bottom - belowText.white.top;
+  if (unitHeight < valueHeight) pass('test 14 — the 9 pt unit is smaller than the 16 pt value');
+  else fail(`test 14 — unit height ${(unitHeight * 100).toFixed(0)} %, value height ${(valueHeight * 100).toFixed(0)} %`);
+
+  console.log('\n[test 15] offsets move the unit and the value');
+  await setValue(wsPort, rangeCtx, 'unitOffset', '6');
+  await setValue(wsPort, rangeCtx, 'valueOffset', '-6');
+  await sleep(POLL_MS * 2);
+  const moved = await keyText(piPort, KEY_RANGE);
+  const px = 1 / 72;
+  if (Math.abs((moved.magenta.top - belowText.magenta.top) - 6 * px) < 1.5 * px) pass('test 15 — unitOffset 6 moves the unit 6 px down');
+  else fail(`test 15 — unit moved ${((moved.magenta.top - belowText.magenta.top) / px).toFixed(1)} px, expected 6`);
+  if (Math.abs((moved.white.top - belowText.white.top) + 6 * px) < 1.5 * px) pass('test 15 — valueOffset -6 moves the value 6 px up');
+  else fail(`test 15 — value moved ${((moved.white.top - belowText.white.top) / px).toFixed(1)} px, expected -6`);
+  await setValue(wsPort, rangeCtx, 'unitFontSize', '99');
+  s = await getTileSettings(wsPort, rangeCtx, READING_ACTION);
+  if (s.unitFontSize === 9) pass('test 15 — an out-of-range unit size is refused');
+  else fail(`test 15 — unitFontSize became ${s.unitFontSize}`);
+
+  console.log('\n[test 16] Hidden leaves the unit out');
+  await setValue(wsPort, rangeCtx, 'unitDisplay', 'hidden');
+  await sleep(POLL_MS * 2);
+  const hidden = await keyText(piPort, KEY_RANGE);
+  if (hidden.white.n > 0 && hidden.magenta.n === 0) pass('test 16 — the value is drawn, the unit is not');
+  else fail(`test 16 — hidden: ${hidden.white.n} white and ${hidden.magenta.n} magenta pixels`);
+
+  // ── Condensed font and text backdrop (PR #115) ──────────────────────────────
+  console.log('\n[test 17] Condensed font draws narrower text');
+  await setValue(wsPort, rangeCtx, 'unitDisplay', 'inline');
+  await setValue(wsPort, rangeCtx, 'valueOffset', '0');
+  await sleep(POLL_MS * 2);
+  const regular = await keyText(piPort, KEY_RANGE);
+  await setOption(wsPort, rangeCtx, 'condensedFont', true);
+  s = await getTileSettings(wsPort, rangeCtx, READING_ACTION);
+  if (s.condensedFont === true && !s.unitDisplay) pass('test 17 — condensedFont persisted, unitDisplay back to the default');
+  else fail(`test 17 — settings: ${JSON.stringify({ condensedFont: s.condensedFont, unitDisplay: s.unitDisplay })}`);
+  await sleep(POLL_MS * 2);
+  const condensed = await keyText(piPort, KEY_RANGE);
+  const widthOf = t => t.white.right - t.white.left;
+  if (widthOf(condensed) < widthOf(regular) * 0.9) {
+    pass(`test 17 — "95%" is ${(widthOf(condensed) * 100).toFixed(0)} % of the key wide, was ${(widthOf(regular) * 100).toFixed(0)} %`);
+  } else {
+    fail(`test 17 — "95%" is ${(widthOf(condensed) * 100).toFixed(0)} % of the key wide, was ${(widthOf(regular) * 100).toFixed(0)} %`);
+  }
+
+  console.log('\n[test 18] Text backdrop darkens the graph behind the text');
+  const plain = await keyColors(piPort, KEY_RANGE);
+  await setOption(wsPort, rangeCtx, 'textShadow', true);
+  s = await getTileSettings(wsPort, rangeCtx, READING_ACTION);
+  if (s.textShadow === true) pass('test 18 — textShadow persisted');
+  else fail(`test 18 — textShadow not persisted: ${JSON.stringify(s.textShadow)}`);
+  await sleep(POLL_MS * 2);
+  const backed = await keyColors(piPort, KEY_RANGE);
+  if (backed.green < plain.green - 0.05) pass(`test 18 — the backdrop covers the fill: green on ${(backed.green * 100).toFixed(0)} % of the key, was ${(plain.green * 100).toFixed(0)} %`);
+  else fail(`test 18 — green on ${(backed.green * 100).toFixed(0)} % of the key with the backdrop, ${(plain.green * 100).toFixed(0)} % without`);
 
   // ── Cleanup ─────────────────────────────────────────────────────────────────
   await mockReset();

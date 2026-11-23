@@ -19,6 +19,11 @@ func DrawTextShadow(dst draw.Image, face font.Face, text string, point fixed.Poi
 	}
 	bounds.Min = bounds.Min.Add(point)
 	bounds.Max = bounds.Max.Add(point)
+	drawOvalBackdrop(dst, bounds, clr)
+}
+
+// drawOvalBackdrop draws the soft oval around the given text bounds.
+func drawOvalBackdrop(dst draw.Image, bounds fixed.Rectangle26_6, clr color.Color) {
 	left, top := float64(bounds.Min.X)/64, float64(bounds.Min.Y)/64
 	right, bottom := float64(bounds.Max.X)/64, float64(bounds.Max.Y)/64
 	cx, cy := (left+right)/2, (top+bottom)/2

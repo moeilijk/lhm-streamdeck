@@ -809,6 +809,7 @@ func (p *Plugin) updateTiles(data *actionData) {
 	if forceUpdate || newThresholdID != s.CurrentThresholdID {
 		if activeThreshold != nil && !snoozed {
 			p.applyThresholdColors(g, activeThreshold)
+			applyUnitTextColor(g, s)
 		} else {
 			p.applyNormalColors(g, s)
 		}
@@ -817,16 +818,20 @@ func (p *Plugin) updateTiles(data *actionData) {
 		_ = p.sd.SetSettings(data.context, s)
 	}
 
+	// The value label shows the value with or without the unit, depending on
+	// where the unit is displayed. The unit label carries it in the below mode.
+	valueLabelText, unitLabelText := unitLabelTexts(s.UnitDisplay, valueTextNoUnit, displayText, displayUnit)
+
 	renderDisplayText, renderAlertText, renderGraphValue, freezeGraph := p.resolveThresholdDisplay(
 		data.context,
 		activeThreshold,
 		v,
 		graphValue,
-		displayText,
+		valueLabelText,
 		alertText,
 	)
 	if snoozed {
-		renderDisplayText = displayText
+		renderDisplayText = valueLabelText
 		renderAlertText = thresholdSnoozeText(snoozeState, now)
 		renderGraphValue = graphValue
 		freezeGraph = false
@@ -848,12 +853,16 @@ func (p *Plugin) updateTiles(data *actionData) {
 		g.SetLabelText(0, "")
 		g.SetLabelText(1, "")
 		g.SetLabelText(2, "")
+		g.SetLabelText(labelUnit, "")
 	} else {
 		g.SetLabelText(1, renderDisplayText)
 		if renderAlertText != "" {
 			g.SetLabelText(2, renderAlertText)
+			// The alert text sits where the unit would be. The alert wins.
+			g.SetLabelText(labelUnit, "")
 		} else {
 			g.SetLabelText(2, "")
+			g.SetLabelText(labelUnit, unitLabelText)
 		}
 	}
 

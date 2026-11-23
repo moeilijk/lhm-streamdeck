@@ -201,6 +201,11 @@ The standard **Libre Hardware Monitor** tile has a **Display** section in its Pr
 - **Graph height** – render the graph in the bottom N% of the tile (10–100). Leaves the top area clear for large text or a clean background.
 - **Line thickness** – width of the highlight stroke at the current value position (1–4 px).
 - **Graph style** – `Classic` is the filled graph the plugin has always drawn and stays the default. `Soft` draws a smoothed curve in the highlight colour with a fill in the foreground colour that fades toward the bottom. `Soft spectrum` draws the same curve over a fixed green, yellow and red gradient that the curve cuts off. The colours show the position within the graph range and say nothing about safe limits for the hardware. The soft styles smooth only the drawing (a five-sample filter, three pixels per reading, so a tile shows about 24 readings). The value on the tile and the alerts keep using the real readings.
+- **Unit** – where the unit of the reading goes. `Next to value` is the default (`1500 RPM` on one line). `Below value` draws the unit as its own element under the value, with its own **Unit size**, **Unit offset** and **Unit color**, so a large value can sit above a small unit. `Hidden` leaves the unit out. With a **Format** set, the format output is shown as typed, so leave the unit out of the format when the unit is below or hidden. While an alert shows its text, that text takes the place of the unit.
+- **Value offset** / **Unit offset** – move the value or the unit up or down, in steps of half a pixel.
+- **Line spacing** – distance between the lines of a multi-line value (a format such as `%.0f\nRPM`) as a multiple of the font's line height, and between the value and a unit below it.
+- **Condensed font** – draws the title, value, unit and alert text in Roboto Condensed Bold instead of DejaVu Sans Bold. More characters fit on a tile.
+- **Text backdrop** – draws a soft oval in the stroke colour (the background colour when none is set) behind the text, which keeps it readable on a busy graph.
 - **Text stroke** – draws a configurable-colour outline around the title and value labels.
 - **Update every** – override the global poll interval for this tile only (`Use global`, `1s`, `2s`, `5s`, `10s`, `30s`, `60s`).
 - **Smoothing** – EMA factor α (0.1–1.0). `1.0` = no smoothing. Threshold evaluation always uses the raw unsmoothed value, so alert accuracy is not affected.
@@ -242,7 +247,3 @@ Based on the excellent [hwinfo-streamdeck](https://github.com/moeilijk/hwinfo-st
 ## License
 
 [GPL-3.0](LICENSE). As a derivative of the hwinfo-streamdeck plugin, this project carries the same license, applied with the permission of Shayne Sweeney, the original author.
-
-### Optional reading typography
-
-Reading actions can select Roboto Condensed Bold and a centered soft oval text backdrop independently. Both are disabled by default; existing font sizes and text outlines retain their behavior. The backdrop uses the outline color, falling back to the graph background. Roboto Condensed is embedded with its Apache License 2.0 in `pkg/graph/fonts/LICENSE.txt`.
