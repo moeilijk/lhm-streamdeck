@@ -1,5 +1,10 @@
 GOCMD=go
-GOBUILD=$(GOCMD) build
+# Release binaries must not depend on where or from which commit they are
+# built (#121): -trimpath drops the absolute source paths, -buildvcs=false
+# drops the commit stamp, so a commit that leaves the Go code alone leaves
+# the binaries byte for byte the same.
+GOBUILDFLAGS=-trimpath -buildvcs=false
+GOBUILD=$(GOCMD) build $(GOBUILDFLAGS)
 GOCLEAN=$(GOCMD) clean
 GOOS?=windows
 GOARCH?=amd64
@@ -23,7 +28,7 @@ COMPANION_DIR?=$(HOME)/projects/GitHub/lhm-companion
 plugin-linux:
 	GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(SDPLUGINDIR)/lhm ./cmd/lhm_streamdeck_plugin
 	GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(SDPLUGINDIR)/lhm-bridge ./cmd/lhm-bridge
-	cd $(COMPANION_DIR) && GOOS=linux GOARCH=amd64 go build -o $(abspath $(SDPLUGINDIR))/lhm-companion ./cmd/lhm-companion
+	cd $(COMPANION_DIR) && GOOS=linux GOARCH=amd64 go build $(GOBUILDFLAGS) -o $(abspath $(SDPLUGINDIR))/lhm-companion ./cmd/lhm-companion
 
 proto: $(PROTOPB)
 
@@ -62,7 +67,15 @@ verify:
 # no filename rule, the CLI's <uuid>.streamDeckPlugin is only its default
 # output name, and Marketplace itself serves downloads with the version in the
 # name (e.g. "Libre Hardware Monitor-2-windows.streamDeckPlugin").
+#
+# When the project's own Go code is unchanged since the previous release,
+# release-binaries.sh puts that release's lhm.exe and lhm-bridge.exe back,
+# after checking their hashes and scanning them, so the hashes stay the same
+# (#121). REBUILD_BINARIES=1 ships the fresh ones regardless. Both targets
+# record what they ship in release-hashes.txt: run them before the release
+# commit and commit that file with the release.
 release: verify
+	bash scripts/release-binaries.sh windows
 	@mkdir -p build
 	-@rm -f build/com.moeilijk.lhm.streamDeckPlugin build/com.moeilijk.lhm-[0-9]*.streamDeckPlugin
 	streamdeck pack com.moeilijk.lhm.sdPlugin --output build --force
@@ -77,6 +90,7 @@ release: verify
 # the release path never leaves the working tree dirty (json.dumps would
 # otherwise reformat the file).
 release-linux: verify plugin-linux
+	bash scripts/release-binaries.sh linux
 	-@rm -f build/com.moeilijk.lhm-linux*.streamDeckPlugin
 	@mkdir -p build
 	@cp $(SDPLUGINDIR)/manifest.json build/.manifest.orig
@@ -89,6 +103,16 @@ release-linux: verify plugin-linux
 	python3 scripts/verify-linux-package.py "build/com.moeilijk.lhm-linux-$$VER.streamDeckPlugin"
 	$(MAKE) av-check AV_CHECK_PKG="build/com.moeilijk.lhm-linux-$$(python3 scripts/manifest-version.py).streamDeckPlugin"
 	$(MAKE) plugin
+
+# Builds the Windows and the Linux binaries from two clones of HEAD in
+# different directories and fails when they differ (#121).
+reproducible:
+	bash scripts/check-reproducible.sh
+
+# Rebuilds a published release from its tag and compares the binaries with
+# release-hashes.txt: make verify-release TAG=v2.2.0
+verify-release:
+	bash scripts/verify-release.sh $(TAG)
 
 # Antivirus check of a packed artifact (issue #93): the Microsoft Defender
 # engine with current definitions runs offline under wine64 and is the hard

@@ -14,7 +14,12 @@ jobs:
       # Needed to create the draft release and upload the artifacts.
       contents: write
     steps:
+      # Full history and tags: release-binaries.sh compares the Go code with
+      # the previous release tag.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       # The Linux package bundles lhm-companion, built from the sibling repo.
       - uses: actions/checkout@v7
@@ -29,6 +34,11 @@ jobs:
       - name: Install Elgato CLI (pack and manifest validation)
         run: npm install -g @elgato/cli
 
+      # release-binaries.sh scans the previous release before it reuses its
+      # Windows binaries.
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
       - name: Check tag matches manifest version
         run: |
           VER=$(python3 scripts/manifest-version.py)
@@ -38,7 +48,12 @@ jobs:
           fi
 
       # Single make invocation so the shared verify prerequisite runs once.
+      # The tag exists here, so release-binaries.sh records nothing: it stops
+      # the release when the binaries differ from the hashes that were
+      # committed for this version in release-hashes.txt.
       - name: Build release packages
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: DECKBRIDGE_OPTIONAL=1 COMPANION_DIR="$GITHUB_WORKSPACE/lhm-companion" make release release-linux
 
       # SignPath code signing slots in here once the Foundation application is
