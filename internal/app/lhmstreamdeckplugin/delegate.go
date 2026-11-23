@@ -356,10 +356,11 @@ func (p *Plugin) OnKeyDown(event *streamdeck.EvKeyDown) {
 		return
 	}
 
+	if keyPressResetsMinMax(&settings) {
+		p.resetReadingScale(event.Context, settings)
+		return
+	}
 	if settings.CurrentThresholdID == "" {
-		if settings.ResetMinMaxOnPress {
-			p.resetReadingScale(event.Context, settings)
-		}
 		return
 	}
 

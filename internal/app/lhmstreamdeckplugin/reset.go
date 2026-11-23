@@ -1,10 +1,32 @@
 package lhmstreamdeckplugin
 
 import (
-	lhmplugin "github.com/moeilijk/lhm-streamdeck/internal/lhm/plugin"
 	"log"
 	"time"
+
+	lhmplugin "github.com/moeilijk/lhm-streamdeck/internal/lhm/plugin"
 )
+
+// keyPressResetsMinMax reports whether a key press resets the sensor's MIN/MAX.
+// An active alert keeps the press for snoozing or clearing that alert.
+func keyPressResetsMinMax(s *actionSettings) bool {
+	return s.ResetMinMaxOnPress && s.CurrentThresholdID == ""
+}
+
+// takePendingScaleReset reports whether the tile's history must be cleared now.
+// A reset is pending from the moment the source confirmed it until the first
+// sample polled after that moment, so the cleared graph starts with fresh data.
+func (p *Plugin) takePendingScaleReset(context string, pollTime uint64) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	resetAt, pending := p.scaleResetAfter[context]
+	if !pending || pollTime <= resetAt {
+		return false
+	}
+	delete(p.scaleResetAfter, context)
+	delete(p.smoothedValues, context)
+	return true
+}
 
 func (p *Plugin) resetReadingScale(context string, settings actionSettings) {
 	profileID := p.resolvedSourceProfileID(settings.SourceProfileID)

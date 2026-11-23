@@ -206,11 +206,6 @@
         </div>
       </div>
 
-      <div class="sdpi-item show-label-row">
-        <div class="sdpi-item-label">Key press</div>
-        <div class="sdpi-item-value"><input type="checkbox" id="resetMinMaxOnPress" />
-          <label for="resetMinMaxOnPress"><span></span>Reset sensor MIN/MAX</label></div>
-      </div>
       <div class="sdpi-item show-label-row" id="textStrokeRow">
         <div class="sdpi-item-label">Text stroke</div>
         <div class="show-label-cell">
@@ -281,6 +276,15 @@
           <input class="sdpi-item-value" style="margin-left: -7px; width:4em" placeholder=" Max" inputmode="numeric"
             pattern="[0-9]*" type="number" id="max" name="max" />
         </div>
+      </div>
+
+      <div class="sdpi-item show-label-row" id="resetMinMaxOnPressRow">
+        <div class="sdpi-item-label">Reset on press</div>
+        <div class="show-label-cell">
+          <input type="checkbox" class="show-label-checkbox" id="resetMinMaxOnPress" />
+        </div>
+        <div class="sdpi-item-label empty"></div>
+        <div class="show-label-cell show-label-cell-spacer" aria-hidden="true"></div>
       </div>
 
       <div class="sdpi-item" id="graphUnitContainer" style="display: none;">
@@ -490,8 +494,8 @@
     </template>
   </div>
   <!-- <script src="echomd.js"></script> -->
-  <script src="pi_utils.js?v=V5-prep.26"></script>
-  <script src="index_pi.js?v=V5-prep.26"></script>
+  <script src="pi_utils.js?v=V5-prep.27"></script>
+  <script src="index_pi.js?v=V5-prep.27"></script>
 </body>
 
 </html>

@@ -204,6 +204,8 @@ The standard **Libre Hardware Monitor** tile has a **Display** section in its Pr
 - **Update every** – override the global poll interval for this tile only (`Use global`, `1s`, `2s`, `5s`, `10s`, `30s`, `60s`).
 - **Smoothing** – EMA factor α (0.1–1.0). `1.0` = no smoothing. Threshold evaluation always uses the raw unsmoothed value, so alert accuracy is not affected.
 
+The **Scale** section has **Reset on press**. With it enabled, pressing the key resets the recorded MIN/MAX of the selected sensor in Libre Hardware Monitor and clears the graph history of the tile. Other sensors are not touched. It is off by default. While an alert is active, a press snoozes or clears the alert as before. The source has to support the reset: Libre Hardware Monitor 0.9.6, or lhm-companion 0.1.16 or newer. With any other source the tile stays as it is and the plugin log gets an error.
+
 The composite and derived tiles have the same Update every and Smoothing controls at tile level, and Graph height / Line thickness / Text stroke in their appearance settings (per slot for composite).
 
 ### Title behavior
@@ -236,11 +238,3 @@ Based on the excellent [hwinfo-streamdeck](https://github.com/moeilijk/hwinfo-st
 ## License
 
 [GPL-3.0](LICENSE). As a derivative of the hwinfo-streamdeck plugin, this project carries the same license, applied with the permission of Shayne Sweeney, the original author.
-
-### Reset a sensor's extrema from a key
-
-Reading actions can optionally reset their selected sensor's MIN/MAX when pressed. This is disabled by default and requires an LHM HTTP server supporting `POST /Sensor?action=ResetMinMax&id=...`. An active alert retains priority: pressing its key snoozes or clears the alert as before.
-
-After a successful reset, the tile clears its graph history on the next fresh sample. Other sensors are unaffected. Unsupported servers or ambiguous sensor identifiers leave history intact and record an error in the plugin log.
-
-Compatibility: upstream LibreHardwareMonitor implements `ResetMinMax` in its `/Sensor` HTTP handler. This integration uses POST and checks the returned `result` before clearing local history.

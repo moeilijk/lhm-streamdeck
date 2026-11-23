@@ -708,15 +708,7 @@ func (p *Plugin) updateTiles(data *actionData) {
 		showUnavailable()
 		return
 	}
-	p.mu.Lock()
-	resetAt, pendingReset := p.scaleResetAfter[data.context]
-	resetHistory := pendingReset && pollTime > resetAt
-	if resetHistory {
-		delete(p.scaleResetAfter, data.context)
-		delete(p.smoothedValues, data.context)
-	}
-	p.mu.Unlock()
-	if resetHistory {
+	if p.takePendingScaleReset(data.context, pollTime) {
 		g.Clear()
 	}
 	if s.ShowTitleInGraph != nil && *s.ShowTitleInGraph && s.Title == "" {

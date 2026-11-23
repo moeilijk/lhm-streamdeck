@@ -188,7 +188,7 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       if (ghpInp) { ghpInp.value = settings.graphHeightPct || 100; positionRangeVal(ghpInp); }
       var gltInp = document.querySelector("#graphLineThickness input[type=range]");
       if (gltInp) { gltInp.value = settings.graphLineThickness || 1; positionRangeVal(gltInp); }
-      document.querySelector("#resetMinMaxOnPress").checked = settings.resetMinMaxOnPress === true;
+      applyDisplayOptionSettings(settings);
       var tsEl = document.querySelector("#textStroke");
       if (tsEl) { tsEl.checked = settings.textStroke === true; }
       var tscEl = document.querySelector("#textStrokeColor");
@@ -377,6 +377,29 @@ function initPropertyInspector(initDelay) {
   prepareDOMElements(document);
 }
 
+// Checkbox options of the reading tile whose element id equals their settings key.
+var displayOptionCheckboxIds = ["resetMinMaxOnPress"];
+
+// applyDisplayOptionSettings shows the saved options in their controls.
+function applyDisplayOptionSettings(settings) {
+  settings = settings || {};
+  displayOptionCheckboxIds.forEach(function(id) {
+    var el = document.querySelector("#" + id);
+    if (el) { el.checked = settings[id] === true; }
+  });
+}
+
+// bindDisplayOptionControls sends an option to the plugin when its control changes.
+function bindDisplayOptionControls() {
+  displayOptionCheckboxIds.forEach(function(id) {
+    var el = document.querySelector("#" + id);
+    if (!el) { return; }
+    el.onchange = function() {
+      sendValueToPlugin({ key: id, value: "", checked: this.checked }, "sdpi_collection");
+    };
+  });
+}
+
 function wireRangeDisplays() {
   ["titleFontSize", "valueFontSize", "graphHeightPct", "graphLineThickness", "smoothingAlpha"].forEach(function(id) {
     var inp = document.querySelector("#" + id + " input[type=range]");
@@ -385,9 +408,7 @@ function wireRangeDisplays() {
       inp.oninput = function() { positionRangeVal(this); };
     }
   });
-  document.querySelector("#resetMinMaxOnPress").onchange = function() {
-    sendValueToPlugin({ key: "resetMinMaxOnPress", value: "", checked: this.checked }, "sdpi_collection");
-  };
+  bindDisplayOptionControls();
   var textStrokeEl = document.querySelector("#textStroke");
   if (textStrokeEl) {
     textStrokeEl.onchange = function() {

@@ -97,11 +97,14 @@ for TEST_FILE in \
   tests/integration/test-composite-global-suppress.js \
   tests/integration/test-settings-tile.js \
   tests/integration/test-favorites.js \
-  tests/integration/test-source-profiles.js; do
+  tests/integration/test-source-profiles.js \
+  tests/integration/test-reading-options.js; do
   echo ""
   echo "── $TEST_FILE ──"
-  node "$TEST_FILE"
-  FILE_EXIT=$?
+  # "|| FILE_EXIT=$?" keeps set -e from aborting the run at the first failing
+  # suite, so the suites after it still run and get reported.
+  FILE_EXIT=0
+  node "$TEST_FILE" || FILE_EXIT=$?
   if [[ $FILE_EXIT -ne 0 ]]; then
     OVERALL_EXIT=$FILE_EXIT
     echo "FAILED: $TEST_FILE (exit $FILE_EXIT)"
