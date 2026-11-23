@@ -244,16 +244,22 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 	g.SetLabelFontSize(1, vfSize)
 	g.SetLabel(2, "", 56, vtColor)
 	g.SetLabelFontSize(2, vfSize)
+	g.SetLabel(labelUnit, "", valueBaseline, vtColor)
 	if settings.GraphHeightPct > 0 {
 		g.SetHeightPct(settings.GraphHeightPct)
 	}
 	if settings.GraphLineThickness > 0 {
 		g.SetLineThickness(settings.GraphLineThickness)
 	}
+	g.SetStyle(settings.GraphStyle)
+	g.SetCondensedFont(settings.CondensedFont)
+	g.SetTextShadow(settings.TextShadow)
 	g.SetTextStroke(settings.TextStroke)
 	if settings.TextStrokeColor != "" {
 		g.SetTextStrokeColor(hexToRGBA(settings.TextStrokeColor))
 	}
+	applyTextLayout(g, &settings)
+	applyUnitTextColor(g, &settings)
 	if drawTitle {
 		g.SetLabelText(0, settings.Title)
 	}
@@ -341,6 +347,7 @@ func (p *Plugin) OnWillDisappear(event *streamdeck.EvWillDisappear) {
 	p.mu.Lock()
 	delete(p.graphs, event.Context)
 	delete(p.zeroTiles, event.Context)
+	delete(p.scaleResetAfter, event.Context)
 	delete(p.divisorCache, event.Context)
 	p.mu.Unlock()
 	p.clearThresholdRuntimeState(event.Context)
@@ -359,6 +366,10 @@ func (p *Plugin) OnKeyDown(event *streamdeck.EvKeyDown) {
 		return
 	}
 
+	if keyPressResetsMinMax(&settings) {
+		p.resetReadingScale(event.Context, settings)
+		return
+	}
 	if settings.CurrentThresholdID == "" {
 		return
 	}
@@ -1065,7 +1076,12 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			if err != nil {
 				log.Println("handleSetTitleFontSize", err)
 			}
-		case "showTitleWhenUnavailable", "hideWhenZero", "zeroHideDelaySeconds", "graphHeightPct", "graphLineThickness", "textStroke", "textStrokeColor", "updateIntervalOverrideMs", "smoothingAlpha":
+		case "unitDisplay", "unitFontSize", "unitOffset", "unitTextColor", "valueOffset", "lineSpacing":
+			err := p.handleTextLayout(event, &sdpi)
+			if err != nil {
+				log.Println("handleTextLayout", err)
+			}
+		case "showTitleWhenUnavailable", "hideWhenZero", "zeroHideDelaySeconds", "resetMinMaxOnPress", "scaleMode", "graphStyle", "condensedFont", "textShadow", "graphHeightPct", "graphLineThickness", "textStroke", "textStrokeColor", "updateIntervalOverrideMs", "smoothingAlpha":
 			err := p.handleGraphVisuals(event, &sdpi)
 			if err != nil {
 				log.Println("handleGraphVisuals", err)

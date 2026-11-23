@@ -40,9 +40,11 @@ type sourceRuntime struct {
 
 // Plugin handles information between Libre Hardware Monitor and Stream Deck
 type Plugin struct {
-	zeroTiles map[string]*zeroTileState
-	mu        sync.RWMutex // protects maps and cached state below
-	sourceMu  sync.RWMutex // protects sources map
+	zeroTiles       map[string]*zeroTileState
+	scaleResetBusy  map[string]bool
+	scaleResetAfter map[string]uint64
+	mu              sync.RWMutex // protects maps and cached state below
+	sourceMu        sync.RWMutex // protects sources map
 
 	sources map[string]*sourceRuntime
 	sd      *streamdeck.StreamDeck
@@ -712,6 +714,9 @@ func (p *Plugin) updateTiles(data *actionData) {
 		showUnavailable()
 		return
 	}
+	if p.takePendingScaleReset(data.context, pollTime) {
+		g.Clear()
+	}
 	if s.ShowTitleInGraph != nil && *s.ShowTitleInGraph && s.Title == "" {
 		g.SetLabelText(0, r.Label())
 	}
@@ -734,6 +739,21 @@ func (p *Plugin) updateTiles(data *actionData) {
 	}
 	if divisor != 1 {
 		graphValue = graphValue / divisor
+	}
+
+	if s.ScaleMode == "auto" {
+		min, max := g.AutoRange(graphValue)
+		g.SetRange(min, max)
+	} else if s.ScaleMode == "lhm" {
+		low, high := r.ValueMin(), r.ValueMax()
+		if s.GraphUnit != "" && strings.Contains(r.Unit(), "/s") {
+			low = p.normalizeForGraph(low, r.Unit(), s.GraphUnit)
+			high = p.normalizeForGraph(high, r.Unit(), s.GraphUnit)
+		}
+		min, max := sensorScale(low/divisor, high/divisor, graphValue, s.Min, s.Max)
+		g.SetRange(min, max)
+	} else {
+		g.SetRange(s.Min, s.Max)
 	}
 
 	// Determine display value and unit
@@ -795,6 +815,7 @@ func (p *Plugin) updateTiles(data *actionData) {
 	if forceUpdate || newThresholdID != s.CurrentThresholdID {
 		if activeThreshold != nil && !snoozed {
 			p.applyThresholdColors(g, activeThreshold)
+			applyUnitTextColor(g, s)
 		} else {
 			p.applyNormalColors(g, s)
 		}
@@ -803,16 +824,20 @@ func (p *Plugin) updateTiles(data *actionData) {
 		_ = p.sd.SetSettings(data.context, s)
 	}
 
+	// The value label shows the value with or without the unit, depending on
+	// where the unit is displayed. The unit label carries it in the below mode.
+	valueLabelText, unitLabelText := unitLabelTexts(s.UnitDisplay, valueTextNoUnit, displayText, displayUnit)
+
 	renderDisplayText, renderAlertText, renderGraphValue, freezeGraph := p.resolveThresholdDisplay(
 		data.context,
 		activeThreshold,
 		v,
 		graphValue,
-		displayText,
+		valueLabelText,
 		alertText,
 	)
 	if snoozed {
-		renderDisplayText = displayText
+		renderDisplayText = valueLabelText
 		renderAlertText = thresholdSnoozeText(snoozeState, now)
 		renderGraphValue = graphValue
 		freezeGraph = false
@@ -834,12 +859,16 @@ func (p *Plugin) updateTiles(data *actionData) {
 		g.SetLabelText(0, "")
 		g.SetLabelText(1, "")
 		g.SetLabelText(2, "")
+		g.SetLabelText(labelUnit, "")
 	} else {
 		g.SetLabelText(1, renderDisplayText)
 		if renderAlertText != "" {
 			g.SetLabelText(2, renderAlertText)
+			// The alert text sits where the unit would be. The alert wins.
+			g.SetLabelText(labelUnit, "")
 		} else {
 			g.SetLabelText(2, "")
+			g.SetLabelText(labelUnit, unitLabelText)
 		}
 	}
 

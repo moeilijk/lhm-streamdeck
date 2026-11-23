@@ -1,6 +1,8 @@
 // mock-sensor-server serves /data.json in LHM format with controllable sensor values.
 // POST /set {"path":"/mockcpu/0/temperature/0","value":85.0} to change a reading.
 // POST /reset to restore all defaults.
+// POST /Sensor?action=ResetMinMax&id=/mockcpu/0/temperature/0 resets the Min/Max of
+// one reading to its current value, like Libre Hardware Monitor does.
 package main
 
 import (
@@ -149,6 +151,13 @@ func handleSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rd.cur = req.Value
+	// Min/Max follow the value the way a real source records extrema.
+	if rd.cur < rd.min {
+		rd.min = rd.cur
+	}
+	if rd.cur > rd.max {
+		rd.max = rd.cur
+	}
 	mu.Unlock()
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, `{"ok":true,"path":%q,"value":%g}`, req.Path, req.Value)
@@ -164,6 +173,31 @@ func handleReset(w http.ResponseWriter, r *http.Request) {
 	mu.Unlock()
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, `{"ok":true}`)
+}
+
+// handleSensor implements the ResetMinMax action of LHM's /Sensor endpoint.
+func handleSensor(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	action, id := r.URL.Query().Get("action"), r.URL.Query().Get("id")
+	if action != "ResetMinMax" {
+		_ = json.NewEncoder(w).Encode(map[string]string{"result": "fail", "message": "Unknown action type " + action})
+		return
+	}
+	mu.Lock()
+	rd, ok := readings[id]
+	if ok {
+		rd.min, rd.max = rd.cur, rd.cur
+	}
+	mu.Unlock()
+	if !ok {
+		_ = json.NewEncoder(w).Encode(map[string]string{"result": "fail", "message": "Unknown id " + id + " specified"})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]string{"result": "ok"})
 }
 
 func handleList(w http.ResponseWriter, _ *http.Request) {
@@ -195,6 +229,7 @@ func main() {
 	http.HandleFunc("/set", handleSet)
 	http.HandleFunc("/reset", handleReset)
 	http.HandleFunc("/list", handleList)
+	http.HandleFunc("/Sensor", handleSensor)
 
 	addr := fmt.Sprintf(":%d", *port)
 	log.Printf("mock-sensor-server listening on %s", addr)

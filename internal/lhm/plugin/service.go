@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -32,6 +33,7 @@ type node struct {
 
 // reading matches the exposed hardware reading.
 type reading struct {
+	path            string
 	id              int32
 	label           string
 	unit            string
@@ -114,6 +116,10 @@ func (s *Service) Recv() error {
 	var root node
 	if err := json.NewDecoder(resp.Body).Decode(&root); err != nil {
 		return fmt.Errorf("decode LHM response: %w", err)
+	}
+	// Decode may stop before HTTP EOF when the response has trailing whitespace.
+	if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+		return fmt.Errorf("finish LHM response: %w", err)
 	}
 
 	sensors, order, readings := buildSnapshot(&root)
@@ -336,6 +342,7 @@ func newReading(sensorID string, n *node) *reading {
 
 	return &reading{
 		id:              makeReadingID(sensorID, n.SensorID),
+		path:            n.SensorID,
 		label:           n.Text,
 		unit:            unit,
 		typ:             n.Type,

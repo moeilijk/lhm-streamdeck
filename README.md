@@ -200,9 +200,20 @@ The standard **Libre Hardware Monitor** tile has a **Display** section in its Pr
 - **Display** – choose what renders on the tile: `Both` (graph + text), `Graph only`, or `Text only`.
 - **Graph height** – render the graph in the bottom N% of the tile (10–100). Leaves the top area clear for large text or a clean background.
 - **Line thickness** – width of the highlight stroke at the current value position (1–4 px).
+- **Graph style** – `Classic` is the filled graph the plugin has always drawn and stays the default. `Soft` draws a smoothed curve in the highlight colour with a fill in the foreground colour that fades toward the bottom. `Soft spectrum` draws the same curve over a fixed green, yellow and red gradient that the curve cuts off. The colours show the position within the graph range and say nothing about safe limits for the hardware. The soft styles smooth only the drawing (a five-sample filter, three pixels per reading, so a tile shows about 24 readings). The value on the tile and the alerts keep using the real readings.
+- **Unit** – where the unit of the reading goes. `Next to value` is the default (`1500 RPM` on one line). `Below value` draws the unit as its own element under the value, with its own **Unit size**, **Unit offset** and **Unit color**, so a large value can sit above a small unit. `Hidden` leaves the unit out. With a **Format** set, the format output is shown as typed, so leave the unit out of the format when the unit is below or hidden. While an alert shows its text, that text takes the place of the unit.
+- **Value offset** / **Unit offset** – move the value or the unit up or down, in steps of half a pixel.
+- **Line spacing** – distance between the lines of a multi-line value (a format such as `%.0f\nRPM`) as a multiple of the font's line height, and between the value and a unit below it.
+- **Condensed font** – draws the title, value, unit and alert text in Roboto Condensed Bold instead of DejaVu Sans Bold. More characters fit on a tile.
+- **Text backdrop** – draws a soft oval in the stroke colour (the background colour when none is set) behind the text, which keeps it readable on a busy graph.
 - **Text stroke** – draws a configurable-colour outline around the title and value labels.
 - **Update every** – override the global poll interval for this tile only (`Use global`, `1s`, `2s`, `5s`, `10s`, `30s`, `60s`).
 - **Smoothing** – EMA factor α (0.1–1.0). `1.0` = no smoothing. Threshold evaluation always uses the raw unsmoothed value, so alert accuracy is not affected.
+
+The **Scale** section sets the range of the graph:
+
+- **Range** – `Manual` uses the Min/Max fields. `Auto (recent history)` fits the range to the readings that are in the graph at that moment, with some padding. A tile holds 72 readings, about 72 seconds at one reading per second, and a longer **Update every** covers a longer period. `Sensor Min / Max` follows the MIN/MAX that the source has recorded for the selected sensor. Neither automatic mode says anything about safe limits for the hardware. The manual limits are kept when you switch modes, and the points already in the graph are redrawn when the range changes.
+- **Reset on press** – with it enabled, pressing the key resets the recorded MIN/MAX of the selected sensor in Libre Hardware Monitor and clears the graph history of the tile. Other sensors are not touched. It is off by default. While an alert is active, a press snoozes or clears the alert as before. The source has to support the reset: Libre Hardware Monitor 0.9.6, or lhm-companion 0.1.16 or newer. With any other source the tile stays as it is and the plugin log gets an error.
 
 The composite and derived tiles have the same Update every and Smoothing controls at tile level, and Graph height / Line thickness / Text stroke in their appearance settings (per slot for composite).
 
@@ -233,12 +244,14 @@ Press the key while an alert is active to step through snooze presets: **5m**, *
 
 Based on the excellent [hwinfo-streamdeck](https://github.com/moeilijk/hwinfo-streamdeck) plugin, originally created by Shayne Sweeney and maintained by me since 2026. Portions of this implementation and README were drafted with AI assistance and reviewed before release.
 
-## License
-
-[GPL-3.0](LICENSE). As a derivative of the hwinfo-streamdeck plugin, this project carries the same license, applied with the permission of Shayne Sweeney, the original author.
-
 ### Optional idle reading display
 
 Reading actions can show a fitted, centered title while waiting for data at startup or after a disconnect. A separate option fades the graph and value into the title after continuous zero readings (1-3600 seconds, default 10); nonzero data reverses the fade. Both options are disabled by default and work for any reading, including FPS. Active threshold alerts prevent zero hiding.
 
 Transitions last 1.5 seconds and use a cosmetic 20 Hz timer; they do not add graph samples or change sensor polling. The title uses the configured title, then the reading label, then `LHM`.
+
+## License
+
+[GPL-3.0](LICENSE). As a derivative of the hwinfo-streamdeck plugin, this project carries the same license, applied with the permission of Shayne Sweeney, the original author.
+
+The plugin embeds the font Roboto Condensed Bold, which is licensed under the [Apache License 2.0](pkg/graph/fonts/LICENSE.txt). The license text ships with the plugin in `licenses/RobotoCondensed-LICENSE.txt`.
