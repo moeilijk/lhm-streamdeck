@@ -102,7 +102,10 @@ CHECKBOXES.forEach(({ id, section, label }) => {
 
 // Select options: element id (= settings key), section, row label, the option
 // values in order and the value shown for a tile without the setting.
-const SELECTS = [{ id: "scaleMode", section: "Scale", label: "Range", values: ["manual", "auto", "lhm"], fallback: "manual" }];
+const SELECTS = [
+  { id: "scaleMode", section: "Scale", label: "Range", values: ["manual", "auto", "lhm"], fallback: "manual" },
+  { id: "graphStyle", section: "Display", label: "Graph style", values: ["classic", "soft", "soft-load"], fallback: "classic" },
+];
 
 win.prepareDOMElements(doc);
 win.bindDisplayOptionControls();

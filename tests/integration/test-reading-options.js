@@ -1,7 +1,8 @@
 'use strict';
 // Reading tile options that came in with #120.
-// Covers: reset of the selected sensor's MIN/MAX on key press (PR #113) and the
-// Range modes Manual / Auto / Sensor Min / Max (PR #112).
+// Covers: reset of the selected sensor's MIN/MAX on key press (PR #113), the
+// Range modes Manual / Auto / Sensor Min / Max (PR #112) and the graph styles
+// Classic / Soft / Soft spectrum (PR #114).
 //
 // Key indices 14–16 (not used by the other suites).
 
@@ -117,6 +118,33 @@ async function graphLevels(piPort, keyIndex) {
   return { levels: levels.length, columns: tops.length, width: info.width, span, last };
 }
 
+// Share of the key image that is clearly red, and the share that is clearly
+// green. Classic fills everything below the line with the foreground colour.
+// Soft fades its fill to the background, so little more than the line is green.
+// Soft spectrum is the only style that draws red.
+async function keyColors(piPort, keyIndex) {
+  const state = await new Promise((resolve, reject) => {
+    http.get({ host: '127.0.0.1', port: piPort, path: '/api/state' }, res => {
+      let out = '';
+      res.on('data', c => out += c);
+      res.on('end', () => { try { resolve(JSON.parse(out)); } catch (e) { reject(e); } });
+    }).on('error', reject);
+  });
+  const slot = (state.slots || []).find(x => x.deviceId === DEVICE && x.keyIndex === keyIndex);
+  if (!slot || !slot.imageDataUrl) throw new Error('no key image for index ' + keyIndex);
+  const buf = Buffer.from(slot.imageDataUrl.split(',')[1], 'base64');
+  const { data, info } = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  let red = 0;
+  let green = 0;
+  for (let o = 0; o < data.length; o += 4) {
+    const [r, g, b] = [data[o], data[o + 1], data[o + 2]];
+    if (r > 150 && g < 80 && b < 80) red++;
+    if (g > 60 && g > r + 30 && g > b + 30) green++;
+  }
+  const px = info.width * info.height;
+  return { red: red / px, green: green / px };
+}
+
 async function setValue(wsPort, ctx, key, value) {
   const { ws } = await connectPI(wsPort, ctx, READING_ACTION);
   sdpi(ws, ctx, READING_ACTION, key, value);
@@ -217,8 +245,7 @@ async function run() {
   else fail(`test 4 — the graph stopped after the reset (${histLater.levels} levels)`);
 
   // ── Range modes (PR #112) ───────────────────────────────────────────────────
-  // "CPU Total" starts at the mock's default of 20 % and then moves between 50
-  // and 54 %. Each mode has to draw the newest sample at the height that follows
+  // "CPU Total" is held at 20 % and then moves between 50 and 54 %. Each mode has to draw the newest sample at the height that follows
   // from its range.
   await mockReset();
   const rangeCtx = await createSlot(piPort, KEY_RANGE, READING_ACTION);
@@ -229,6 +256,10 @@ async function run() {
   s = await getTileSettings(wsPort, rangeCtx, READING_ACTION);
   if (!s.scaleMode) pass('test 5 — a new tile has no scaleMode (Manual)');
   else fail(`test 5 — a new tile has scaleMode=${JSON.stringify(s.scaleMode)}`);
+  // Make sure the start value is in the history before the swing begins: the
+  // Auto range in test 6 is derived from all three values.
+  await mockSet(OTHER_PATH, 20);
+  await sleep(POLL_MS * 3);
   await alternate(OTHER_PATH, 50, 54, 3);
   const manual = await graphLevels(piPort, KEY_RANGE);
   if (manual.last > 0.4 && manual.last < 0.65) {
@@ -246,7 +277,7 @@ async function run() {
   else fail(`test 6 — manual limits changed: ${s.min}..${s.max}`);
   await alternate(OTHER_PATH, 50, 54, 2);
   const auto = await graphLevels(piPort, KEY_RANGE);
-  // The history holds the mock's start value 20 and the 50/54 swing. Auto pads
+  // The history holds the start value 20 and the 50/54 swing. Auto pads
   // 20..54 and rounds outward to 10..60, so 54 sits at 88 % of the height
   // instead of the 54 % it has on the manual scale.
   if (Math.abs(auto.last - 0.88) < 0.08) {
@@ -289,6 +320,47 @@ async function run() {
   const back = await graphLevels(piPort, KEY_RANGE);
   if (Math.abs(back.last - 0.45) < 0.12) pass(`test 8 — 45 % is drawn at ${(back.last * 100).toFixed(0)} % of the key height on 0..100`);
   else fail(`test 8 — 45 % is drawn at ${(back.last * 100).toFixed(0)} % of the key height, expected about 45 %`);
+
+  // ── Graph styles (PR #114) ──────────────────────────────────────────────────
+  // Same tile, manual 0..100, reading held at 95 % so the top of the scale is drawn.
+  await mockSet(OTHER_PATH, 95);
+  await sleep(POLL_MS * 4);
+
+  console.log('\n[test 9] Classic stays the default look');
+  s = await getTileSettings(wsPort, rangeCtx, READING_ACTION);
+  if (!s.graphStyle) pass('test 9 — the tile has no graphStyle (Classic)');
+  else fail(`test 9 — the tile has graphStyle=${JSON.stringify(s.graphStyle)}`);
+  const classic = await keyColors(piPort, KEY_RANGE);
+  if (classic.red === 0 && classic.green > 0.25) pass(`test 9 — Classic fills ${(classic.green * 100).toFixed(0)} % of the key with green at 95 % and draws no red`);
+  else fail(`test 9 — Classic: green on ${(classic.green * 100).toFixed(0)} %, red on ${(classic.red * 100).toFixed(1)} % of the key`);
+
+  console.log('\n[test 10] Soft draws a faded fill');
+  await setValue(wsPort, rangeCtx, 'graphStyle', 'soft');
+  s = await getTileSettings(wsPort, rangeCtx, READING_ACTION);
+  if (s.graphStyle === 'soft') pass('test 10 — graphStyle=soft persisted');
+  else fail(`test 10 — graphStyle not persisted: ${JSON.stringify(s.graphStyle)}`);
+  await sleep(POLL_MS * 3);
+  const soft = await keyColors(piPort, KEY_RANGE);
+  if (soft.red === 0 && soft.green > 0.005 && soft.green < classic.green / 3) {
+    pass(`test 10 — Soft leaves a line and a faded fill: green on ${(soft.green * 100).toFixed(0)} % of the key (Classic ${(classic.green * 100).toFixed(0)} %), no red`);
+  } else {
+    fail(`test 10 — Soft: green on ${(soft.green * 100).toFixed(0)} % of the key (Classic ${(classic.green * 100).toFixed(0)} %), red on ${(soft.red * 100).toFixed(1)} %`);
+  }
+
+  console.log('\n[test 11] Soft spectrum draws red at the top of the range');
+  await setValue(wsPort, rangeCtx, 'graphStyle', 'soft-load');
+  await sleep(POLL_MS * 3);
+  const spectrum = await keyColors(piPort, KEY_RANGE);
+  if (spectrum.red > 0.03) pass(`test 11 — Soft spectrum draws red on ${(spectrum.red * 100).toFixed(1)} % of the key at 95 %`);
+  else fail(`test 11 — Soft spectrum draws red on only ${(spectrum.red * 100).toFixed(1)} % of the key at 95 %`);
+
+  console.log('\n[test 12] back to Classic');
+  await setValue(wsPort, rangeCtx, 'graphStyle', 'classic');
+  await sleep(POLL_MS * 3);
+  const again = await keyColors(piPort, KEY_RANGE);
+  // The fill keeps growing while 95 % scrolls in, so it is at least what it was.
+  if (again.red === 0 && again.green > classic.green - 0.05) pass(`test 12 — the key is filled like Classic again (${(again.green * 100).toFixed(0)} %)`);
+  else fail(`test 12 — after switching back: green on ${(again.green * 100).toFixed(0)} % (was ${(classic.green * 100).toFixed(0)} %), red ${(again.red * 100).toFixed(1)} %`);
 
   // ── Cleanup ─────────────────────────────────────────────────────────────────
   await mockReset();

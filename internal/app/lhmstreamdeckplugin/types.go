@@ -56,7 +56,7 @@ type Threshold struct {
 type actionSettings struct {
 	ResetMinMaxOnPress       bool    `json:"resetMinMaxOnPress"`
 	ScaleMode                string  `json:"scaleMode,omitempty"` // empty/manual, auto, or lhm
-	GraphStyle               string  `json:"graphStyle"`
+	GraphStyle               string  `json:"graphStyle,omitempty"` // empty/classic, soft, or soft-load
 	SourceProfileID          string  `json:"sourceProfileId,omitempty"`
 	SensorUID                string  `json:"sensorUid"`
 	ReadingID                int32   `json:"readingId,string"`
