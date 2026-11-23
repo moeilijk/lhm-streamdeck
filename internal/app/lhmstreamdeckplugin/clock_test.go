@@ -3,11 +3,26 @@ package lhmstreamdeckplugin
 import (
 	"bytes"
 	"image/png"
+	"os"
+
+	"github.com/moeilijk/lhm-streamdeck/pkg/graph"
 	"testing"
 	"time"
 )
 
+func loadClockTestFont(t *testing.T) {
+	t.Helper()
+	data, err := os.ReadFile("../../../DejaVuSans-Bold.ttf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := graph.GetSharedFontFaceManager()
+	manager.SetFontData(data)
+	t.Cleanup(func() { manager.SetFontData(nil) })
+}
+
 func TestClockShowsLocalMinute(t *testing.T) {
+	loadClockTestFont(t)
 	now := time.Date(2026, 11, 6, 23, 59, 0, 0, time.FixedZone("UTC+3", 3*3600))
 	frame, err := renderClock(now, clockSettings{})
 	if err != nil {
@@ -44,6 +59,7 @@ func TestClockShowsLocalMinute(t *testing.T) {
 }
 
 func TestClockColonFadeAndWeekday(t *testing.T) {
+	loadClockTestFont(t)
 	now := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
 	if clockColonOpacity(now) != 255 || clockColonOpacity(now.Add(4*time.Second)) != 0 {
 		t.Fatal("colon should fade fully in and out")
@@ -71,6 +87,7 @@ func TestClockColonFadeAndWeekday(t *testing.T) {
 }
 
 func TestClockOptions(t *testing.T) {
+	loadClockTestFont(t)
 	now := time.Date(2026, 11, 6, 23, 59, 0, 0, time.UTC)
 	day, date := clockCalendar(now, "en")
 	if day != "FRI" || date != "06 NOV" {
