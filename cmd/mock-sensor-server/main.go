@@ -1,6 +1,7 @@
 // mock-sensor-server serves /data.json in LHM format with controllable sensor values.
 // POST /set {"path":"/mockcpu/0/temperature/0","value":85.0} to change a reading.
 // POST /reset to restore all defaults.
+// POST /source {"available":false} makes /data.json fail until it is switched back.
 // POST /Sensor?action=ResetMinMax&id=/mockcpu/0/temperature/0 resets the Min/Max of
 // one reading to its current value, like Libre Hardware Monitor does.
 package main
@@ -124,7 +125,19 @@ func buildTree() *node {
 	}
 }
 
+// sourceAvailable is false while the mock plays a source that stopped
+// answering: /data.json then fails, as it does when LHM hangs or is closed
+// behind a proxy. Guarded by mu.
+var sourceAvailable = true
+
 func handleDataJSON(w http.ResponseWriter, r *http.Request) {
+	mu.Lock()
+	available := sourceAvailable
+	mu.Unlock()
+	if !available {
+		http.Error(w, "source unavailable", http.StatusServiceUnavailable)
+		return
+	}
 	tree := buildTree()
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(tree)
@@ -170,9 +183,30 @@ func handleReset(w http.ResponseWriter, r *http.Request) {
 	}
 	mu.Lock()
 	readings = defaultReadings()
+	sourceAvailable = true
 	mu.Unlock()
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, `{"ok":true}`)
+}
+
+// handleSource switches the source on and off: POST /source {"available":false}.
+func handleSource(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Available bool `json:"available"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	mu.Lock()
+	sourceAvailable = req.Available
+	mu.Unlock()
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, `{"ok":true,"available":%t}`, req.Available)
 }
 
 // handleSensor implements the ResetMinMax action of LHM's /Sensor endpoint.
@@ -223,11 +257,13 @@ func main() {
 
 	mu.Lock()
 	readings = defaultReadings()
+	sourceAvailable = true
 	mu.Unlock()
 
 	http.HandleFunc("/data.json", handleDataJSON)
 	http.HandleFunc("/set", handleSet)
 	http.HandleFunc("/reset", handleReset)
+	http.HandleFunc("/source", handleSource)
 	http.HandleFunc("/list", handleList)
 	http.HandleFunc("/Sensor", handleSensor)
 

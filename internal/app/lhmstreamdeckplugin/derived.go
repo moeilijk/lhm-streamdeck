@@ -17,6 +17,8 @@ const derivedAction = "com.moeilijk.lhm.derived"
 type derivedState struct {
 	graph            *graph.Graph
 	lastPollTime     uint64
+	unavailable      bool // placeholder is on the key because there is no live value to show
+	piError          bool // the Property Inspector was told the source is unavailable
 	divisorCache     [8]divisorCacheEntry
 	tileDivisorCache divisorCacheEntry
 	smoothedValue    float64
@@ -179,10 +181,31 @@ func (p *Plugin) updateDerivedTile(ctx string) {
 	}
 
 	profileID := p.resolvedSourceProfileID(settings.SourceProfileID)
-	pollTime, err := p.getCachedPollTimeForSource(profileID)
-	if err != nil || pollTime == 0 || time.Since(time.Unix(0, int64(pollTime))) > 5*time.Second {
+	configured := 0
+	for i := 0; i < settings.SlotCount; i++ {
+		if slot := &settings.Slots[i]; slot.IsValid && slot.SensorUID != "" {
+			configured++
+		}
+	}
+	// unavailable drops the smoothing history with the stale value and puts
+	// the placeholder on the key.
+	unavailable := func() {
+		p.mu.Lock()
+		state.smoothedInit = false
+		p.mu.Unlock()
+		p.showTileUnavailable(ctx, &state.unavailable, &state.lastPollTime)
+	}
+	sources := p.tileSourcesForProfile(profileID)
+	p.syncTilePIError(derivedAction, ctx, &state.piError, !sources.available)
+	if !sources.available {
+		unavailable()
 		return
 	}
+	if configured < 2 {
+		// Not configured far enough to compute anything; nothing went away.
+		return
+	}
+	pollTime := sources.pollKey
 	if pollTime == state.lastPollTime {
 		return
 	}
@@ -244,12 +267,16 @@ func (p *Plugin) updateDerivedTile(ctx string) {
 		}
 	}
 
+	// Too few live values, or a formula that cannot be computed: the last
+	// rendered value is no longer true, so it must not stay on the key.
 	if len(values) < 2 {
+		unavailable()
 		return
 	}
 
 	aggregated, ok := computeDerived(settings.Formula, values)
 	if !ok {
+		unavailable()
 		return
 	}
 
@@ -394,6 +421,7 @@ func (p *Plugin) updateDerivedTile(ctx string) {
 	p.mu.Lock()
 	if st, ok := p.derivedStates[ctx]; ok {
 		st.lastPollTime = pollTime
+		st.unavailable = false
 	}
 	if settings.UpdateIntervalOverrideMs > 0 {
 		p.lastRenderTime[ctx] = time.Now()

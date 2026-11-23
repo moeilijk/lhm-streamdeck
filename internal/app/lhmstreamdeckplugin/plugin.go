@@ -617,6 +617,80 @@ func (p *Plugin) getCachedDivisor(context, raw string) (float64, error) {
 	return fdiv, nil
 }
 
+// sourceStaleAfter is how old a source's poll time may be before its values
+// count as gone.
+const sourceStaleAfter = 5 * time.Second
+
+// pollTimeFresh reports whether a poll time is set and recent.
+func pollTimeFresh(pollTime uint64) bool {
+	return pollTime != 0 && time.Since(time.Unix(0, int64(pollTime))) <= sourceStaleAfter
+}
+
+// freshPollTimeForSource returns the poll time of a source profile and
+// whether that source is present and still polling.
+func (p *Plugin) freshPollTimeForSource(profileID string) (uint64, bool) {
+	pollTime, err := p.getCachedPollTimeForSource(profileID)
+	if err != nil || !pollTimeFresh(pollTime) {
+		return 0, false
+	}
+	return pollTime, true
+}
+
+// tileSources is the availability of a multi-slot tile, judged on the source
+// its slots read (#101).
+type tileSources struct {
+	// available: the source of the tile is polling.
+	available bool
+	// pollKey changes whenever the source polls or drops out; it is what the
+	// tile compares against its last render.
+	pollKey uint64
+}
+
+// tileSourcesForProfile judges the source behind a Composite or Derived tile.
+// All slots of such a tile read the tile's one source profile.
+func (p *Plugin) tileSourcesForProfile(profileID string) tileSources {
+	pollTime, fresh := p.freshPollTimeForSource(profileID)
+	return tileSources{available: fresh, pollKey: pollTime}
+}
+
+// showTileUnavailable puts the chip placeholder on a Composite or Derived key
+// that has no live data to show, the same image a Reading tile falls back to.
+// The image is sent once per outage; lastPollTime is cleared so the tile
+// renders again as soon as it has data (#101).
+func (p *Plugin) showTileUnavailable(ctx string, unavailable *bool, lastPollTime *uint64) {
+	p.mu.Lock()
+	first := !*unavailable
+	*unavailable = true
+	*lastPollTime = 0
+	p.mu.Unlock()
+
+	if !first || len(p.placeholderImage) == 0 {
+		return
+	}
+	if err := p.sd.SetImage(ctx, p.placeholderImage); err != nil {
+		log.Printf("Failed to setImage: %v\n", err)
+	}
+}
+
+// syncTilePIError tells the Property Inspector of a Composite or Derived tile
+// when its source went away and when it is back, as the Reading tile does.
+func (p *Plugin) syncTilePIError(action, ctx string, piError *bool, want bool) {
+	p.mu.Lock()
+	changed := *piError != want
+	*piError = want
+	p.mu.Unlock()
+	if !changed {
+		return
+	}
+	payload := evStatus{Error: false, Message: "show_ui"}
+	if want {
+		payload = evStatus{Error: true, Message: "Libre Hardware Monitor Unavailable"}
+	}
+	if err := p.sd.SendToPropertyInspector(action, ctx, payload); err != nil {
+		log.Println("syncTilePIError SendToPropertyInspector", err)
+	}
+}
+
 func (p *Plugin) updateTiles(data *actionData) {
 	if data.action != "com.moeilijk.lhm.reading" {
 		log.Printf("Unknown action updateTiles: %s\n", data.action)
@@ -675,7 +749,7 @@ func (p *Plugin) updateTiles(data *actionData) {
 		showUnavailable()
 		return
 	}
-	if pollTime == 0 || time.Since(time.Unix(0, int64(pollTime))) > 5*time.Second {
+	if !pollTimeFresh(pollTime) {
 		showUnavailable()
 		return
 	}

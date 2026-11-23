@@ -914,6 +914,7 @@ func TestUpdateDialPageDrawsFullscreenIndicatorOnlyWhenEnabled(t *testing.T) {
 		}
 		p.sources[""] = &sourceRuntime{
 			hw: stubHardwareService{
+				pollTime: uint64(time.Now().UnixNano()),
 				readingsBySensor: map[string][]hwsensorsservice.Reading{
 					sensorUID: {stubReading{id: readingID, typ: "Load", label: "CPU Total", unit: "%"}},
 				},
@@ -1063,6 +1064,7 @@ func TestUpdateDialPageKeepsSnoozeWhenThresholdDrops(t *testing.T) {
 	}
 	p.sources[""] = &sourceRuntime{
 		hw: stubHardwareService{
+			pollTime: uint64(time.Now().UnixNano()),
 			readingsBySensor: map[string][]hwsensorsservice.Reading{
 				sensorUID: {
 					stubReading{id: readingID, typ: "Load", label: "CPU Total", unit: "%"},
@@ -1123,6 +1125,7 @@ func newBringToFrontPlugin(bringToFront bool) (*Plugin, *dialActionSettings, *di
 	}
 	p.sources[""] = &sourceRuntime{
 		hw: stubHardwareService{
+			pollTime: uint64(time.Now().UnixNano()),
 			readingsBySensor: map[string][]hwsensorsservice.Reading{
 				sensorUID: {stubReading{id: readingID, typ: "Load", label: "CPU Total", unit: "%"}},
 			},
