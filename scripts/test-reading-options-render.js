@@ -52,12 +52,14 @@ function check(cond, msg) {
 }
 
 function bootPi() {
-  const body = html.replace(/^[\s\S]*?<body[^>]*>/i, "").replace(/<\/body>[\s\S]*$/i, "").replace(/<script[\s\S]*?<\/script>/gi, "");
-  const dom = new JSDOM(`<!DOCTYPE html><html><head><style>${css}</style></head><body>${body}</body></html>`, {
-    pretendToBeVisual: true,
-    runScripts: "outside-only",
-  });
+  // The page is parsed as it is. With runScripts "outside-only" jsdom does not
+  // run or fetch the page's own <script> and <link> elements, so the scripts
+  // and the stylesheets are fed in by hand below.
+  const dom = new JSDOM(html, { pretendToBeVisual: true, runScripts: "outside-only" });
   const win = dom.window;
+  const style = win.document.createElement("style");
+  style.textContent = css;
+  win.document.head.appendChild(style);
   win.eval(read("pi_utils.js"));
   win.eval(read("index_pi.js"));
   const sent = [];
