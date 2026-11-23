@@ -247,3 +247,5 @@ Based on the excellent [hwinfo-streamdeck](https://github.com/moeilijk/hwinfo-st
 ## License
 
 [GPL-3.0](LICENSE). As a derivative of the hwinfo-streamdeck plugin, this project carries the same license, applied with the permission of Shayne Sweeney, the original author.
+
+The plugin embeds the font Roboto Condensed Bold, which is licensed under the [Apache License 2.0](pkg/graph/fonts/LICENSE.txt). The license text ships with the plugin in `licenses/RobotoCondensed-LICENSE.txt`.
