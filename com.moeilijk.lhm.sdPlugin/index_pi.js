@@ -188,6 +188,12 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       if (ghpInp) { ghpInp.value = settings.graphHeightPct || 100; positionRangeVal(ghpInp); }
       var gltInp = document.querySelector("#graphLineThickness input[type=range]");
       if (gltInp) { gltInp.value = settings.graphLineThickness || 1; positionRangeVal(gltInp); }
+      ["showTitleWhenUnavailable", "hideWhenZero"].forEach(function(id) {
+        var el = document.querySelector("#" + id);
+        if (el) el.checked = settings[id] === true;
+      });
+      var delayEl = document.querySelector("#zeroHideDelaySeconds");
+      if (delayEl) delayEl.value = settings.zeroHideDelaySeconds || 10;
       applyDisplayOptionSettings(settings);
       // Only the plugin's answer to a connect carries resetSupported. Other
       // messages with settings say nothing about the source.
@@ -473,6 +479,16 @@ function wireRangeDisplays() {
       inp.oninput = function() { positionRangeVal(this); };
     }
   });
+  ["showTitleWhenUnavailable", "hideWhenZero"].forEach(function(id) {
+    var el = document.querySelector("#" + id);
+    if (el) el.onchange = function() {
+      sendValueToPlugin({ key: id, value: "", checked: this.checked }, "sdpi_collection");
+    };
+  });
+  var delayEl = document.querySelector("#zeroHideDelaySeconds");
+  if (delayEl) delayEl.onchange = function() {
+    sendValueToPlugin({ key: "zeroHideDelaySeconds", value: this.value }, "sdpi_collection");
+  };
   bindDisplayOptionControls();
   var textStrokeEl = document.querySelector("#textStroke");
   if (textStrokeEl) {

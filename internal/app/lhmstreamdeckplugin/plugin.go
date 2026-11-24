@@ -40,6 +40,7 @@ type sourceRuntime struct {
 
 // Plugin handles information between Libre Hardware Monitor and Stream Deck
 type Plugin struct {
+	zeroTiles       map[string]*zeroTileState
 	scaleResetBusy  map[string]bool
 	scaleResetAfter map[string]uint64
 	mu              sync.RWMutex // protects maps and cached state below
@@ -455,6 +456,9 @@ func (p *Plugin) RunForever() error {
 		}
 	}()
 
+	idleDone := make(chan struct{})
+	defer close(idleDone)
+	go p.runIdleTiles(idleDone)
 	p.sd.SetDelegate(p)
 	p.am.Run(p.updateTiles, p.updateAuxTiles)
 
@@ -716,7 +720,9 @@ func (p *Plugin) updateTiles(data *actionData) {
 			p.sd.SetSettings(data.context, &data.settings)
 
 			// Only set image on state transition (optimization #2)
-			if len(p.placeholderImage) > 0 {
+			if data.settings.ShowTitleWhenUnavailable {
+				_ = p.showReadingTitle(data.context, data.settings)
+			} else if len(p.placeholderImage) > 0 {
 				if err := p.sd.SetImage(data.context, p.placeholderImage); err != nil {
 					log.Printf("Failed to setImage: %v\n", err)
 				}
@@ -946,7 +952,7 @@ func (p *Plugin) updateTiles(data *actionData) {
 		return
 	}
 
-	err = p.sd.SetImage(data.context, b)
+	err = p.setReadingImage(data.context, b, s, graphValue)
 	if err != nil {
 		log.Printf("Failed to setImage: %v\n", err)
 		return

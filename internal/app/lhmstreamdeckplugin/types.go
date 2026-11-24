@@ -54,6 +54,9 @@ type Threshold struct {
 }
 
 type actionSettings struct {
+	ShowTitleWhenUnavailable bool    `json:"showTitleWhenUnavailable"`
+	HideWhenZero             bool    `json:"hideWhenZero"`
+	ZeroHideDelaySeconds     int     `json:"zeroHideDelaySeconds"`
 	ResetMinMaxOnPress       bool    `json:"resetMinMaxOnPress"`
 	ScaleMode                string  `json:"scaleMode,omitempty"`     // empty/manual, auto, or sensor
 	GraphStyle               string  `json:"graphStyle,omitempty"`    // empty/classic, soft, or soft-load

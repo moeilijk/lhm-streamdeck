@@ -297,6 +297,9 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 		migrated = true
 	}
 
+	if settings.ShowTitleWhenUnavailable {
+		_ = p.showReadingTitle(event.Context, &settings)
+	}
 	p.am.SetAction(event.Action, event.Context, &settings)
 	if migrated {
 		_ = p.sd.SetSettings(event.Context, &settings)
@@ -343,6 +346,7 @@ func (p *Plugin) OnWillDisappear(event *streamdeck.EvWillDisappear) {
 	}
 	p.mu.Lock()
 	delete(p.graphs, event.Context)
+	delete(p.zeroTiles, event.Context)
 	delete(p.scaleResetAfter, event.Context)
 	delete(p.divisorCache, event.Context)
 	p.mu.Unlock()
@@ -1077,7 +1081,7 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 			if err != nil {
 				log.Println("handleTextLayout", err)
 			}
-		case "resetMinMaxOnPress", "scaleMode", "graphStyle", "condensedFont", "textShadow", "graphHeightPct", "graphLineThickness", "textStroke", "textStrokeColor", "updateIntervalOverrideMs", "smoothingAlpha":
+		case "showTitleWhenUnavailable", "hideWhenZero", "zeroHideDelaySeconds", "resetMinMaxOnPress", "scaleMode", "graphStyle", "condensedFont", "textShadow", "graphHeightPct", "graphLineThickness", "textStroke", "textStrokeColor", "updateIntervalOverrideMs", "smoothingAlpha":
 			err := p.handleGraphVisuals(event, &sdpi)
 			if err != nil {
 				log.Println("handleGraphVisuals", err)
