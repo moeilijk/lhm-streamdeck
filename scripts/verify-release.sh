@@ -6,9 +6,9 @@
 # record-release-hashes.sh leaves: that script records what a download holds,
 # this one proves the recorded hash follows from the tag.
 #
-# The plugin binaries are pure Go, so the rebuild needs no pinned environment:
-# the toolchain comes from the tag's go.mod and the flags from the tag's
-# Makefile.
+# Only the Windows binaries are rebuilt. They are pure Go, so the rebuild
+# needs no pinned environment: the toolchain comes from the tag's go.mod and
+# the flags from the tag's Makefile.
 #
 # Usage: scripts/verify-release.sh [<tag>]     default: the latest v* tag
 #
@@ -16,8 +16,9 @@
 # could not run), 2 the release predates the reproducible build flags and
 # cannot be rebuilt this way.
 #
-# Not covered: linux/lhm-companion. It is built from the lhm-companion
-# repository, which this repository does not pin to a commit.
+# Not covered: the Linux binaries. They link against the C library of the
+# machine that builds them, so a rebuild elsewhere gives other bytes, and
+# lhm-companion comes from its own repository.
 set -euo pipefail
 
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -26,8 +27,6 @@ hashes_file="${HASHES_FILE:-$root_dir/release-hashes.txt}"
 binaries=(
   "lhm.exe:windows:./cmd/lhm_streamdeck_plugin"
   "lhm-bridge.exe:windows:./cmd/lhm-bridge"
-  "linux/lhm:linux:./cmd/lhm_streamdeck_plugin"
-  "linux/lhm-bridge:linux:./cmd/lhm-bridge"
 )
 
 tag="${1:-$(git -C "$root_dir" describe --tags --abbrev=0 --match 'v*')}"

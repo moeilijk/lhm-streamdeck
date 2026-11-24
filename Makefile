@@ -71,9 +71,9 @@ verify:
 # When the project's own Go code is unchanged since the previous release,
 # release-binaries.sh puts that release's lhm.exe and lhm-bridge.exe back,
 # after checking their hashes and scanning them, so the hashes stay the same
-# (#121). REBUILD_BINARIES=1 ships the fresh ones regardless. Both targets
-# record what they ship in release-hashes.txt: run them before the release
-# commit and commit that file with the release.
+# (#121). REBUILD_BINARIES=1 ships the fresh ones regardless. make release
+# records the two Windows binaries in release-hashes.txt: run it before the
+# release commit and commit that file with the release.
 release: verify
 	bash scripts/release-binaries.sh windows
 	@mkdir -p build

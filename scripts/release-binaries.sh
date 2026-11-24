@@ -9,6 +9,11 @@
 # the ones from that release, byte for byte. The Linux binaries are always the
 # fresh build: nothing judges them by hash.
 #
+# Only the Windows binaries are recorded and compared here. The Linux binaries
+# link against the C library of the machine that builds them, so their bytes
+# differ between this machine and the release workflow. Their hashes are
+# recorded from the published package, with scripts/record-release-hashes.sh.
+#
 # Security comes first. The old binaries are only reused when they match the
 # hashes recorded for that release in release-hashes.txt and govulncheck finds
 # no known vulnerability in them. A dependency or toolchain update that fixes
@@ -23,9 +28,9 @@
 #
 # Usage: scripts/release-binaries.sh [windows|linux]
 #   windows  decide and record lhm.exe and lhm-bridge.exe (default)
-#   linux    record the Linux lhm, lhm-bridge and lhm-companion that were
-#            just built; also puts the Windows binaries of the decision back,
-#            because the Linux package contains them too
+#   linux    put the Windows binaries of the decision back, because the Linux
+#            package contains them too, and print the hashes of the Linux
+#            binaries that were just built
 #
 # Environment:
 #   REBUILD_BINARIES=1   keep the freshly built binaries, whatever changed
@@ -42,8 +47,7 @@ plugin_dir="${SDPLUGINDIR:-$root_dir/com.moeilijk.lhm.sdPlugin}"
 hashes_file="${HASHES_FILE:-$root_dir/release-hashes.txt}"
 mode="${1:-windows}"
 windows_binaries=(lhm.exe lhm-bridge.exe)
-# "<name in release-hashes.txt>:<file in the plugin directory>"
-linux_binaries=("linux/lhm:lhm" "linux/lhm-bridge:lhm-bridge" "linux/lhm-companion:lhm-companion")
+linux_binaries=(lhm lhm-bridge lhm-companion)
 
 if [[ "$mode" != "windows" && "$mode" != "linux" ]]; then
   echo "usage: scripts/release-binaries.sh [windows|linux]" >&2
@@ -87,7 +91,7 @@ record_or_check() {
 finish() {
   if [[ "$mismatch" == "1" ]]; then
     echo "release-binaries: the build does not match what was recorded for $tag" >&2
-    echo "  Run make release and make release-linux before the release commit and commit release-hashes.txt." >&2
+    echo "  Run make release before the release commit and commit release-hashes.txt." >&2
     exit 1
   fi
   if [[ "$tagged" == "1" ]]; then
@@ -190,13 +194,12 @@ decide_windows
 report_windows "$windows_built"
 
 if [[ "$mode" == "linux" ]]; then
-  for entry in "${linux_binaries[@]}"; do
-    IFS=: read -r name file <<< "$entry"
+  for file in "${linux_binaries[@]}"; do
     if [[ ! -f "$plugin_dir/$file" ]]; then
       echo "release-binaries: $file is missing from the plugin directory" >&2
       exit 1
     fi
-    record_or_check "$name" "$plugin_dir/$file" "$tag"
+    echo "  linux/$file $(sha256sum "$plugin_dir/$file" | cut -d' ' -f1) (this build, not recorded)"
   done
 fi
 
