@@ -28,13 +28,13 @@ type node struct {
 }
 
 type reading struct {
-	path     string
-	unit     string
-	typ      string
-	defVal   float64
-	min      float64
-	max      float64
-	cur      float64
+	path   string
+	unit   string
+	typ    string
+	defVal float64
+	min    float64
+	max    float64
+	cur    float64
 }
 
 var (

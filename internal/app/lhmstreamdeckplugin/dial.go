@@ -16,8 +16,8 @@ import (
 	"github.com/moeilijk/lhm-streamdeck/pkg/graph"
 	hwsensorsservice "github.com/moeilijk/lhm-streamdeck/pkg/service"
 	"github.com/moeilijk/lhm-streamdeck/pkg/streamdeck"
-	"golang.org/x/image/font"
 	xdraw "golang.org/x/image/draw"
+	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
 )
 

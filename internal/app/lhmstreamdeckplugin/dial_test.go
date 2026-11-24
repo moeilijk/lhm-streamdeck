@@ -730,7 +730,6 @@ func TestDrawDialVerticalIndicatorHonoursExplicitChoice(t *testing.T) {
 	}
 }
 
-
 func TestDrawDialPageIndicatorUsesDotsForSmallPageCounts(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, dialWidth, dialHeight))
 	fillRect(img, img.Bounds(), color.RGBA{0, 0, 0, 255})
