@@ -773,7 +773,7 @@ func (p *Plugin) updateTiles(data *actionData) {
 	}
 
 	// No recovery-by-label: an unknown reading id means the source renamed its
-	// sensors (LHM/companion upgrade, hardware change) and the user re-selects
+	// sensors (a source upgrade, a hardware change) and the user re-selects
 	// the reading explicitly. Silent re-mapping could pick the wrong reading
 	// when labels are not unique within a sensor.
 	r, _, err := p.getReadingForSource(profileID, s.SensorUID, s.ReadingID)
