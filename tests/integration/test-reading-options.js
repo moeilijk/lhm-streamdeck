@@ -228,6 +228,12 @@ async function run() {
   console.log('\n[test 1] default: a key press does not reset MIN/MAX');
   let s = await getTileSettings(wsPort, ctx, READING_ACTION);
   if (s.resetMinMaxOnPress) fail('test 1 — resetMinMaxOnPress is on for a new tile');
+  {
+    const { ws, payload } = await connectPI(wsPort, ctx, READING_ACTION);
+    ws.close();
+    if (payload.resetSupported === true) pass('test 1 — the inspector payload says the source can reset MIN/MAX');
+    else fail(`test 1 — resetSupported is ${JSON.stringify(payload.resetSupported)}, expected true`);
+  }
   const before = await mockReadings();
   const histBefore = await graphLevels(piPort, KEY_TILE);
   await pressKey(piPort, KEY_TILE);
@@ -322,9 +328,9 @@ async function run() {
   }
 
   console.log('\n[test 7] Sensor Min / Max follows the range recorded by the source');
-  await setValue(wsPort, rangeCtx, 'scaleMode', 'lhm');
+  await setValue(wsPort, rangeCtx, 'scaleMode', 'sensor');
   s = await getTileSettings(wsPort, rangeCtx, READING_ACTION);
-  if (s.scaleMode === 'lhm') pass('test 7 — scaleMode=lhm persisted');
+  if (s.scaleMode === 'sensor') pass('test 7 — scaleMode=sensor persisted');
   else fail(`test 7 — scaleMode not persisted: ${JSON.stringify(s.scaleMode)}`);
   // Narrow the recorded range to the current value, then widen it to 40..60.
   await new Promise((resolve, reject) => {

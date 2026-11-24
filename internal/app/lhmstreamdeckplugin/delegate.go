@@ -366,7 +366,7 @@ func (p *Plugin) OnKeyDown(event *streamdeck.EvKeyDown) {
 		return
 	}
 
-	if keyPressResetsMinMax(&settings) {
+	if p.sourceResetSupported() && keyPressResetsMinMax(&settings) {
 		p.resetReadingScale(event.Context, settings)
 		return
 	}
@@ -545,7 +545,7 @@ func (p *Plugin) OnPropertyInspectorConnected(event *streamdeck.EvSendToPlugin) 
 	for _, s := range sensors {
 		evsensors = append(evsensors, sensorPayload(s.ID(), s.Name()))
 	}
-	payload := evSendSensorsPayload{Sensors: evsensors, Settings: &settings}
+	payload := evSendSensorsPayload{Sensors: evsensors, Settings: &settings, ResetSupported: p.sourceResetSupported()}
 	err = p.sd.SendToPropertyInspector(event.Action, event.Context, payload)
 	if err != nil {
 		log.Println("OnPropertyInspectorConnected SendToPropertyInspector", err)

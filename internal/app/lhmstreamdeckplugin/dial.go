@@ -1022,8 +1022,10 @@ func (p *Plugin) updateDialPage(ctx string, settings *dialActionSettings, state 
 	pageCtx := dialPageContext(ctx, index)
 	g := state.graphs[index]
 	profileID := p.resolvedSourceProfileID(page.SourceProfileID)
+	// A poll time that stopped advancing is as gone as a missing one: the
+	// page must not keep rendering the last values (#101).
 	pollTime, err := p.getCachedPollTimeForSource(profileID)
-	if err != nil || pollTime == 0 {
+	if err != nil || !pollTimeFresh(pollTime) {
 		if active {
 			render.messageTitle = "LHM Dial"
 			render.messageValue = "LHM unavailable"

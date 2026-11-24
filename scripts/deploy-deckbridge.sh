@@ -47,28 +47,11 @@ else
 fi
 
 # ── stop existing DeckBridge daemon ────────────────────────────────────────
-echo "kill: DeckBridge + plugin + companion processes"
-# DeckBridge installs a SIGTERM handler that does not reliably exit, so a plain
-# pkill (SIGTERM) leaves the old daemon alive; the next start then dies on
-# EADDRINUSE and the stale daemon keeps serving OLD code. Use SIGKILL.
-# Also: the real process is launched as "node dist/index.js" (cwd is the
-# DeckBridge dir, which is NOT part of the command line), so the historical
-# "node.*DeckBridge" pattern never matched it. Match the entry script instead.
-pkill -9 -f "dist/index.js"   2>/dev/null || true
-# Kill the spawned plugin binary too. On Linux DeckBridge runs the "lhm" binary
-# (not "lhm.exe"), so a "lhm.exe"-only match leaves a stale plugin process alive
-# and the deploy silently keeps running OLD plugin code. Match the plugin path so
-# both "sdPlugin/lhm" and "sdPlugin/lhm.exe" are killed.
-pkill -9 -f "sdPlugin/lhm"  2>/dev/null || true
-pkill -f "lhm.exe"          2>/dev/null || true
-pkill -f "lhm-companion"    2>/dev/null || true
-
-# Wait until port 34075 is actually free before starting, so we never race a
-# half-dead daemon into EADDRINUSE.
-for _ in $(seq 1 20); do
-  if ! ss -ltn 2>/dev/null | grep -q ':34075 '; then break; fi
-  sleep 0.5
-done
+echo "stop: DeckBridge and everything it started"
+# stop-deckbridge.sh finds the processes through /proc and also stops the
+# helpers of the other plugins DeckBridge loads; it fails when a process or
+# the daemon port survives, so a stale daemon can never keep serving old code.
+bash "$root_dir/scripts/stop-deckbridge.sh" "$companion_bin"
 
 if [[ -x "$companion_bin" ]]; then
   echo "start: lhm-companion on $host_ip:$companion_port"
@@ -162,4 +145,16 @@ else
   echo "DeckBridge PID: $daemon_pid"
   echo "Dashboard:      $dashboard_url"
   echo "Log:            $log_file"
+fi
+
+# ── dials for the live dial e2e suites ──────────────────────────────────────
+# `make verify` runs dial suites against the dial that is on the emulated
+# Stream Deck +. Put the two dials they need in place when they are missing.
+# Under the XL profile the emulated Stream Deck + has no encoders and a dial
+# cannot be placed.
+if [[ "${DECKBRIDGE_DEVICE_PROFILE:-}" == "streamdeck-xl" ]]; then
+  echo "dials: skipped, the streamdeck-xl profile has no encoders"
+elif [[ -n "$dashboard_url" ]]; then
+  # Without node_modules in the repo, 'ws' comes from the DeckBridge checkout.
+  NODE_PATH="${NODE_PATH:-$deckbridge_dir/node_modules}" node "$root_dir/scripts/ensure-deckbridge-dials.js" || echo "warn: dials for the live dial e2e suites are not in place"
 fi

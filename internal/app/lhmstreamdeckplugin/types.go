@@ -58,7 +58,7 @@ type actionSettings struct {
 	HideWhenZero             bool    `json:"hideWhenZero"`
 	ZeroHideDelaySeconds     int     `json:"zeroHideDelaySeconds"`
 	ResetMinMaxOnPress       bool    `json:"resetMinMaxOnPress"`
-	ScaleMode                string  `json:"scaleMode,omitempty"`     // empty/manual, auto, or lhm
+	ScaleMode                string  `json:"scaleMode,omitempty"`     // empty/manual, auto, or sensor
 	GraphStyle               string  `json:"graphStyle,omitempty"`    // empty/classic, soft, or soft-load
 	CondensedFont            bool    `json:"condensedFont,omitempty"` // Roboto Condensed Bold instead of DejaVu Sans Bold
 	TextShadow               bool    `json:"textShadow,omitempty"`    // soft oval backdrop behind the text
@@ -154,6 +154,9 @@ type evSendSensorsPayloadSensor struct {
 type evSendSensorsPayload struct {
 	Sensors  []*evSendSensorsPayloadSensor `json:"sensors"`
 	Settings *actionSettings               `json:"settings"`
+	// ResetSupported tells the inspector whether the sensor source can reset
+	// MIN/MAX, so it only offers "Reset on press" where a press can do it.
+	ResetSupported bool `json:"resetSupported"`
 }
 
 type evSendReadingsPayloadReading struct {

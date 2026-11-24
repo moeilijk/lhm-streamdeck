@@ -50,6 +50,24 @@ Do not ask which version is live on the Marketplace; look it up. The plugin's pu
 
 Fetch that page and read the **Version** field (it also shows the "Last Updated" date). That value is the currently published Marketplace version. Write the Marketplace changelog as the Windows-relevant delta between it and the version now being published. For example, if the listing shows `1.9.1` and you are publishing `2.0.0`, the changelog covers only what changed for Windows between 1.9.1 and 2.0.0.
 
+## Binaries
+
+Windows reputation services (Smart App Control, SmartScreen, Defender cloud protection) judge unsigned files by hash, so a release does not ship new hashes for `lhm.exe` and `lhm-bridge.exe` without a reason (issue #121, taken over from hwinfo-streamdeck). Security comes first: a known vulnerability in the old binaries is always a reason.
+
+- All binaries are built with `-trimpath -buildvcs=false`. `make reproducible` builds `lhm.exe`, `lhm-bridge.exe` and the Linux `lhm` and `lhm-bridge` from two clones in different directories, one of them with an extra commit that touches no Go code, and fails when the bytes differ. CI runs it on every push and prints the hashes.
+- The two Windows binaries are pure Go: the same source, dependencies and toolchain give the same bytes on every machine. The Linux binaries link against the C library of the machine that builds them, so they are the same between directories and commits on one machine but differ between machines. Everything below that depends on equal bytes covers the Windows binaries only.
+- `make release` runs `scripts/release-binaries.sh` after the build. When the project's own Go code behind the two Windows binaries is unchanged since the previous release tag, the script puts that release's binaries back in the plugin directory, byte for byte, so only the plugin files (manifest, Property Inspector, images) differ. Test files are not compiled in and never count as a change. The Linux binaries are always the fresh build.
+- The old binaries are only reused after `scripts/scan-release.sh` has downloaded them, found their SHA-256 equal to the one recorded for that release in `release-hashes.txt`, and scanned them with `govulncheck -mode=binary` without a finding. With a finding the freshly built binaries ship instead, so a dependency or toolchain update that fixes something in the old binaries goes out with this release. When the hashes are missing or different, or the download or the scanner fails, the release stops. It never falls back to reusing unverified binaries.
+- Dependency and toolchain updates without a known vulnerability stay on `main` and go out with the next release that changes the Go code. `REBUILD_BINARIES=1 make release` ships fresh binaries regardless.
+- `make release` records the hashes of the two Windows binaries it ships in `release-hashes.txt` under the version from the manifest, with the release they were built for. Run it before the release commit and commit that file with the release.
+- The release workflow on GitHub builds the packages again from the tag. Because the version is tagged by then, it records nothing. It compares its Windows binaries with the committed hashes and stops when they differ.
+- The binaries do not carry their commit. `make verify-release TAG=vX.Y.Z` rebuilds the Windows binaries of the release they were built for from its tag, with the toolchain and the flags of that tag, and compares the result with `release-hashes.txt`. Releases up to 2.1.1 were built without the flags and cannot be rebuilt this way.
+- `scripts/scan-release.sh [tag]` downloads a release, compares its binaries with `release-hashes.txt` and scans them. Exit 0 is clean, 3 means known vulnerabilities, 1 anything else.
+- `scripts/record-release-hashes.sh vX.Y.Z` records the hashes of the Linux binaries from the published packages, so the weekly scan can tell them apart from replaced assets. It stops when a Windows binary in the download differs from its recorded hash.
+- `marketplace-version.txt` holds the GitHub release that is live on the Elgato Marketplace. Update it when a Marketplace submission is published.
+- The "Release scan" workflow runs every week: the hash check and `govulncheck` on the latest GitHub release and on the Marketplace version, and the rebuild of the latest release. A failing job means a new release (or Marketplace update) is due, or the record does not match what is published.
+- The Linux package bundles `lhm-companion`, built from its own repository with the toolchain in its `go.mod`. Keep that toolchain current there.
+
 ## Antivirus check
 
 Every packed artifact is scanned before it is published (issue #93). `make release` and `make release-linux` each run `make av-check` on the package they just packed; a detection fails the build, and the release must not be published until the cause is understood. `make av-check` can also be run on its own (`AV_CHECK_PKG=<package>` selects the package, default the newest one in `build/`), and `scripts/av-check.sh <package>` on any package, for example a previously published asset after a definitions update.
@@ -89,11 +107,11 @@ No vendor offers an API for this; each has a form or an address. Report as the s
 2. Propose and justify the next version.
 3. Wait for explicit approval of the version rationale.
 4. Update `Version` in `com.moeilijk.lhm.sdPlugin/manifest.json` to `MAJOR.MINOR.PATCH.0`.
-5. Commit and push the release changes.
-6. Handle the GitHub issue or issues included in the committed scope.
-7. Run `make release`. It packs the Windows artifact and runs the antivirus check on it; a detection stops the release.
-8. Run `make release-linux`. It packs the Linux artifact and runs the same check on it.
-9. Create the GitHub release with tag `vMAJOR.MINOR.PATCH`, English release notes, and both artifacts attached:
-   - `com.moeilijk.lhm.streamDeckPlugin`
-   - `com.moeilijk.lhm-linux.streamDeckPlugin`
-10. Confirm that the issue state matches the published release scope.
+5. Run `make release` and `make release-linux`. They decide which Windows binaries ship, record their hashes in `release-hashes.txt`, pack both artifacts and run the antivirus check on them. A detection stops the release.
+6. Commit and push the release changes, `release-hashes.txt` included.
+7. Handle the GitHub issue or issues included in the committed scope.
+8. Create the GitHub release with tag `vMAJOR.MINOR.PATCH`, English release notes, and both artifacts attached:
+   - `com.moeilijk.lhm-MAJOR.MINOR.PATCH.streamDeckPlugin`
+   - `com.moeilijk.lhm-linux-MAJOR.MINOR.PATCH.streamDeckPlugin`
+9. Confirm that the issue state matches the published release scope.
+10. Run `scripts/record-release-hashes.sh vMAJOR.MINOR.PATCH` and `make verify-release TAG=vMAJOR.MINOR.PATCH`: the published Windows binaries must be the recorded ones and what the tag builds. Commit and push the Linux lines it added to `release-hashes.txt`.

@@ -28,6 +28,11 @@ jobs:
         # Live e2e tests self-skip in CI (no DeckBridge emulator).
         run: DECKBRIDGE_OPTIONAL=1 make verify
 
+      - name: make reproducible
+        # Fails when the binaries depend on the build path or the commit, and
+        # prints the hashes a release built from this commit would get (#121).
+        run: make reproducible
+
   govulncheck:
     runs-on: ubuntu-latest
     steps:

@@ -109,7 +109,7 @@ CHECKBOXES.forEach(({ id, section, label }) => {
 // Select options: element id (= settings key), section, row label, the option
 // values in order and the value shown for a tile without the setting.
 const SELECTS = [
-  { id: "scaleMode", section: "Scale", label: "Range", values: ["manual", "auto", "lhm"], fallback: "manual" },
+  { id: "scaleMode", section: "Scale", label: "Range", values: ["manual", "auto", "sensor"], fallback: "manual" },
   { id: "graphStyle", section: "Display", label: "Graph style", values: ["classic", "soft", "soft-load"], fallback: "classic" },
   { id: "unitDisplay", section: "Display", label: "Unit", values: ["inline", "below", "hidden"], fallback: "inline" },
 ];
@@ -155,23 +155,30 @@ SELECTS.forEach(({ id, section, label, values, fallback }) => {
   check(sent.length === before + 1 && !!c && c.key === id && c.value === values[values.length - 1], `${id}: a user change sends { key: "${id}", value: "${values[values.length - 1]}" }`);
 });
 
-// Range: the manual Min/Max inputs are only shown in Manual. Reset on press
-// stays available in every mode.
+// Range: the manual Min/Max inputs are only shown in Manual. Reset on press is
+// only offered when the plugin reports that the sensor source can reset, and
+// then it stays available in every mode.
 {
   const manual = doc.getElementById("paramsgroup");
   const resetRow = doc.getElementById("resetMinMaxOnPressRow");
   const shown = (el) => win.getComputedStyle(el).display !== "none";
-  [["manual", true], ["auto", false], ["lhm", false]].forEach(([mode, want]) => {
+  check(!shown(resetRow), "Reset on press is hidden until the plugin reports reset support");
+  win.setResetSupported(false);
+  check(!shown(resetRow), "Reset on press is hidden for a source that cannot reset");
+  win.setResetSupported(true);
+  check(shown(resetRow), "Reset on press is shown for a source that can reset");
+  [["manual", true], ["auto", false], ["sensor", false]].forEach(([mode, want]) => {
     win.applyDisplayOptionSettings({ scaleMode: mode });
     check(shown(manual) === want, `scaleMode ${mode} (saved): Min/Max inputs ${want ? "shown" : "hidden"}`);
     check(shown(resetRow), `scaleMode ${mode} (saved): Reset on press stays shown`);
   });
   const sel = doc.getElementById("scaleMode");
-  [["auto", false], ["manual", true], ["lhm", false]].forEach(([mode, want]) => {
+  [["auto", false], ["manual", true], ["sensor", false]].forEach(([mode, want]) => {
     sel.value = mode;
     sel.dispatchEvent(new win.Event("change", { bubbles: true }));
     check(shown(manual) === want, `scaleMode ${mode} (picked by the user): Min/Max inputs ${want ? "shown" : "hidden"}`);
   });
+  win.setResetSupported(false);
 }
 
 RANGES.forEach(({ id, label, min, max, step, fallback, saved }) => {
@@ -237,6 +244,53 @@ RANGES.forEach(({ id, label, min, max, step, fallback, saved }) => {
 
 // The Format help has to warn about a duplicated unit.
 check(/leave the unit out of the format/i.test(doc.getElementById("format").parentElement.textContent), "Format help mentions leaving the unit out when it is shown below or hidden");
+
+// The plugin's own messages drive "Reset on press". This boots a second page
+// through the real connectElgatoStreamDeckSocket with a stand-in WebSocket and
+// feeds it the payloads the plugin sends, so the message handler itself runs.
+{
+  const live = bootPi().win;
+  live.eval(`
+    window.__socket = null;
+    WebSocket = function () { window.__socket = this; this.readyState = 1; this.send = function () {}; };
+    window.__handlerErrors = [];
+  `);
+  live.connectElgatoStreamDeckSocket(
+    "1",
+    "ctx-live",
+    "registerPropertyInspector",
+    JSON.stringify({ colors: { highlightColor: "#0078ffff" } }),
+    JSON.stringify({ action: "com.moeilijk.lhm.reading" })
+  );
+  const row = live.document.getElementById("resetMinMaxOnPressRow");
+  const stroke = live.document.getElementById("textStroke");
+  const shown = () => live.getComputedStyle(row).display !== "none";
+  const settings = { format: "", divisor: "", min: 0, max: 100, textStroke: true, thresholds: null };
+  const deliver = (payload) => {
+    try {
+      live.__socket.onmessage({ data: JSON.stringify({ event: "sendToPropertyInspector", payload }) });
+      return null;
+    } catch (e) {
+      return e;
+    }
+  };
+
+  check(!shown(), "live page: Reset on press is hidden before the plugin has answered");
+  let err = deliver({ sensors: [], settings, resetSupported: true });
+  check(err === null, "live page: the settings message is handled without an error" + (err ? " (" + err.message + ")" : ""));
+  check(shown(), "live page: resetSupported true in the plugin's message shows Reset on press");
+  check(stroke.checked === true, "live page: the settings after Reset on press in the handler are still applied");
+
+  // Later messages carry settings without the field. They say nothing about
+  // the source and must leave the row as it is.
+  err = deliver({ readings: [], settings });
+  check(err === null && shown(), "live page: a readings message without resetSupported keeps Reset on press shown");
+  err = deliver({ thresholds: [], settings, globalThresholds: [] });
+  check(err === null && shown(), "live page: a thresholds message without resetSupported keeps Reset on press shown");
+
+  err = deliver({ sensors: [], settings, resetSupported: false });
+  check(err === null && !shown(), "live page: resetSupported false hides Reset on press");
+}
 
 // Control: a bare checkbox computes to display:none, so the visibility checks
 // above fail if a control ever regresses to that markup.

@@ -195,6 +195,11 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
       var delayEl = document.querySelector("#zeroHideDelaySeconds");
       if (delayEl) delayEl.value = settings.zeroHideDelaySeconds || 10;
       applyDisplayOptionSettings(settings);
+      // Only the plugin's answer to a connect carries resetSupported. Other
+      // messages with settings say nothing about the source.
+      if (typeof jsonObj.payload.resetSupported === "boolean") {
+        setResetSupported(jsonObj.payload.resetSupported);
+      }
       var tsEl = document.querySelector("#textStroke");
       if (tsEl) { tsEl.checked = settings.textStroke === true; }
       var tscEl = document.querySelector("#textStrokeColor");
@@ -415,6 +420,13 @@ function applyDisplayOptionSettings(settings) {
   updateUnitControls();
 }
 
+// setResetSupported shows "Reset on press" only when the plugin reports that
+// the sensor source can reset a sensor's MIN/MAX.
+function setResetSupported(supported) {
+  var row = document.querySelector("#resetMinMaxOnPressRow");
+  if (row) { row.style.display = supported ? "" : "none"; }
+}
+
 function setDisplayOptionRange(id, value) {
   var inp = document.querySelector("#" + id + " input[type=range]");
   if (inp) { inp.value = value; positionRangeVal(inp); }
@@ -437,13 +449,15 @@ function updateScaleModeControls() {
   var mode = document.querySelector("#scaleMode");
   var manual = document.querySelector("#paramsgroup");
   if (!mode || !manual) { return; }
-  manual.style.display = (mode.value === "auto" || mode.value === "lhm") ? "none" : "";
+  manual.style.display = (mode.value === "auto" || mode.value === "sensor") ? "none" : "";
 }
 
 // bindDisplayOptionControls sends an option to the plugin when its control changes.
 // The selects are sent by the generic sdpi change handling; only their effect on
 // the other controls is wired here.
 function bindDisplayOptionControls() {
+  // Hidden until the plugin says the source can reset, see setResetSupported.
+  setResetSupported(false);
   displayOptionCheckboxIds.forEach(function(id) {
     var el = document.querySelector("#" + id);
     if (!el) { return; }

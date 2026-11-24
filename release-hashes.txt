@@ -1,0 +1,16 @@
+# SHA-256 of the binaries shipped in each release (issue #121), and the
+# release they were built for. A release that reuses the binaries of an
+# earlier one names that earlier release as "built".
+# The Windows package holds lhm.exe and lhm-bridge.exe, the Linux package the
+# entries under linux/.
+# scripts/scan-release.sh checks a downloaded release against this list before
+# its binaries are scanned. Add the lines for a new release with the release.
+38350a61cb9474446c599e99ed1359ce1ccf2eb791ba916637ad49354917d84f  v2.0.0/linux/lhm  built:v2.0.0
+834351722da6ff5be7d93fdf581853ab56f22cf836511ae34f28c79272546bb8  v2.0.0/linux/lhm-bridge  built:v2.0.0
+2f0dd1806e042b2628cd0d5e4754bed417916b698317b7725aa619c9a4d58962  v2.0.0/lhm.exe  built:v2.0.0
+8d416730a8bca8f4607c462ec000ec089d4f896d3df505cdd6ae8b65c850cfcf  v2.0.0/lhm-bridge.exe  built:v2.0.0
+a1d85492aa5b1774bec609a6789dd6b11750dfaf13889dfb177cd665f34f5326  v2.1.1/lhm.exe  built:v2.1.1
+901d8b0f57874804cb92e7b60be970ec6940bf899964bce1e127bfbf363a5a4e  v2.1.1/lhm-bridge.exe  built:v2.1.1
+ffaa0e30f6c2c5b1f849e3565f474cebec1aaf54f139076237c89dfe93ab96a4  v2.1.1/linux/lhm  built:v2.1.1
+f431a2fa585191e444794fec64824018177305201aa28e0c87e616cd8596340b  v2.1.1/linux/lhm-bridge  built:v2.1.1
+d01d8ee68f4ec611cf9e92613efc4c23d0aacdc7f5a1c2075aea117168c05f3b  v2.1.1/linux/lhm-companion  built:v2.1.1

@@ -631,7 +631,7 @@ func (p *Plugin) handleGraphVisuals(event *streamdeck.EvSendToPlugin, sdpi *evSd
 	case "resetMinMaxOnPress":
 		settings.ResetMinMaxOnPress = sdpi.Checked
 	case "scaleMode":
-		if sdpi.Value != "manual" && sdpi.Value != "auto" && sdpi.Value != "lhm" {
+		if sdpi.Value != "manual" && sdpi.Value != "auto" && sdpi.Value != "sensor" {
 			return fmt.Errorf("unknown scale mode: %s", sdpi.Value)
 		}
 		settings.ScaleMode = sdpi.Value

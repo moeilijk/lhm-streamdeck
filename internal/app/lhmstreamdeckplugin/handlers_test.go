@@ -94,9 +94,15 @@ func TestRuntimeForSourceReconcilesLoadedSourceProfile(t *testing.T) {
 
 type stubHardwareService struct {
 	readingsBySensor map[string][]hwsensorsservice.Reading
+	// pollTime is the poll time of the source; unset it is 1, a source that
+	// stopped polling long ago.
+	pollTime uint64
 }
 
 func (s stubHardwareService) PollTime() (uint64, error) {
+	if s.pollTime != 0 {
+		return s.pollTime, nil
+	}
 	return 1, nil
 }
 
