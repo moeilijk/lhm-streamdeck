@@ -463,16 +463,9 @@ function sendLhmEndpoint() {
     portEl.value = port;
   }
 
-  sendJson({
-    event: "setGlobalSettings",
-    context: uuid,
-    payload: {
-      pollInterval: normalizeInterval(byId("pollInterval") ? byId("pollInterval").value : 1000),
-      lhmHost: host,
-      lhmPort: port
-    }
-  });
-
+  // The plugin writes the complete global settings. Stream Deck replaces the
+  // stored global settings on every setGlobalSettings, so the Property
+  // Inspector never writes them itself.
   sendJson({
     action: action,
     event: "sendToPlugin",
@@ -545,12 +538,6 @@ function bindUIHandlers() {
     }
     var interval = normalizeInterval(e.target.value);
     e.target.value = interval;
-
-    sendJson({
-      event: "setGlobalSettings",
-      context: uuid,
-      payload: { pollInterval: interval }
-    });
 
     var rateEl = byId("currentRate");
     if (rateEl) {

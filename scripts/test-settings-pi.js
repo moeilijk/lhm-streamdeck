@@ -161,12 +161,27 @@ function testPollIntervalEvents() {
   elements.pollInterval.value = "2000";
   elements.pollInterval.trigger("change");
 
-  const global = sent.find((m) => m.event === "setGlobalSettings");
-  assert(global, "missing setGlobalSettings");
-  assert(global.payload.pollInterval === 2000, "poll interval payload mismatch");
+  // Stream Deck replaces the stored global settings on every
+  // setGlobalSettings: a write of only pollInterval would erase the source
+  // profiles, favorites, thresholds and presets. The plugin writes them whole.
+  assert(!sent.some((m) => m.event === "setGlobalSettings"), "PI must not write global settings itself");
 
   const pollMsgs = sent.filter((m) => m.event === "sendToPlugin" && m.payload && m.payload.setPollInterval === 2000);
   assert(pollMsgs.length === 1, "expected one setPollInterval message");
+}
+
+function testLhmEndpointGoesThroughPlugin() {
+  const { sandbox, elements, sent } = loadSandbox();
+  sandbox.context = "ctx-settings";
+  sandbox.uuid = "ctx-fallback";
+  elements.lhmHost.value = "192.168.1.20";
+  elements.lhmPort.value = "8086";
+  sandbox.sendLhmEndpoint();
+
+  assert(!sent.some((m) => m.event === "setGlobalSettings"), "PI must not write global settings itself");
+  const msgs = sent.filter((m) => m.event === "sendToPlugin" && m.payload && m.payload.setLhmEndpoint);
+  assert(msgs.length === 1, "expected one setLhmEndpoint message");
+  assert(msgs[0].payload.setLhmEndpoint.host === "192.168.1.20" && msgs[0].payload.setLhmEndpoint.port === 8086, "endpoint payload mismatch");
 }
 
 function testDidReceiveSettingsAppliesUi() {
@@ -356,6 +371,7 @@ function main() {
   testShowLabelPayload();
   testContextFanout();
   testPollIntervalEvents();
+  testLhmEndpointGoesThroughPlugin();
   testDidReceiveSettingsAppliesUi();
   testMalformedInputsDoNotCrash();
   testPollingFallbackSave();

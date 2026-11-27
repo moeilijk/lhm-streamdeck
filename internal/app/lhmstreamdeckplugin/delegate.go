@@ -883,6 +883,12 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 	}
 
 	if event.Action == derivedAction {
+		if data, ok := payload["saveDerivedPresets"]; ok {
+			if err := p.saveDerivedPresets(*data); err != nil {
+				log.Printf("derived saveDerivedPresets: %v", err)
+			}
+			return
+		}
 		if data, ok := payload["loadDerivedPreset"]; ok {
 			var preset derivedPresetPayload
 			if err := json.Unmarshal(*data, &preset); err != nil {
@@ -1235,9 +1241,15 @@ func (p *Plugin) OnDidReceiveGlobalSettings(event *streamdeck.EvDidReceiveGlobal
 		return
 	}
 
-	var gs globalSettings
-	if err := json.Unmarshal(*event.Payload.Settings, &gs); err != nil {
-		log.Printf("OnDidReceiveGlobalSettings unmarshal failed: %v\n", err)
+	// Merge instead of replace: a partial object (from a Property Inspector of
+	// an older version, which wrote only the field it changed) must not wipe
+	// the source profiles, favorites, thresholds or presets.
+	p.mu.RLock()
+	current := p.globalSettings
+	p.mu.RUnlock()
+	gs, incomplete, err := mergeGlobalSettings(current, *event.Payload.Settings)
+	if err != nil {
+		log.Printf("OnDidReceiveGlobalSettings: %v\n", err)
 		return
 	}
 
@@ -1286,9 +1298,12 @@ func (p *Plugin) OnDidReceiveGlobalSettings(event *streamdeck.EvDidReceiveGlobal
 	}
 	p.mu.Unlock()
 
-	if migrated {
-		if err := p.sd.SetGlobalSettings(p.globalSettings); err != nil {
-			log.Printf("SetGlobalSettings migration persist failed: %v\n", err)
+	if migrated || incomplete {
+		p.mu.RLock()
+		persist := p.globalSettings
+		p.mu.RUnlock()
+		if err := p.sd.SetGlobalSettings(persist); err != nil {
+			log.Printf("SetGlobalSettings persist failed: %v\n", err)
 		}
 	}
 

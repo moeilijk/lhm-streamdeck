@@ -31,6 +31,9 @@ node scripts/test-reading-pi.js
 echo "test: dial PI functional script"
 node scripts/test-dial-pi.js
 
+echo "test: derived PI functional script"
+node scripts/test-derived-pi.js
+
 if node -e "require('../DeckBridge/node_modules/jsdom')" >/dev/null 2>&1 \
   || node -e "require('jsdom')" >/dev/null 2>&1; then
   echo "test: dial bulk render (jsdom, real DOM)"

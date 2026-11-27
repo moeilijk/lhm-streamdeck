@@ -102,6 +102,7 @@ for TEST_FILE in \
   tests/integration/test-composite-global-suppress.js \
   tests/integration/test-settings-tile.js \
   tests/integration/test-favorites.js \
+  tests/integration/test-global-settings-complete.js \
   tests/integration/test-source-profiles.js \
   tests/integration/test-reading-options.js \
   tests/integration/test-source-gone.js; do

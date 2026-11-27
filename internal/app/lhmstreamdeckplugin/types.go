@@ -1,5 +1,7 @@
 package lhmstreamdeckplugin
 
+import "encoding/json"
+
 // lhmSourceProfile represents a named Libre Hardware Monitor endpoint.
 type lhmSourceProfile struct {
 	ID   string `json:"id"`
@@ -15,6 +17,7 @@ type globalSettings struct {
 	DefaultSourceProfileID string             `json:"defaultSourceProfileId,omitempty"` // ID of the default source profile
 	FavoriteReadings       []favoriteReading  `json:"favoriteReadings,omitempty"`       // shared favorites for all tiles
 	GlobalThresholds       []Threshold        `json:"globalThresholds,omitempty"`       // shared threshold library
+	DerivedPresets         json.RawMessage    `json:"derivedPresets,omitempty"`         // Derived presets, owned by the Derived Property Inspector
 
 	// Legacy fields — kept for migration only, omitempty so they are dropped after migration
 	LhmHost string `json:"lhmHost,omitempty"`
