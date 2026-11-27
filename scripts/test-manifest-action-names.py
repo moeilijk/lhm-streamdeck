@@ -23,6 +23,7 @@ MANIFEST = os.path.join(SDPLUGINDIR, "manifest.json")
 # The reading action keeps the plugin name (it is the plugin's primary tile);
 # every other action is named after what it does.
 EXPECTED_NAMES = {
+    "com.moeilijk.lhm.clock": "Clock",
     "com.moeilijk.lhm.reading": "Libre Hardware Monitor",
     "com.moeilijk.lhm.composite": "Composite Dashboard",
     "com.moeilijk.lhm.derived": "Derived Metric",

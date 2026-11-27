@@ -110,6 +110,10 @@ func (p *Plugin) OnConnected(c *websocket.Conn) {
 
 // OnWillAppear event
 func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
+	if event.Action == clockAction {
+		p.setClockSettings(event.Context, event.Payload.Settings)
+		return
+	}
 	if event.Action == dialAction && event.Payload.Controller == "Encoder" {
 		p.handleDialWillAppear(event)
 		return
@@ -305,6 +309,12 @@ func (p *Plugin) OnWillAppear(event *streamdeck.EvWillAppear) {
 
 // OnWillDisappear event
 func (p *Plugin) OnWillDisappear(event *streamdeck.EvWillDisappear) {
+	if event.Action == clockAction {
+		p.mu.Lock()
+		delete(p.clockContexts, event.Context)
+		p.mu.Unlock()
+		return
+	}
 	if event.Action == dialAction && event.Payload.Controller == "Encoder" {
 		p.handleDialWillDisappear(event)
 		return
@@ -1161,6 +1171,10 @@ func (p *Plugin) OnSendToPlugin(event *streamdeck.EvSendToPlugin) {
 
 // OnDidReceiveSettings handles action settings updates persisted by Stream Deck.
 func (p *Plugin) OnDidReceiveSettings(event *streamdeck.EvDidReceiveSettings) {
+	if event.Action == clockAction {
+		p.setClockSettings(event.Context, event.Payload.Settings)
+		return
+	}
 	if !p.isSettingsAction(event.Action, event.Context) {
 		return
 	}

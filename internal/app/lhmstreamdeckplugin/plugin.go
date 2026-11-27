@@ -40,6 +40,7 @@ type sourceRuntime struct {
 
 // Plugin handles information between Libre Hardware Monitor and Stream Deck
 type Plugin struct {
+	clockContexts   map[string]*clockState
 	scaleResetBusy  map[string]bool
 	scaleResetAfter map[string]uint64
 	mu              sync.RWMutex // protects maps and cached state below
@@ -455,6 +456,9 @@ func (p *Plugin) RunForever() error {
 		}
 	}()
 
+	clockDone := make(chan struct{})
+	defer close(clockDone)
+	go p.runClocks(clockDone)
 	p.sd.SetDelegate(p)
 	p.am.Run(p.updateTiles, p.updateAuxTiles)
 
