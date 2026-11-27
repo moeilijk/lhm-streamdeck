@@ -123,8 +123,9 @@ func (rec *gsRecorder) take() []map[string]json.RawMessage {
 	}
 }
 
-// newGSPlugin returns a plugin whose sources are already running, so
-// receiving global settings starts no bridge.
+// newGSPlugin returns a plugin that has received the complete global
+// settings once, with the writes of that first receive discarded. Its
+// sources are already running, so receiving global settings starts no bridge.
 func newGSPlugin(t *testing.T) (*Plugin, *gsRecorder) {
 	rec := newGSRecorder(t)
 	p := &Plugin{
@@ -186,8 +187,8 @@ func assertWrittenComplete(t *testing.T, writes []map[string]json.RawMessage, wa
 }
 
 // A Property Inspector of an older version writes only the presets. The
-// plugin keeps everything else and writes the complete settings back, so
-// the stored copy is whole again.
+// plugin keeps everything else, the refresh rate included, and writes the
+// complete settings back, so the stored copy is whole again.
 func TestPartialPresetWriteKeepsTheRest(t *testing.T) {
 	p, rec := newGSPlugin(t)
 	receiveGlobalSettings(p, `{"derivedPresets":[{"name":"old"},{"name":"new","formula":"sum","slotCount":2,"slots":[]}]}`)
@@ -221,8 +222,8 @@ func TestCompleteGlobalSettingsAreNotWrittenBack(t *testing.T) {
 	}
 }
 
-// Every write by the plugin carries the Derived presets: saving a favorite or
-// adding a global threshold must not drop them.
+// Every write by the plugin carries the Derived presets: saving a favorite,
+// adding a global threshold or changing the refresh rate must not drop them.
 func TestPluginWriteKeepsDerivedPresets(t *testing.T) {
 	p, rec := newGSPlugin(t)
 	if err := p.persistGlobalSettings(); err != nil {
@@ -237,6 +238,22 @@ func TestPluginWriteKeepsDerivedPresets(t *testing.T) {
 	}
 	if !strings.Contains(string(writes[len(writes)-1]["derivedPresets"]), `"old"`) {
 		t.Errorf("threshold write lost the presets: %s", writes[len(writes)-1]["derivedPresets"])
+	}
+
+	p.setPollInterval(5000)
+	writes = rec.take()
+	if len(writes) == 0 {
+		t.Fatal("changing the refresh rate wrote nothing")
+	}
+	last := writes[len(writes)-1]
+	if string(last["pollInterval"]) != "5000" {
+		t.Errorf("written poll interval = %s, want 5000", last["pollInterval"])
+	}
+	if !strings.Contains(string(last["derivedPresets"]), `"old"`) {
+		t.Errorf("refresh rate write lost the presets: %s", last["derivedPresets"])
+	}
+	if !strings.Contains(string(last["favoriteReadings"]), `"f1"`) {
+		t.Errorf("refresh rate write lost the favorites: %s", last["favoriteReadings"])
 	}
 }
 
@@ -262,20 +279,20 @@ func TestSaveDerivedPresetsWritesComplete(t *testing.T) {
 }
 
 func TestMergeGlobalSettings(t *testing.T) {
-	current := globalSettings{PollInterval: 1000, DefaultSourceProfileID: "default", SourceProfiles: []lhmSourceProfile{{ID: "default", Host: "127.0.0.1", Port: 8085}}}
+	current := globalSettings{PollInterval: 1000, GlobalThresholds: []Threshold{{ID: "g1", Name: "Hot"}}}
 
-	merged, incomplete, err := mergeGlobalSettings(current, json.RawMessage(`{"sourceProfiles":[{"id":"default","host":"10.0.0.2","port":8085}]}`))
+	merged, incomplete, err := mergeGlobalSettings(current, json.RawMessage(`{"globalThresholds":[{"id":"g1","name":"Changed"}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !incomplete {
-		t.Error("an object without pollInterval and default profile should count as incomplete")
+		t.Error("an object without pollInterval should count as incomplete")
 	}
-	if merged.SourceProfiles[0].Host != "10.0.0.2" || merged.PollInterval != 1000 || merged.DefaultSourceProfileID != "default" {
+	if merged.GlobalThresholds[0].Name != "Changed" || merged.PollInterval != 1000 {
 		t.Errorf("merged = %+v", merged)
 	}
-	if current.SourceProfiles[0].Host != "127.0.0.1" {
-		t.Errorf("merge changed the current settings: %+v", current.SourceProfiles)
+	if current.GlobalThresholds[0].Name != "Hot" {
+		t.Errorf("merge changed the current settings: %+v", current.GlobalThresholds)
 	}
 
 	if _, _, err := mergeGlobalSettings(current, json.RawMessage(`[1,2]`)); err == nil {
